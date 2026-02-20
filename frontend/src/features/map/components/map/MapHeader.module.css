@@ -1,0 +1,54 @@
+.header {
+  padding: 0.75rem 1rem;
+  background: #1a5f2a;
+  color: white;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+  font-weight: normal;
+}
+
+.button {
+  padding: 0.25rem 0.5rem;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+}
+
+.button:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.buttonActive {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.breadcrumbItem {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.separator {
+  opacity: 0.7;
+}
+
+.backButton {
+  margin-left: 0.5rem;
+}
+
+.loading {
+  font-size: 0.85rem;
+  opacity: 0.9;
+}

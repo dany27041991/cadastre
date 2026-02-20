@@ -1,0 +1,33 @@
+.buttonContainer {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1000;
+}
+
+.button {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1a5f2a;
+  background: #fff;
+}
+
+.button:hover:not(:disabled) {
+  background: rgba(26, 95, 42, 0.08);
+}
+
+.buttonActive {
+  background: rgba(26, 95, 42, 0.2);
+}
+
+.buttonDisabled {
+  opacity: 0.6;
+  cursor: default;
+}

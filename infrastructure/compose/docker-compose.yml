@@ -1,0 +1,294 @@
+# =============================================================================
+# Municipal Arboreal Cadastre - Platform
+# =============================================================================
+# National SaaS webapp for census and management of geospatial green assets.
+# Multi-tenant architecture, thousands of municipalities, millions of geometries.
+#
+# Ready for Kubernetes deployment (volumes, secrets, scale-out).
+# =============================================================================
+
+name: catasto-arboreo-platform
+
+services:
+  # ---------------------------------------------------------------------------
+  # 1. PostgreSQL + PostGIS
+  # ---------------------------------------------------------------------------
+  # Main geospatial database: assets (points, lines, polygons),
+  # hierarchical areas, partitioning by istat_code.
+  postgis:
+    image: postgis/postgis:16-3.4
+    container_name: catasto-postgis
+    restart: unless-stopped
+    # Increased shared memory for heavy geospatial queries and partitioned tables
+    shm_size: '4gb'
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-arboreal_green_cadastre}
+      POSTGRES_USER: ${POSTGRES_USER:-cadastre}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+      # Tuning for large geospatial data volumes
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+    command:
+      - postgres
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - work_mem=128MB
+      - -c
+      - maintenance_work_mem=512MB
+      - -c
+      - effective_cache_size=2GB
+      - -c
+      - max_parallel_workers_per_gather=4
+      - -c
+      - max_parallel_workers=8
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - max_connections=200
+      # Required for partitioned tables with hundreds of partitions
+      - -c
+      - max_locks_per_transaction=256
+      # Autovacuum: reduce contention on many partitions (lock not available / canceling task)
+      - -c
+      - autovacuum_max_workers=5
+      - -c
+      - autovacuum_vacuum_cost_limit=1000
+      - -c
+      - autovacuum_vacuum_cost_delay=1
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+      - ../scripts/init/postgis/sql:/docker-entrypoint-initdb.d:ro
+      - ../data:/data:ro
+    networks:
+      - catasto-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-cadastre} -d $${POSTGRES_DB:-arboreal_green_cadastre} || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+
+  # ---------------------------------------------------------------------------
+  # 2. PgBouncer - Connection Pooling
+  # ---------------------------------------------------------------------------
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: catasto-pgbouncer
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgres://${POSTGRES_USER:-cadastre}:${POSTGRES_PASSWORD}@postgis:5432/${POSTGRES_DB:-arboreal_green_cadastre}"
+      POSTGRES_USER: ${POSTGRES_USER:-cadastre}
+      POSTGRES_DB: ${POSTGRES_DB:-arboreal_green_cadastre}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 10000
+      DEFAULT_POOL_SIZE: 50
+      MIN_POOL_SIZE: 10
+      RESERVE_POOL_SIZE: 25
+      SERVER_IDLE_TIMEOUT: 600
+    depends_on:
+      postgis:
+        condition: service_healthy
+    networks:
+      - catasto-network
+    healthcheck:
+      # Use app user: PgBouncer userlist has only cadastre, not postgres
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U \"$${POSTGRES_USER:-cadastre}\" -d \"$${POSTGRES_DB:-arboreal_green_cadastre}\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # 3. Redis - Caching
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: catasto-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - catasto-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # 3b. DB Init - Data population (geometries, districts) on startup
+  # ---------------------------------------------------------------------------
+  init:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    container_name: catasto-init
+    restart: "no"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cadastre}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-arboreal_green_cadastre}
+      DATABASE_DIRECT_URL: postgresql://${POSTGRES_USER:-cadastre}:${POSTGRES_PASSWORD}@postgis:5432/${POSTGRES_DB:-arboreal_green_cadastre}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-cadastre}:${POSTGRES_PASSWORD}@postgis:5432/${POSTGRES_DB:-arboreal_green_cadastre}
+      GEOJSON_DIR: /data/geojson-italy-master/geojson
+      ISTAT_ASC_DIR: /data/istat
+    volumes:
+      - ../scripts:/scripts:ro
+      - ../data:/data
+    depends_on:
+      postgis:
+        condition: service_healthy
+    networks:
+      - catasto-network
+    # Full init at startup: schema (01-05) + geometries + districts
+    command: ["sh", "/scripts/init/postgis/run-init.sh"]
+
+  # ---------------------------------------------------------------------------
+  # 4. Backend API - FastAPI
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    container_name: catasto-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-cadastre}:${POSTGRES_PASSWORD}@pgbouncer:5432/${POSTGRES_DB:-arboreal_green_cadastre}
+      DATABASE_DIRECT_URL: postgresql://${POSTGRES_USER:-cadastre}:${POSTGRES_PASSWORD}@postgis:5432/${POSTGRES_DB:-arboreal_green_cadastre}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY required}
+      JWT_ALGORITHM: HS256
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      APP_ENV: ${APP_ENV:-development}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ../../backend:/app
+      - ../scripts:/scripts:ro
+      - ../data:/data
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - catasto-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # 5. Frontend - React + Vite + OpenLayers + OSM
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+    container_name: catasto-frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ../../frontend/src:/app/src
+      - ../../frontend/index.html:/app/index.html
+      - ../../frontend/vite.config.ts:/app/vite.config.ts
+      - ../../frontend/tsconfig.json:/app/tsconfig.json
+      - ../../frontend/tsconfig.node.json:/app/tsconfig.node.json
+    depends_on:
+      - backend
+    networks:
+      - catasto-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5173"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # 6. ClickHouse - OLAP Analytics
+  # ---------------------------------------------------------------------------
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3
+    container_name: catasto-clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-cadastre_analytics}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-cadastre}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse_secret}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+    networks:
+      - catasto-network
+    ports:
+      - "${CLICKHOUSE_HTTP_PORT:-8123}:8123"
+      - "${CLICKHOUSE_NATIVE_PORT:-9000}:9000"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # 7. PgAdmin (optional - development/debug only)
+  # ---------------------------------------------------------------------------
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: catasto-pgadmin
+    restart: unless-stopped
+    profiles:
+      - tools  # Started only with: docker compose --profile tools up
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@cadastre.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?PGADMIN_PASSWORD required}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    depends_on:
+      postgis:
+        condition: service_healthy
+    networks:
+      - catasto-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+# =============================================================================
+# Persistent volumes
+# =============================================================================
+volumes:
+  postgis_data:
+  redis_data:
+  clickhouse_data:
+  clickhouse_logs:
+  pgadmin_data:
+
+# =============================================================================
+# Isolated network
+# =============================================================================
+networks:
+  catasto-network:
+    driver: bridge
+    name: catasto-arboreo-network
