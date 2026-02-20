@@ -71,9 +71,6 @@ htmlcov/
 *.sqlite
 *.sqlite3
 
-# --- Dati geografici (troppo grandi per Git; usare storage/LFS o script di seed) ---
-infrastructure/data/
-
 # --- Cursor / browser (se in repo) ---
 .cursor/
 browser-logs/
