@@ -5,7 +5,7 @@
 -- 
 -- ⚡ OTTIMIZZATO: Partition pruning (region_id IS NOT NULL)
 -- ⚡ OTTIMIZZATO: Indici compositi su query GEO (ga.province_id = p.id, ga.region_id = p.region_id)
--- ⚡ OTTIMIZZATO: Indici compositi parziali per query POINT (geometry_type = 'point')
+-- ⚡ OTTIMIZZATO: Indici compositi parziali per query POINT (geometry_type = 'P' per OBT)
 -- =============================================================================
 
 \timing on
@@ -106,7 +106,7 @@ JOIN cadastre.green_assets ga ON ST_Within(ga.geometry, p.geometry)
   AND ga.province_id = p.id  -- ⚡ INDICE COMPOSITO
   AND ga.region_id = p.region_id  -- ⚡ PARTITION PRUNING
 WHERE ga.geometry IS NOT NULL AND p.geometry IS NOT NULL
-  AND ga.geometry_type = 'point'  -- ⚡ INDICE COMPOSITO PARZIALE
+  AND ga.geometry_type = 'P'  -- ⚡ INDICE COMPOSITO PARZIALE
 GROUP BY p.id
 ORDER BY asset_totale DESC;
 
@@ -118,7 +118,7 @@ JOIN cadastre.green_assets ga ON ST_Within(ga.geometry, p.geometry)
   AND ga.province_id = p.id  -- ⚡ INDICE COMPOSITO
   AND ga.region_id = p.region_id  -- ⚡ PARTITION PRUNING
 WHERE ga.geometry IS NOT NULL AND p.geometry IS NOT NULL
-  AND ga.geometry_type = 'point'  -- ⚡ INDICE COMPOSITO PARZIALE
+  AND ga.geometry_type = 'P'  -- ⚡ INDICE COMPOSITO PARZIALE
 GROUP BY p.id, ga.asset_type
 ORDER BY p.id, n DESC;
 

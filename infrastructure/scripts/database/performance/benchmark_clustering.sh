@@ -49,7 +49,7 @@ points AS (
     FROM cadastre.green_assets av
     CROSS JOIN municipality_info c
     CROSS JOIN box_envelope b
-    WHERE av.geometry_type = 'point'
+    WHERE av.geometry_type = 'P'
       AND av.region_id = c.region_id
       AND av.province_id = c.province_id
       AND av.municipality_id = c.municipality_id
@@ -90,7 +90,7 @@ points AS (
     SELECT av.id, av.geometry, av.asset_type, av.species
     FROM cadastre.green_assets av
     CROSS JOIN municipality_info c
-    WHERE av.geometry_type = 'point'
+    WHERE av.geometry_type = 'P'
       AND av.region_id = c.region_id
       AND av.province_id = c.province_id
       AND av.municipality_id = c.municipality_id
@@ -104,7 +104,7 @@ run_query "3" "High zoom - Small-medium box (0.01 degrees) - Individual points" 
 "WITH points AS (
     SELECT id, geometry, asset_type, species
     FROM cadastre.green_assets
-    WHERE geometry_type = 'point'
+    WHERE geometry_type = 'P'
       AND ST_Within(geometry, ST_MakeEnvelope(12.48, 41.88, 12.49, 41.89, 4326))
       AND ST_Within(geometry, (SELECT geometry FROM public.municipalities WHERE name = 'Roma' LIMIT 1))
 )
@@ -115,7 +115,7 @@ run_query "4" "Medium zoom - Medium box (0.02 degrees) - 50 clusters" \
 "WITH points AS (
     SELECT id, geometry, asset_type, species
     FROM cadastre.green_assets
-    WHERE geometry_type = 'point'
+    WHERE geometry_type = 'P'
       AND ST_Within(geometry, ST_MakeEnvelope(12.48, 41.88, 12.50, 41.90, 4326))
       AND ST_Within(geometry, (SELECT geometry FROM public.municipalities WHERE name = 'Roma' LIMIT 1))
 ),
@@ -135,7 +135,7 @@ run_query "5" "Low zoom - Large box (0.2 degrees) - 50 clusters" \
 "WITH points AS (
     SELECT id, geometry, asset_type, species
     FROM cadastre.green_assets
-    WHERE geometry_type = 'point'
+    WHERE geometry_type = 'P'
       AND ST_Within(geometry, ST_MakeEnvelope(12.4, 41.8, 12.6, 42.0, 4326))
       AND ST_Within(geometry, (SELECT geometry FROM public.municipalities WHERE name = 'Roma' LIMIT 1))
 ),
@@ -155,7 +155,7 @@ run_query "6" "Minimum zoom - Very large box (0.7 degrees) - 20 clusters" \
 "WITH points AS (
     SELECT id, geometry, asset_type, species
     FROM cadastre.green_assets
-    WHERE geometry_type = 'point'
+    WHERE geometry_type = 'P'
       AND ST_Within(geometry, ST_MakeEnvelope(12.2, 41.6, 12.9, 42.2, 4326))
       AND ST_Within(geometry, (SELECT geometry FROM public.municipalities WHERE name = 'Roma' LIMIT 1))
 ),
@@ -182,7 +182,7 @@ points AS (
     SELECT av.id, av.geometry, av.asset_type, av.species
     FROM cadastre.green_assets av
     CROSS JOIN lazio_region r
-    WHERE av.geometry_type = 'point'
+    WHERE av.geometry_type = 'P'
       AND av.region_id = r.region_id
       AND ST_Intersects(av.geometry, ST_MakeEnvelope(11.449370420563334, 40.78473374858241, 14.02764450725866, 42.83868318987591, 4326))
       AND ST_Within(av.geometry, r.region_geom)
@@ -210,7 +210,7 @@ points AS (
     SELECT av.id, av.geometry, av.asset_type, av.species
     FROM cadastre.green_assets av
     CROSS JOIN lazio_region r
-    WHERE av.geometry_type = 'point'
+    WHERE av.geometry_type = 'P'
       AND av.region_id = r.region_id
       AND ST_Intersects(av.geometry, r.region_geom)
       AND ST_Within(av.geometry, r.region_geom)
@@ -243,7 +243,7 @@ points AS (
     FROM cadastre.green_assets av
     CROSS JOIN municipality_info c
     CROSS JOIN box_envelope b
-    WHERE av.geometry_type = 'point'
+    WHERE av.geometry_type = 'P'
       AND av.region_id = c.region_id
       AND av.province_id = c.province_id
       AND av.municipality_id = c.municipality_id
@@ -272,7 +272,7 @@ points AS (
     FROM cadastre.green_assets av
     CROSS JOIN municipality_info c
     CROSS JOIN box_envelope b
-    WHERE av.geometry_type = 'point'
+    WHERE av.geometry_type = 'P'
       AND av.region_id = c.region_id
       AND av.province_id = c.province_id
       AND av.municipality_id = c.municipality_id
@@ -311,7 +311,7 @@ points AS (
     FROM cadastre.green_assets av
     CROSS JOIN municipality_info c
     CROSS JOIN box_envelope b
-    WHERE av.geometry_type = 'point'
+    WHERE av.geometry_type = 'P'
       AND av.region_id = c.region_id
       AND av.province_id = c.province_id
       AND av.municipality_id = c.municipality_id

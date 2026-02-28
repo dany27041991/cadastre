@@ -102,6 +102,6 @@ docker compose run --rm init python3 /scripts/init/postgis/py/administrative_bou
 
 ## Notes
 
-- **infrastructure/scripts/init/postgis**: `sql/` 01 (public schema), 02 (cadastre schema), 03 (indexes public), 04 (indexes cadastre), then **administrative_boundaries/load_geojson.py**, then 06 (partitions), then 05 (autovacuum on leaf partitions) are run by **run-init.sh**. GRANTs use `POSTGRES_USER` from `.env` (default `cadastre`); if you change it, update `sql/02-init-schema-cadastre.sql`. The cadastre tables use **sub_municipal_area_id** (no longer district_id); backend and seed scripts that referenced districts need to be updated to use sub_municipal_area where applicable.
+- **infrastructure/scripts/init/postgis**: `sql/` 01 (public schema), 02 (cadastre schema), 03 (indexes public), 04 (indexes cadastre), then **administrative_boundaries/load_geojson.py**, then 06 (partitions), then 05 (autovacuum on leaf partitions) are run by **run-init.sh**. GRANTs use `POSTGRES_USER` from `.env` (default `cadastre`); if you change it, update `sql/02-init-schema-cadastre.sql`. The cadastre tables use **sub_municipal_area_id**; backend and frontend use **sub_municipal_area** (sub-municipal areas) consistently.
 - **Backend**: uses PgBouncer for queries; `DATABASE_DIRECT_URL` for migrations
 - **Frontend**: `VITE_API_URL` must point to the backend (localhost in dev, public URL in prod)

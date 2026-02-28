@@ -1,0 +1,21 @@
+{
+  "territory": {
+    "italia": "Italia",
+    "appTitle": "Catasto arboreo",
+    "greenAreas": "Aree verdi",
+    "provinceSuffix": " Provincia",
+    "clusterLabel": "Cluster ({{count}})",
+    "selected": "Selezionato",
+    "navigationAria": "Navigazione territorio",
+    "back": "← Indietro",
+    "loading": "Caricamento...",
+    "loadingGreenLayer": "Caricamento layer verde",
+    "loadingGreen": "Caricamento verde..."
+  },
+  "errors": {
+    "generic": "Si è verificato un errore.",
+    "loadFailed": "Caricamento non riuscito.",
+    "regionIdRequired": "regionId richiesto",
+    "httpError": "Richiesta fallita (HTTP {{status}})."
+  }
+}

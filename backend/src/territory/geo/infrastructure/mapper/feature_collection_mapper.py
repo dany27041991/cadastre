@@ -7,7 +7,7 @@ from territory.geo.domain.entities import GeoJSONFeatureCollection
 _REGION_PROPERTIES = ["code", "name"]
 _PROVINCE_PROPERTIES = ["code", "name", "vehicle_registration_code"]
 _MUNICIPALITY_PROPERTIES = ["istat_code", "name"]
-_DISTRICT_PROPERTIES = ["code", "name"]
+_SUB_MUNICIPAL_AREA_PROPERTIES = ["code", "name", "level", "area_type", "parent_id"]
 
 
 def build_region_feature_collection(rows: list[tuple]) -> GeoJSONFeatureCollection:
@@ -27,6 +27,8 @@ def build_municipality_feature_collection(
     return build_feature_collection(rows, _MUNICIPALITY_PROPERTIES)
 
 
-def build_district_feature_collection(rows: list[tuple]) -> GeoJSONFeatureCollection:
-    """Build FeatureCollection from district rows."""
-    return build_feature_collection(rows, _DISTRICT_PROPERTIES)
+def build_sub_municipal_area_feature_collection(
+    rows: list[tuple],
+) -> GeoJSONFeatureCollection:
+    """Build FeatureCollection from sub-municipal area rows (public.sub_municipal_area)."""
+    return build_feature_collection(rows, _SUB_MUNICIPAL_AREA_PROPERTIES)

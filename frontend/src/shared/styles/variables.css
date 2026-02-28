@@ -1,0 +1,7 @@
+/**
+ * Shared CSS variables (theme, spacing, colors).
+ */
+:root {
+  --color-primary: #1a5f2a;
+  --color-primary-light: rgba(26, 95, 42, 0.12);
+}

@@ -55,7 +55,7 @@ backend/
 │   │   │       ├── region_model.py
 │   │   │       ├── province_model.py
 │   │   │       ├── municipality_model.py
-│   │   │       └── district_model.py
+│   │   │       └── sub_municipal_area_model.py
 │   │   ├── application/                  # Layer: usecases (query / command), no ports (soft CA)
 │   │   │   ├── __init__.py
 │   │   │   └── usecases/
@@ -80,13 +80,13 @@ backend/
 │   │       │   ├── region_repository.py
 │   │       │   ├── province_repository.py
 │   │       │   ├── municipality_repository.py
-│   │       │   └── district_repository.py
+│   │       │   └── sub_municipal_area_repository.py
 │   │       └── web/                        # HTTP adapters (one router per resource)
 │   │           ├── __init__.py
 │   │           ├── region_ctrl.py
 │   │           ├── province_ctrl.py
 │   │           ├── municipality_ctrl.py
-│   │           └── district_ctrl.py
+│   │           └── sub_municipal_area_ctrl.py
 │   ├── areas/                             # Submodule: green areas
 │   │   ├── __init__.py
 │   │   ├── domain/

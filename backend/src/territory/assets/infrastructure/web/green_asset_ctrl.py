@@ -30,7 +30,7 @@ def _geobuf_response(content: bytes, hits: int, misses: int) -> Response:
 def get_green_assets(
     region_id: int,
     municipality_id: int,
-    district_id: int | None = None,
+    sub_municipal_area_id: int | None = None,
     green_area_id: int | None = None,
     format: str | None = None,
 ) -> GreenAssetsOutput | Response:
@@ -39,7 +39,7 @@ def get_green_assets(
     result = get_green_assets_uc().catalog_green_assets(
         region_id,
         municipality_id,
-        district_id=district_id,
+        sub_municipal_area_id=sub_municipal_area_id,
         green_area_id=green_area_id,
     )
     ci = _cached_green_assets.cache_info()

@@ -1,0 +1,21 @@
+{
+  "territory": {
+    "italia": "Italy",
+    "appTitle": "Tree Cadastre",
+    "greenAreas": "Green areas",
+    "provinceSuffix": " Province",
+    "clusterLabel": "Cluster ({{count}})",
+    "selected": "Selected",
+    "navigationAria": "Territory navigation",
+    "back": "← Back",
+    "loading": "Loading...",
+    "loadingGreenLayer": "Loading green layer",
+    "loadingGreen": "Loading green..."
+  },
+  "errors": {
+    "generic": "Something went wrong.",
+    "loadFailed": "Load failed.",
+    "regionIdRequired": "regionId required",
+    "httpError": "Request failed (HTTP {{status}})."
+  }
+}

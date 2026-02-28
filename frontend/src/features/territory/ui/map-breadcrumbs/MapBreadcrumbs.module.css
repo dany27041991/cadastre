@@ -1,0 +1,46 @@
+.breadcrumbs {
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+}
+
+.link {
+  padding: 0.2rem 0.4rem;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #333;
+  cursor: pointer;
+}
+
+.link:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.linkDisabled {
+  cursor: default;
+}
+
+.linkDisabled:hover {
+  background: transparent;
+}
+
+.linkActive {
+  font-weight: 600;
+  color: #1a5f2a;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.separator {
+  color: #999;
+}

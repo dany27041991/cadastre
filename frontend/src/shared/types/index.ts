@@ -1,8 +1,5 @@
 /**
- * Barrel: re-export da tutte le sottocartelle per import da @/shared/types.
+ * Shared global types only.
  */
-export * from './territory'
-export * from './geojson'
-export * from './api'
-export * from './navigation'
-export * from './map'
+export type { GeoJSONFeatureCollection } from './geojson'
+export type { ApiError } from './api'

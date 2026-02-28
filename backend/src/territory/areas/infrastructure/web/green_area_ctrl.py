@@ -18,13 +18,13 @@ def get_green_areas(
     region_id: int,
     parent_id: int | None = None,
     municipality_id: int | None = None,
-    district_id: int | None = None,
+    sub_municipal_area_id: int | None = None,
     format: str | None = None,
 ) -> GreenAreasOutput | Response:
     """
     Return green areas (N-level hierarchy).
     - With parent_id: children of that area.
-    - Without parent_id: root areas for municipality_id (opt. district_id).
+    - Without parent_id: root areas for municipality_id (opt. sub_municipal_area_id).
     region_id required (partitioning).
     Use ?format=geobuf for compact binary response (6-8x smaller, faster transfer).
     """
@@ -39,7 +39,7 @@ def get_green_areas(
         region_id,
         parent_id=parent_id,
         municipality_id=municipality_id,
-        district_id=district_id,
+        sub_municipal_area_id=sub_municipal_area_id,
     )
     if not result.get("features"):
         if format == "geobuf":

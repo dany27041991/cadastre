@@ -1,6 +1,7 @@
 """
 Load public.regions from region/regions.geojson.
 Properties: COD_REG → code, DEN_REG → name, geometry.
+Upsert on code: no duplicates on re-run.
 """
 import json
 

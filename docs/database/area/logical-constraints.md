@@ -89,4 +89,4 @@ Legenda: ✔ consentito, ✖ non consentito, △ solo in casi specifici (es. are
 
 - Livelli e matrice: [area-level-table.md](./area-level-table.md).
 - Stati e eventi (esempi): [asset-area-state-and-events.md](./asset-area-state-and-events.md).
-- Catalogo e shapefile: [object-catalog-dbt.md](./obt/object-catalog-dbt.md).
+- Catalogo e shapefile: [object-catalog-dbt.md](../obt/object-catalog-dbt.md).

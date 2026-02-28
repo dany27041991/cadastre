@@ -3,7 +3,7 @@
 -- =============================================================================
 -- Aligned with docs/database/design/database-mapping-diagram.md (125-368).
 -- Depends on 01-init-schema-public.sql (public.regions, provinces, municipalities,
--- sub_municipal_area, area_level, object_codes). Indexes: 03-init-indexes-public.sql, 04-init-indexes-cadastre.sql.
+-- sub_municipal_area, area_level, attribute_types). Indexes: 03-init-indexes-public.sql, 04-init-indexes-cadastre.sql.
 -- Table names green_areas / green_assets kept for partition compatibility (06-create-partitions.sql).
 -- =============================================================================
 
@@ -16,12 +16,6 @@ DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON t.typnamespace = n.oid WHERE n.nspname = 'cadastre' AND t.typname = 'intensity_of_fruition') THEN
     CREATE TYPE cadastre.intensity_of_fruition AS ENUM ('NONE', 'LOW', 'MEDIUM', 'HIGH');
-  END IF;
-END $$;
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON t.typnamespace = n.oid WHERE n.nspname = 'cadastre' AND t.typname = 'geometry_dimension') THEN
-    CREATE TYPE cadastre.geometry_dimension AS ENUM ('P', 'L', 'S');
   END IF;
 END $$;
 DO $$
@@ -70,7 +64,7 @@ END $$;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON t.typnamespace = n.oid WHERE n.nspname = 'cadastre' AND t.typname = 'geometry_type') THEN
-    CREATE TYPE cadastre.geometry_type AS ENUM ('point', 'linestring', 'polygon');
+    CREATE TYPE cadastre.geometry_type AS ENUM ('P', 'L', 'S');  -- OBT: point, line, surface (attribute_types)
   END IF;
 END $$;
 DO $$
@@ -158,12 +152,11 @@ CREATE TABLE IF NOT EXISTS cadastre.green_areas (
   level_id BIGINT REFERENCES public.area_level(level_id),
   parent_id BIGINT,
   name VARCHAR(255) NOT NULL,
-  classification_istat_id BIGINT,
-  object_code_id BIGINT REFERENCES public.object_codes(id),
+  attribute_type_id BIGINT REFERENCES public.attribute_types(id),
   zril_identifier VARCHAR(80),
   susceptibility_classification_area_id BIGINT,
   intensity_of_fruition cadastre.intensity_of_fruition,
-  geometry_dimension cadastre.geometry_dimension,
+  geometry_type cadastre.geometry_type,
   geometry GEOMETRY(Geometry, 4326),
   perimeter_type cadastre.perimeter_type,
   administrative_status cadastre.administrative_status,
@@ -215,11 +208,10 @@ CREATE TABLE IF NOT EXISTS cadastre.green_assets (
   province_id INTEGER NOT NULL,
   municipality_id INTEGER NOT NULL,
   sub_municipal_area_id INTEGER REFERENCES public.sub_municipal_area(id),
-  object_code_id BIGINT REFERENCES public.object_codes(id),
+  attribute_type_id BIGINT REFERENCES public.attribute_types(id),
   asset_type cadastre.asset_type NOT NULL DEFAULT 'other',
   geometry_type cadastre.geometry_type NOT NULL,
   geometry GEOMETRY(Geometry, 4326) NOT NULL,
-  common_name VARCHAR(80),
   family VARCHAR(80),
   genus VARCHAR(50),
   species VARCHAR(50),
@@ -288,7 +280,9 @@ COMMENT ON TABLE cadastre.green_areas IS 'ASSET_AREA: green areas / hierarchical
 COMMENT ON COLUMN cadastre.green_areas.name IS 'area_name: human-readable name (e.g. Parco Sempione)';
 COMMENT ON COLUMN cadastre.green_areas.parent_id IS 'parent_area_id: self-reference for containment hierarchy';
 COMMENT ON COLUMN cadastre.green_areas.level_id IS 'Reference to AREA_LEVEL.level_id (semantic hierarchy)';
+COMMENT ON COLUMN cadastre.green_areas.attribute_type_id IS 'Reference to ATTRIBUTE_TYPES.id (DBT classification: geom_type + primary + secondary + attribute).';
 COMMENT ON TABLE cadastre.asset_area_history IS 'Temporal snapshots of ASSET_AREA (diagram 246-266).';
 COMMENT ON TABLE cadastre.green_assets IS 'ASSET_GREEN: green assets (trees, etc.). Partitioned by region_id.';
 COMMENT ON COLUMN cadastre.green_assets.green_area_id IS 'area_id in diagram: reference to ASSET_AREA.id (green_areas.id).';
+COMMENT ON COLUMN cadastre.green_assets.attribute_type_id IS 'Reference to ATTRIBUTE_TYPES.id (DBT classification).';
 COMMENT ON TABLE cadastre.asset_green_history IS 'Temporal snapshots of ASSET_GREEN (diagram 348-368).';

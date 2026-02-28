@@ -6,12 +6,14 @@ from territory.geo.application.usecases.query import (
     CatalogRegion,
     CatalogProvinceByRegion,
     CatalogMunicipalityByProvince,
-    CatalogDistrictByMunicipality,
+    CatalogSubMunicipalAreasByMunicipality,
 )
 from territory.geo.infrastructure.repository.region_repository import RegionRepository
 from territory.geo.infrastructure.repository.province_repository import ProvinceRepository
 from territory.geo.infrastructure.repository.municipality_repository import MunicipalityRepository
-from territory.geo.infrastructure.repository.district_repository import DistrictRepository
+from territory.geo.infrastructure.repository.sub_municipal_area_repository import (
+    SubMunicipalAreaRepository,
+)
 
 
 def _region_repository() -> RegionRepository:
@@ -26,8 +28,8 @@ def _municipality_repository() -> MunicipalityRepository:
     return MunicipalityRepository(session_factory=get_session)
 
 
-def _district_repository() -> DistrictRepository:
-    return DistrictRepository(session_factory=get_session)
+def _sub_municipal_area_repository() -> SubMunicipalAreaRepository:
+    return SubMunicipalAreaRepository(session_factory=get_session)
 
 
 def get_regions_use_case() -> CatalogRegion:
@@ -42,17 +44,17 @@ def get_municipalities_by_province_use_case() -> CatalogMunicipalityByProvince:
     return CatalogMunicipalityByProvince(_municipality_repository())
 
 
-def get_districts_by_municipality_use_case() -> CatalogDistrictByMunicipality:
-    return CatalogDistrictByMunicipality(_district_repository())
+def get_sub_municipal_areas_by_municipality_use_case() -> CatalogSubMunicipalAreasByMunicipality:
+    return CatalogSubMunicipalAreasByMunicipality(_sub_municipal_area_repository())
 
 
 __all__ = [
     "RegionRepository",
     "ProvinceRepository",
     "MunicipalityRepository",
-    "DistrictRepository",
+    "SubMunicipalAreaRepository",
     "get_regions_use_case",
     "get_provinces_by_region_use_case",
     "get_municipalities_by_province_use_case",
-    "get_districts_by_municipality_use_case",
+    "get_sub_municipal_areas_by_municipality_use_case",
 ]

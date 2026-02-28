@@ -1,4 +1,4 @@
-"""Output DTO for a single GeoJSON Feature (region, province, municipality, district)."""
+"""Output DTO for a single GeoJSON Feature (region, province, municipality, sub-municipal area)."""
 
 from typing import Any
 

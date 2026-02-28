@@ -2,10 +2,10 @@
 -- AGGREGATIONS LEVEL: SUB-MUNICIPAL AREA (IDs only - map names with separate queries)
 -- =============================================================================
 -- Pure benchmark: no JOIN with lookup. Returns sub_municipal_area_id, municipality_id.
--- Uses public.sub_municipal_area (replaces former districts).
+-- Uses public.sub_municipal_area.
 --
 -- OPTIMIZED: Partition pruning (region_id IS NOT NULL)
--- OPTIMIZED: Composite indexes (municipality_id IS NOT NULL, geometry_type = 'point')
+-- OPTIMIZED: Composite indexes (municipality_id IS NOT NULL, geometry_type = 'P' per OBT)
 -- OPTIMIZED: Partial composite indexes for POINT with sub_municipal_area_id (04-init-indexes-cadastre.sql)
 -- =============================================================================
 
@@ -22,7 +22,7 @@ FROM cadastre.green_assets
 WHERE sub_municipal_area_id IS NOT NULL
   AND region_id IS NOT NULL  -- PARTITION PRUNING
   AND municipality_id IS NOT NULL  -- COMPOSITE INDEX
-  AND geometry_type = 'point'  -- PARTIAL COMPOSITE INDEX
+  AND geometry_type = 'P'  -- PARTIAL COMPOSITE INDEX
 GROUP BY municipality_id
 ORDER BY num_sub_areas_with_assets DESC;
 
@@ -33,7 +33,7 @@ FROM cadastre.green_assets
 WHERE sub_municipal_area_id IS NOT NULL
   AND region_id IS NOT NULL  -- PARTITION PRUNING
   AND municipality_id IS NOT NULL  -- COMPOSITE INDEX
-  AND geometry_type = 'point'  -- PARTIAL COMPOSITE INDEX
+  AND geometry_type = 'P'  -- PARTIAL COMPOSITE INDEX
 GROUP BY sub_municipal_area_id
 ORDER BY total_assets DESC;
 
@@ -44,7 +44,7 @@ FROM cadastre.green_assets
 WHERE sub_municipal_area_id IS NOT NULL
   AND region_id IS NOT NULL  -- PARTITION PRUNING
   AND municipality_id IS NOT NULL  -- COMPOSITE INDEX
-  AND geometry_type = 'point'  -- PARTIAL COMPOSITE INDEX
+  AND geometry_type = 'P'  -- PARTIAL COMPOSITE INDEX
 GROUP BY sub_municipal_area_id, asset_type
 ORDER BY sub_municipal_area_id, n DESC;
 
@@ -107,7 +107,7 @@ JOIN cadastre.green_assets ga ON ST_Within(ga.geometry, s.geometry)
   AND ga.municipality_id = s.municipality_id  -- COMPOSITE INDEX
   AND ga.region_id = (SELECT p.region_id FROM public.municipalities c JOIN public.provinces p ON c.province_id = p.id WHERE c.id = s.municipality_id)  -- PARTITION PRUNING
 WHERE ga.geometry IS NOT NULL AND s.geometry IS NOT NULL
-  AND ga.geometry_type = 'point'  -- PARTIAL COMPOSITE INDEX
+  AND ga.geometry_type = 'P'  -- PARTIAL COMPOSITE INDEX
 GROUP BY s.id, s.municipality_id
 ORDER BY total_assets DESC;
 
@@ -120,7 +120,7 @@ JOIN cadastre.green_assets ga ON ST_Within(ga.geometry, s.geometry)
   AND ga.municipality_id = s.municipality_id  -- COMPOSITE INDEX
   AND ga.region_id = (SELECT p.region_id FROM public.municipalities c JOIN public.provinces p ON c.province_id = p.id WHERE c.id = s.municipality_id)  -- PARTITION PRUNING
 WHERE ga.geometry IS NOT NULL AND s.geometry IS NOT NULL
-  AND ga.geometry_type = 'point'  -- PARTIAL COMPOSITE INDEX
+  AND ga.geometry_type = 'P'  -- PARTIAL COMPOSITE INDEX
 GROUP BY s.id, ga.asset_type
 ORDER BY s.id, n DESC;
 

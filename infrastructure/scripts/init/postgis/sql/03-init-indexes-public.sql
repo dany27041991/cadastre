@@ -33,8 +33,10 @@ CREATE INDEX IF NOT EXISTS idx_sub_municipal_area_geom ON public.sub_municipal_a
 CREATE INDEX IF NOT EXISTS idx_sub_municipal_area_municipality_level ON public.sub_municipal_area(municipality_id, level);
 
 -- -----------------------------------------------------------------------------
--- CENSUS_SECTION
+-- CENSUS_SECTION (no duplicates: unique index + loader ON CONFLICT)
 -- -----------------------------------------------------------------------------
+-- Unique index for upsert; code can be NULL → COALESCE. Loader: ON CONFLICT (...) DO UPDATE.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_census_section_upsert ON public.census_section (municipality_id, COALESCE(code, ''), name, layer_type);
 CREATE INDEX IF NOT EXISTS idx_census_section_municipality ON public.census_section(municipality_id);
 CREATE INDEX IF NOT EXISTS idx_census_section_municipality_code ON public.census_section(municipality_id, code);
 CREATE INDEX IF NOT EXISTS idx_census_section_layer_type ON public.census_section(layer_type);

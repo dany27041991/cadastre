@@ -19,11 +19,9 @@ CREATE INDEX IF NOT EXISTS idx_green_areas_sub_municipal_area_id ON cadastre.gre
 CREATE INDEX IF NOT EXISTS idx_green_areas_level_id ON cadastre.green_areas(level_id) WHERE level_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_green_areas_parent ON cadastre.green_areas(parent_id);
 -- name: no index (display / LIKE)
--- classification_istat_id: filter by classification
-CREATE INDEX IF NOT EXISTS idx_green_areas_classification_istat_id ON cadastre.green_areas(classification_istat_id) WHERE classification_istat_id IS NOT NULL;
--- object_code_id: FK lookup
-CREATE INDEX IF NOT EXISTS idx_green_areas_object_code_id ON cadastre.green_areas(object_code_id) WHERE object_code_id IS NOT NULL;
--- zril_identifier, susceptibility_*, intensity_of_fruition, geometry_dimension, perimeter_type: no index (rare filters)
+-- attribute_type_id: FK lookup (DBT catalog)
+CREATE INDEX IF NOT EXISTS idx_green_areas_attribute_type_id ON cadastre.green_areas(attribute_type_id) WHERE attribute_type_id IS NOT NULL;
+-- zril_identifier, susceptibility_*, intensity_of_fruition, geometry_type, perimeter_type: no index (rare filters)
 -- administrative_status: filter active/approved areas
 CREATE INDEX IF NOT EXISTS idx_green_areas_administrative_status ON cadastre.green_areas(administrative_status) WHERE administrative_status IS NOT NULL;
 -- operational_status, survey_status: no index unless needed
@@ -56,14 +54,14 @@ CREATE INDEX IF NOT EXISTS idx_green_assets_province_id ON cadastre.green_assets
 CREATE INDEX IF NOT EXISTS idx_green_assets_municipality_id ON cadastre.green_assets(municipality_id);
 CREATE INDEX IF NOT EXISTS idx_green_assets_sub_municipal_area_id ON cadastre.green_assets(sub_municipal_area_id);
 CREATE INDEX IF NOT EXISTS idx_green_assets_green_area_id ON cadastre.green_assets(green_area_id);
-CREATE INDEX IF NOT EXISTS idx_green_assets_object_code_id ON cadastre.green_assets(object_code_id) WHERE object_code_id IS NOT NULL;
--- asset_type, geometry_type: filters and composites (point/municipality in 06 + default section below)
+CREATE INDEX IF NOT EXISTS idx_green_assets_attribute_type_id ON cadastre.green_assets(attribute_type_id) WHERE attribute_type_id IS NOT NULL;
+-- asset_type, geometry_type: filters and composites (P/L/S per OBT; point = P in partial indexes below)
 CREATE INDEX IF NOT EXISTS idx_green_assets_asset_type ON cadastre.green_assets(asset_type);
 CREATE INDEX IF NOT EXISTS idx_green_assets_geometry_type ON cadastre.green_assets(geometry_type);
 CREATE INDEX IF NOT EXISTS idx_green_assets_asset_type_province ON cadastre.green_assets(asset_type, province_id);
 -- geometry: spatial
 CREATE INDEX IF NOT EXISTS idx_green_assets_geom ON cadastre.green_assets USING GIST(geometry);
--- common_name, family, genus, variety: no index (display / search)
+-- family, genus, variety: no index (display / search)
 -- species: filter by species
 CREATE INDEX IF NOT EXISTS idx_green_assets_species ON cadastre.green_assets(species)
   WHERE species IS NOT NULL AND species != '';
@@ -109,12 +107,12 @@ CREATE INDEX IF NOT EXISTS idx_green_areas_default_municipality ON cadastre.gree
 -- -----------------------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_av_default_point_municipality_region
 ON cadastre.green_assets_default(geometry_type, region_id, municipality_id)
-WHERE geometry_type = 'point';
+WHERE geometry_type = 'P';
 
 CREATE INDEX IF NOT EXISTS idx_av_default_point_province_region
 ON cadastre.green_assets_default(geometry_type, region_id, province_id)
-WHERE geometry_type = 'point';
+WHERE geometry_type = 'P';
 
 CREATE INDEX IF NOT EXISTS idx_av_default_point_sub_municipal_municipality_region
 ON cadastre.green_assets_default(geometry_type, region_id, municipality_id, sub_municipal_area_id)
-WHERE geometry_type = 'point' AND sub_municipal_area_id IS NOT NULL;
+WHERE geometry_type = 'P' AND sub_municipal_area_id IS NOT NULL;

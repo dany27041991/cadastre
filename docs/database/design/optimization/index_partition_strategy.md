@@ -106,7 +106,7 @@
 ```sql
 -- ✅ CREATE:
 -- 1. Partitioned tables with DEFAULT
--- 2. BASE indexes on reference tables (regions, provinces, municipalities, districts)
+-- 2. BASE indexes on reference tables (regions, provinces, municipalities, sub_municipal_area)
 -- 3. BASE indexes on DEFAULT partition (only essential ones)
 -- 4. GIST indexes on geometry (essential for spatial queries)
 
@@ -166,7 +166,7 @@
 ### ✅ **Before Population** (`01-init-schema.sql` + `02-init-indexes.sql`)
 
 - [x] Partitioned tables with DEFAULT
-- [x] Indexes on reference tables (regions, provinces, municipalities, districts)
+- [x] Indexes on reference tables (regions, provinces, municipalities, sub_municipal_area)
 - [x] GIST indexes on geometry for DEFAULT
 - [x] Base indexes on filter columns for DEFAULT
 - [ ] ~~Partial composite indexes~~ (after)

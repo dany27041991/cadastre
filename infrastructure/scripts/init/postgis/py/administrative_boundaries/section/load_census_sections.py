@@ -1,6 +1,7 @@
 """
 Load public.census_section from section/sections.geojson.
 Depends on public.municipalities. Properties: istat_code → municipality_id, name, layer_type (sezione→census_section, località→locality).
+Upsert by (municipality_id, COALESCE(code,''), name, layer_type): no duplicates on re-run.
 """
 import json
 
@@ -34,6 +35,8 @@ def load(conn):
                 INSERT INTO public.census_section (municipality_id, code, name, layer_type, geometry)
                 SELECT m.id, %s, %s, %s::public.census_layer_type, ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)
                 FROM public.municipalities m WHERE m.istat_code = %s
+                ON CONFLICT (municipality_id, COALESCE(code, ''), name, layer_type) DO UPDATE SET
+                  geometry = EXCLUDED.geometry
                 """,
                 (code, name, layer_type, geom, istat_code),
             )

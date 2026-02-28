@@ -6,7 +6,7 @@
 -- OPTIMIZED: Partition pruning (region_id IS NOT NULL)
 -- OPTIMIZED: Composite indexes (province_id IS NOT NULL)
 -- OPTIMIZED: Composite indexes on GEO queries (ga.municipality_id = c.id, ga.province_id = c.province_id)
--- OPTIMIZED: Partial composite indexes for POINT queries (geometry_type = 'point')
+-- OPTIMIZED: Partial composite indexes for POINT queries (geometry_type = 'P' per OBT)
 -- =============================================================================
 
 \timing on
@@ -121,7 +121,7 @@ JOIN cadastre.green_assets ga ON ST_Within(ga.geometry, c.geometry)
   AND ga.province_id = c.province_id  -- COMPOSITE INDEX
   AND ga.region_id = (SELECT region_id FROM public.provinces WHERE id = c.province_id)  -- PARTITION PRUNING
 WHERE ga.geometry IS NOT NULL AND c.geometry IS NOT NULL
-  AND ga.geometry_type = 'point'  -- PARTIAL COMPOSITE INDEX
+  AND ga.geometry_type = 'P'  -- PARTIAL COMPOSITE INDEX
 GROUP BY c.id
 ORDER BY total_assets DESC
 LIMIT 50;
@@ -135,7 +135,7 @@ JOIN cadastre.green_assets ga ON ST_Within(ga.geometry, c.geometry)
   AND ga.province_id = c.province_id  -- COMPOSITE INDEX
   AND ga.region_id = (SELECT region_id FROM public.provinces WHERE id = c.province_id)  -- PARTITION PRUNING
 WHERE ga.geometry IS NOT NULL AND c.geometry IS NOT NULL
-  AND ga.geometry_type = 'point'  -- PARTIAL COMPOSITE INDEX
+  AND ga.geometry_type = 'P'  -- PARTIAL COMPOSITE INDEX
 GROUP BY c.id, ga.asset_type
 ORDER BY c.id, n DESC
 LIMIT 500;

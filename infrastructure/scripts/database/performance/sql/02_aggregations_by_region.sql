@@ -4,7 +4,7 @@
 -- Benchmark puro: nessuna JOIN con lookup. Restituisce region_id per mapping.
 -- 
 -- ⚡ OTTIMIZZATO: Partition pruning su query GEO (ga.region_id = r.id)
--- ⚡ OTTIMIZZATO: Indici compositi parziali per query POINT (geometry_type = 'point')
+-- ⚡ OTTIMIZZATO: Indici compositi parziali per query POINT (geometry_type = 'P' per OBT)
 -- =============================================================================
 
 \timing on
@@ -97,7 +97,7 @@ FROM public.regions r
 JOIN cadastre.green_assets ga ON ST_Within(ga.geometry, r.geometry)
   AND ga.region_id = r.id  -- ⚡ PARTITION PRUNING
 WHERE ga.geometry IS NOT NULL AND r.geometry IS NOT NULL
-  AND ga.geometry_type = 'point'  -- ⚡ INDICE COMPOSITO PARZIALE
+  AND ga.geometry_type = 'P'  -- ⚡ INDICE COMPOSITO PARZIALE
 GROUP BY r.id
 ORDER BY asset_totale DESC;
 
@@ -108,7 +108,7 @@ FROM public.regions r
 JOIN cadastre.green_assets ga ON ST_Within(ga.geometry, r.geometry)
   AND ga.region_id = r.id  -- ⚡ PARTITION PRUNING
 WHERE ga.geometry IS NOT NULL AND r.geometry IS NOT NULL
-  AND ga.geometry_type = 'point'  -- ⚡ INDICE COMPOSITO PARZIALE
+  AND ga.geometry_type = 'P'  -- ⚡ INDICE COMPOSITO PARZIALE
 GROUP BY r.id, ga.asset_type
 ORDER BY r.id, n DESC;
 

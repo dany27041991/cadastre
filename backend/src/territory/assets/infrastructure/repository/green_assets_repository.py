@@ -63,7 +63,7 @@ class GreenAssetsRepository:
     def get_within_municipality(
         self, region_id: int, municipality_id: int
     ) -> GeoJSONFeatureCollection:
-        """Assets within municipality (ST_Union of root areas, no district)."""
+        """Assets within municipality (ST_Union of root areas, no sub-municipal area filter)."""
         av = GreenAssetModel
         a = GreenAreaModel
         province_subq = (
@@ -91,10 +91,13 @@ class GreenAssetsRepository:
             rows = self._rows_from_session(session, stmt)
         return build_green_asset_feature_collection(rows)
 
-    def get_within_municipality_and_district(
-        self, region_id: int, municipality_id: int, district_id: int
+    def get_within_municipality_and_sub_municipal_area(
+        self,
+        region_id: int,
+        municipality_id: int,
+        sub_municipal_area_id: int,
     ) -> GeoJSONFeatureCollection:
-        """Assets within municipality and district (ST_Union of root areas for that district)."""
+        """Assets within municipality and sub-municipal area (ST_Union of root areas)."""
         av = GreenAssetModel
         a = GreenAreaModel
         province_subq = (
@@ -109,7 +112,7 @@ class GreenAssetsRepository:
             .where(a.region_id == region_id)
             .where(a.province_id == province_subq)
             .where(a.parent_id.is_(None))
-            .where(a.district_id == district_id)
+            .where(a.sub_municipal_area_id == sub_municipal_area_id)
             .where(a.geometry.isnot(None))
         ).scalar_subquery()
         stmt = (
@@ -117,7 +120,7 @@ class GreenAssetsRepository:
             .where(av.region_id == region_id)
             .where(av.province_id == province_subq)
             .where(av.municipality_id == municipality_id)
-            .where(av.district_id == district_id)
+            .where(av.sub_municipal_area_id == sub_municipal_area_id)
             .where(func.ST_Within(av.geometry, area_union))
         )
         with self._session_factory() as session:

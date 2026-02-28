@@ -87,7 +87,7 @@ WITH aree_filtrate AS (
 asset_filtrati AS (
   SELECT id, geometry, region_id
   FROM cadastre.green_assets
-  WHERE geometry IS NOT NULL AND region_id IS NOT NULL AND geometry_type = 'point'
+  WHERE geometry IS NOT NULL AND region_id IS NOT NULL AND geometry_type = 'P'
 )
 SELECT a.id AS green_area_id, a.municipality_id, COUNT(ga.id) AS asset_totale
 FROM aree_filtrate a
@@ -108,7 +108,7 @@ WITH aree_filtrate AS (
 asset_filtrati AS (
   SELECT id, geometry, region_id
   FROM cadastre.green_assets
-  WHERE geometry IS NOT NULL AND region_id IS NOT NULL AND geometry_type = 'point'
+  WHERE geometry IS NOT NULL AND region_id IS NOT NULL AND geometry_type = 'P'
 )
 SELECT a.id AS green_area_id, a.municipality_id, COUNT(ga.id) AS asset_totale
 FROM aree_filtrate a

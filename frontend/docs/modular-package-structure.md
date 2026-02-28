@@ -4,19 +4,19 @@ Questo documento propone la **mappatura tra domini funzionali (e API backend) e 
 
 **Quando usarlo:** onboarding, scelta della cartella in cui aggiungere una feature, introduzione di una nuova feature o di un nuovo layer (es. catalog), verifica delle dipendenze tra moduli.
 
+**Riferimento struttura cartelle:** [folders-structure-fe.md](./folders-structure-fe.md) – struttura dettagliata e convenzioni.
+
 ---
 
 ## Livello di maturità della struttura
 
 | Aspetto | Situazione attuale | Cosa migliora la struttura |
 |--------|---------------------|-----------------------------|
-| **Confini e naming** | api/territory, shared, features/map (e territory/types), components | Esplicitare i **contract**: cosa espone ogni feature (solo componenti e hook pubblici), cosa non deve uscire (tipi interni, dettagli API) |
-| **Dipendenze** | api usa shared; App usa shared/hooks, features, components | Regole **scritte e verificabili** (es. lint sui path: features non importano da altre features; shared non importa da features) |
-| **Allineamento al backend** | api/territory con areas e assets rispecchia backend | Criteri di **evoluzione**: quando aggiungere una feature (es. catalog), quando splittare una feature (es. map vs navigazione) |
-| **Separazione dei layer** | api, shared, features, components già separati | Chiarire **cosa vive dove**: chiamate HTTP solo in api; stato UI e logica di feature in features; UI riutilizzabile in components; niente logica di dominio in components |
-| **Trade-off e alternative** | Scelte implicite (un’unica feature map, hook territorio in shared) | **Rationale** documentato: perché gli hook territorio sono in shared; perché map e territory types sono organizzati così; cosa si è scartato |
-
-Sarebbe utile adottare **ADR (Architecture Decision Records)**: documenti brevi (uno per decisione) che registrano il contesto, la decisione presa e le conseguenze. Servono a non perdere il perché di una scelta quando il team cambia, a far discutere le alternative in modo esplicito e a dare a chi arriva dopo il rationale delle scelte—ad esempio perché gli hook di navigazione territorio stanno in `shared` invece che in `features/territory`, o perché si è scelto un unico layer `api/territory` invece di un modulo per ogni dominio backend.
+| **Confini e naming** | app, shared, entities, features (territory-map, green-asset-explorer, green-area-explorer), widgets | Esplicitare i **contract**: ogni feature/widget espone solo API pubblica (index.ts); tipi e dettagli interni restano nascosti |
+| **Dipendenze** | app → widgets → features → entities → shared | Regole **scritte e verificabili** (es. lint sui path: features non importano da altre features; shared/entities non importano da app, features, widgets) |
+| **Allineamento al backend** | API territory, green areas, green assets rispecchiano backend | Criteri di **evoluzione**: quando aggiungere una feature (es. catalog), quando introdurre un nuovo widget |
+| **Separazione dei layer** | app, shared, entities, features, widgets | Chiarire **cosa vive dove**: chiamate HTTP in features/*/api o shared/lib/http; stato e orchestrazione in features/*/model; UI generica in shared/ui; dominio puro in entities |
+| **Table e dati** | — | **Table Core Engine** headless in shared/lib/table-core; DataTable, FilterPanel, Pagination in shared/ui; feature explorer usano table-core + React Query |
 
 ---
 
@@ -24,12 +24,13 @@ Sarebbe utile adottare **ADR (Architecture Decision Records)**: documenti brevi 
 
 | Dominio / API backend | Modulo frontend | Contenuto tipico |
 |------------------------|-----------------|-------------------|
-| **Gerarchia geo + aree + asset** (territory) | **api/territory** | Client: `territory.ts`, `areas/greenAreas.api.ts`, `assets/greenAssets.api.ts`. Contratti (tipi risposta) e fetcher. |
-| **Catalogo DBT** (futuro) | **api/catalog** (futuro) | Endpoint tipi/codici; stesso pattern di api/territory. |
-| **Costanti, tipi globali, hook condivisi** | **shared** | `constants/`, `types/`, `styles/`, `hooks/` (es. useTerritoryMap, useTerritoryNavigation), `factory/loaders`. Niente logica di business legata a una sola schermata. |
-| **Mappa e navigazione territorio** | **features/map** (e tipi in **features/territory**) | Componenti mappa (MapHeader, palette verde), tipi mappa e territorio, config layer (cluster, loaders). |
-| **Layout e UI riutilizzabile** | **components** | Layout (sidebar, main-content, breadcrumb), componenti UI generici. Nessuna chiamata API né stato di dominio. |
-| **Composizione e bootstrap** | **App.tsx / main.tsx** | Montaggio hook shared, feature map e layout; nessuna logica di dominio oltre al wiring. |
+| **Gerarchia geo + aree + asset (mappa)** | **features/territory-map** + api interna | useTerritoryMap, useMapLayers, fetchers; territory.api, greenAreaMap.api, greenAssetMap.api; MapContainer, MapHeader, MapLayersToggle. |
+| **Green assets (tabella, filtri, paginazione)** | **features/green-asset-explorer** + api interna | useGreenAssetTable (table-core), filters.config, columns.config, query; GreenAssetExplorer.api; GreenAssetTable, GreenAssetFilters, GreenAssetToolbar. |
+| **Green areas (tabella, filtri, paginazione)** | **features/green-area-explorer** + api interna | useGreenAreaTable (table-core), filters.config, columns.config, query; GreenAreaExplorer.api; GreenAreaTable, GreenAreaFilters, GreenAreaToolbar. |
+| **Dominio puro (tipi, schema, mapper)** | **entities/** (territory, green-area, green-asset) | types.ts, schema.ts, mapper.ts; nessuna chiamata API né UI. |
+| **UI generica, utility, hook, config** | **shared/** | ui (button, input, data-table, pagination, filter-panel), lib (http, table-core, url, cache), hooks (useUrlState), config (map), types (api, geojson). |
+| **Composizione schermate** | **widgets/** | layout (main, sidebar); territory-map-widget; green-asset-explorer-widget; green-area-explorer-widget. Solo orchestrazione di feature + layout. |
+| **Bootstrap e routing** | **app/** | index.tsx (Providers + App), App.tsx (Router + vista default), router/, providers/, config/. |
 
 ---
 
@@ -43,22 +44,30 @@ flowchart LR
     end
 
     subgraph FE["Moduli frontend"]
-        api_territory[api territory]
-        api_catalog["api catalog futuro"]
+        feat_territory_map[features/territory-map]
+        feat_green_asset[features/green-asset-explorer]
+        feat_green_area[features/green-area-explorer]
+        entities[entities]
         shared[shared]
-        features_map[features map]
-        features_territory[features territory types]
-        components[components]
+        widgets[widgets]
     end
 
-    territory_api --> api_territory
-    catalog_api -.-> api_catalog
+    territory_api --> feat_territory_map
+    territory_api --> feat_green_asset
+    territory_api --> feat_green_area
+    catalog_api -.-> FE
 
-    api_territory --> features_map
-    api_territory --> shared
-    shared --> features_map
-    shared --> components
-    features_map --> components
+    feat_territory_map --> entities
+    feat_territory_map --> shared
+    feat_green_asset --> entities
+    feat_green_asset --> shared
+    feat_green_area --> entities
+    feat_green_area --> shared
+
+    widgets --> feat_territory_map
+    widgets --> feat_green_asset
+    widgets --> feat_green_area
+    widgets --> shared
 ```
 
 *Le frecce indicano: “questo modulo frontend consuma questa API o questo modulo”. Linea tratteggiata = previsto (catalog non ancora presente).*
@@ -67,42 +76,64 @@ flowchart LR
 
 ## 3. Diagramma: Dipendenze tra moduli (regole)
 
-Il grafo mostra chi può dipendere da chi (freccia = “A importa da B”). **shared** e **api** sono usati da app e features; le **features** non si importano tra loro; **components** sono usati da app e features.
+Il grafo mostra chi può dipendere da chi (freccia = “A importa da B”). **Regola:** `app → widgets → features → entities → shared`. Mai invertire.
 
 ```mermaid
 flowchart TB
     subgraph entry["Entry"]
-        app[App main]
+        main[main.tsx]
+        app[app]
+    end
+
+    subgraph widgets_layer["Widgets"]
+        layout[widgets/layout]
+        territory_w[territory-map-widget]
+        green_asset_w[green-asset-explorer-widget]
+        green_area_w[green-area-explorer-widget]
     end
 
     subgraph features_layer["Features"]
-        map[features map]
-        territory_types[features territory]
+        territory_map[features/territory-map]
+        green_asset[features/green-asset-explorer]
+        green_area[features/green-area-explorer]
     end
 
-    subgraph infra["Infra e condiviso"]
-        api[api]
-        shared[shared]
+    subgraph entities_layer["Entities"]
+        ent_territory[entities/territory]
+        ent_green_area[entities/green-area]
+        ent_green_asset[entities/green-asset]
     end
 
-    subgraph ui["UI condivisa"]
-        components[components]
+    subgraph shared_layer["Shared"]
+        shared[shared ui lib hooks config types]
     end
 
-    app --> map
-    app --> shared
-    app --> components
+    main --> app
+    app --> layout
+    app --> territory_w
+    app --> green_asset_w
+    app --> green_area_w
 
-    map --> api
-    map --> shared
-    map --> components
-    territory_types --> shared
+    territory_w --> territory_map
+    territory_w --> shared
+    green_asset_w --> green_asset
+    green_asset_w --> shared
+    green_area_w --> green_area
+    green_area_w --> shared
+    layout --> shared
 
-    api --> shared
+    territory_map --> ent_territory
+    territory_map --> ent_green_area
+    territory_map --> ent_green_asset
+    territory_map --> shared
+    green_asset --> ent_green_asset
+    green_asset --> shared
+    green_area --> ent_green_area
+    green_area --> shared
 ```
 
-- **Consentito:** App → features, shared, components; features → api, shared, components; api → shared.
-- **Non consentito:** features → features; shared → features o api; components → features, api o shared (oltre a tipi/shared minimi).
+- **Consentito:** app → widgets; widgets → features, shared; features → entities, shared; entities e shared non importano da app, widgets, features.
+- **Non consentito:** features → features; shared → features, entities, app, widgets; entities → app, features, widgets, shared (oltre a tipi puri se necessario).
 
 ---
 
@@ -113,35 +144,43 @@ flowchart TB
 ```mermaid
 flowchart TB
     subgraph src["frontend src"]
-        app[App.tsx main.tsx]
-        subgraph api["api"]
-            client[client]
-            territory[territory areas assets]
+        main[main.tsx]
+        app[app index App router providers config]
+
+        subgraph widgets["widgets"]
+            layout[layout main sidebar]
+            territory_w[territory-map-widget]
+            green_asset_w[green-asset-explorer-widget]
+            green_area_w[green-area-explorer-widget]
         end
-        subgraph shared["shared"]
-            constants[constants]
-            types[types]
-            hooks[hooks]
-            factory[factory loaders]
-        end
+
         subgraph features["features"]
-            map[map components hooks types]
-            territory_feat[territory types]
+            territory_map[territory-map model api ui]
+            green_asset[green-asset-explorer model api ui]
+            green_area[green-area-explorer model api ui]
         end
-        subgraph components["components"]
-            layout[layout]
+
+        subgraph entities["entities"]
+            ent_t[territory]
+            ent_ga[green-area]
+            ent_gs[green-asset]
+        end
+
+        subgraph shared["shared"]
+            ui[ui button data-table pagination filter-panel]
+            lib[lib http table-core url cache]
+            hooks[hooks]
+            config[config]
+            types[types]
         end
     end
 
-    app --> shared
-    app --> features
-    app --> components
-
-    features --> api
+    main --> app
+    app --> widgets
+    widgets --> features
+    widgets --> shared
+    features --> entities
     features --> shared
-    features --> components
-
-    api --> shared
 ```
 
 ---
@@ -150,35 +189,43 @@ flowchart TB
 
 | Layer | Contenuto | Non deve contenere |
 |-------|-----------|---------------------|
-| **api/** | Fetcher, URL, tipi di richiesta/risposta, adattatori da JSON a tipi di dominio (se necessario) | Stato React, hook, componenti, logica UI |
-| **shared/** | Costanti, tipi globali, hook riutilizzabili da più feature, utility, loaders/factory condivisi, stili globali | Import da features; logica legata a una sola schermata |
-| **features/** | Componenti, hook e tipi specifici della feature; eventuale stato locale; uso di api e shared | Import da altre features; chiamate HTTP dirette (usare api) |
-| **components/** | Componenti UI e layout riutilizzabili, presentazionali o layout puri | Chiamate API, stato di dominio, import da features (solo tipi condivisi da shared se necessario) |
-| **App / main** | Composizione: quale hook, quale feature, quale layout | Logica di dominio complessa (delegare a features o shared) |
+| **app/** | Bootstrap, Router, Providers, config (env, costanti). Monta widgets e vista default. | Logica di dominio, chiamate API, componenti di feature |
+| **widgets/** | Composizione di feature + layout (TerritoryMapWidget, GreenAssetExplorerWidget, MainContent, Sidebar). | Logica di dominio, chiamate API dirette (usare le feature) |
+| **features/** | Per use-case: model (hook, fetchers), api (fetcher, *.api.ts), ui (componenti). Usano table-core, DataTable, FilterPanel dove serve. | Import da altre features; logica fuori dal use-case |
+| **entities/** | Tipi, schema, mapper di dominio puri (territory, green-area, green-asset). | Chiamate API, componenti, hook React, import da app/features/widgets |
+| **shared/** | UI generica (button, data-table, pagination, filter-panel), lib (http, table-core, url, cache), hooks (useUrlState), config, types globali. | Import da features o entities; logica legata a un solo use-case |
 
 ---
 
 ## 6. Regole di dipendenza (da rispettare)
 
 | Da → A | Consentito | Non consentito |
-|--------|------------|----------------|
-| **features/** | api, shared, components | Altre features (no feature A → feature B) |
-| **api/** | shared (costanti, tipi) | features, components |
-| **shared/** | — | features, api (solo tipi/utility generici) |
-| **components/** | shared (tipi, costanti, stili) | features, api |
-| **App** | shared, features, components | — |
+|--------|------------|------------------|
+| **app/** | widgets, shared (se necessario) | features, entities (no import diretto; passare dai widgets) |
+| **widgets/** | features, shared | Altre widgets (evitare); entities (preferire via feature) |
+| **features/** | entities, shared | Altre features; app; widgets |
+| **entities/** | — (solo tipi/utility puri) | app, features, widgets, shared (ecc. tipi condivisi) |
+| **shared/** | — | app, features, widgets, entities |
 
 Rendere queste regole **verificabili** (es. ESLint con restrizione sui path o strumenti tipo Nx/Barrel) migliora il rispetto della struttura nel tempo.
 
 ---
 
-## 7. Riepilogo e passi successivi
+## 7. Table Core Engine e explorer
+
+- **shared/lib/table-core:** motore headless (pagination, sorting, filtering, query-adapter per React Query). Le feature non implementano la logica tabella, passano solo queryKey, fetcher, colonne, schema filtri.
+- **shared/ui:** DataTable, Pagination, FilterPanel sono generici; le feature (green-asset-explorer, green-area-explorer) li usano e forniscono config (columns, filters).
+- **Sync URL:** useUrlState (shared/hooks) e queryParams (shared/lib/url) per deep-linking e persistenza filtri/paginazione.
+
+---
+
+## 8. Riepilogo e passi successivi
 
 - **Allineamento con il backend:**  
-  `api/territory` riflette i contesti backend (geo, areas, assets). Un futuro modulo backend **catalog** può diventare `api/catalog` e essere usato da feature che gestiscono tipi/codici DBT.
+  Le API in features (territory-map, green-asset-explorer, green-area-explorer) riflettono i contesti backend (geo, areas, assets). Un futuro modulo backend **catalog** può diventare una feature dedicata e un eventuale widget.
 
 - **Struttura modulare:**  
-  **api** (chiamate e contratti), **shared** (tutto ciò che è usato da più feature o dall’app), **features** (una cartella per area funzionale: map, e tipi territorio dove servono), **components** (layout e UI condivisa). Nessuna dipendenza tra feature; dipendenze a senso unico verso api e shared.
+  **app** (bootstrap, router, providers), **widgets** (composizione), **features** (un use-case per cartella: territory-map, green-asset-explorer, green-area-explorer), **entities** (dominio puro), **shared** (ui, lib, hooks, config, types). Dipendenze a senso unico: app → widgets → features → entities → shared.
 
 - **Riferimenti:**  
   - [folders-structure-fe.md](./folders-structure-fe.md) – struttura dettagliata delle cartelle e convenzioni  

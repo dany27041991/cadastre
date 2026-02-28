@@ -154,9 +154,6 @@ erDiagram
         VARCHAR(255) area_name
         "Human-readable name (e.g., 'Parco Sempione')."
 
-        BIGINT classification_istat_id
-        "Green area class according to ISTAT urban environmental survey (statistical purpose)."
-
         BIGINT attribute_type_id FK
         "Reference to ATTRIBUTE_TYPES.id (DBT classification: geometry + primary + secondary + attribute)."
 
@@ -176,8 +173,8 @@ erDiagram
         "Allowed: NONE, LOW, MEDIUM, HIGH."
 
         %% ---------- Geometry ----------
-        ENUM geometry_dimension
-        "Allowed: P, L, S.
+        ENUM geometry_type
+        "Allowed: P, L, S (OBT: point, line, surface).
          Must be consistent with the stored geometry type."
 
         GEOMETRY geometry
@@ -296,7 +293,6 @@ erDiagram
         GEOMETRY geometry "GEOMETRY(GEOMETRY, 4326) geometry Point, LineString, or Polygon geometry in WGS84 (EPSG:4326)"
 
         %% ---------- Biological / physical attributes ----------
-        VARCHAR(80) common_name "Common plant name (e.g., 'London plane', 'Holm oak', 'Olive tree')"
         VARCHAR(80) family "Botanical family grouping related genera (e.g., 'Platanaceae', 'Fagaceae', 'Oleaceae')"
         VARCHAR(50) genus "Plant genus, first part of the scientific name (e.g., 'Platanus', 'Quercus', 'Olea')"
         VARCHAR(50) species "Plant species, second part of the scientific name (e.g., 'acerifolia', 'ilex', 'europaea')"

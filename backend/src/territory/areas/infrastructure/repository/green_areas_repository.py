@@ -30,10 +30,11 @@ class GreenAreasRepository:
         return [tuple(row) for row in result.all()]
 
     def get_by_parent(self, parent_id: int, region_id: int) -> GeoJSONFeatureCollection:
-        """Children of a given parent area."""
+        """Children of a given parent area (identified by id + region_id for composite PK)."""
         province_subq = (
             select(GreenAreaModel.province_id)
             .where(GreenAreaModel.id == parent_id)
+            .where(GreenAreaModel.region_id == region_id)
             .limit(1)
             .scalar_subquery()
         )
@@ -50,7 +51,7 @@ class GreenAreasRepository:
     def get_roots_by_municipality(
         self, municipality_id: int, region_id: int
     ) -> GeoJSONFeatureCollection:
-        """Root areas for a municipality (no district)."""
+        """Root areas for a municipality (no sub-municipal area filter)."""
         province_subq = (
             select(MunicipalityModel.province_id)
             .where(MunicipalityModel.id == municipality_id)
@@ -68,10 +69,13 @@ class GreenAreasRepository:
             rows = self._rows_from_session(session, stmt)
         return build_green_area_feature_collection(rows)
 
-    def get_roots_by_municipality_and_district(
-        self, municipality_id: int, district_id: int, region_id: int
+    def get_roots_by_municipality_and_sub_municipal_area(
+        self,
+        municipality_id: int,
+        sub_municipal_area_id: int,
+        region_id: int,
     ) -> GeoJSONFeatureCollection:
-        """Root areas for a municipality and district."""
+        """Root areas for a municipality and sub-municipal area."""
         province_subq = (
             select(MunicipalityModel.province_id)
             .where(MunicipalityModel.id == municipality_id)
@@ -81,7 +85,7 @@ class GreenAreasRepository:
         stmt = (
             self._select_geojson()
             .where(GreenAreaModel.municipality_id == municipality_id)
-            .where(GreenAreaModel.district_id == district_id)
+            .where(GreenAreaModel.sub_municipal_area_id == sub_municipal_area_id)
             .where(GreenAreaModel.parent_id.is_(None))
             .where(GreenAreaModel.region_id == region_id)
             .where(GreenAreaModel.province_id == province_subq)

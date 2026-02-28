@@ -16,10 +16,6 @@ CREATE TABLE IF NOT EXISTS public.regions (
   id SERIAL PRIMARY KEY,
   code VARCHAR(10) NOT NULL UNIQUE,
   name VARCHAR(100) NOT NULL,
-  geographic_division VARCHAR(50),
-  nuts1 VARCHAR(10),
-  nuts2 VARCHAR(10),
-  nuts3 VARCHAR(10),
   geometry GEOMETRY(MultiPolygon, 4326)
 );
 
@@ -37,12 +33,8 @@ CREATE TABLE IF NOT EXISTS public.municipalities (
   id SERIAL PRIMARY KEY,
   istat_code VARCHAR(6) NOT NULL UNIQUE,
   name VARCHAR(255) NOT NULL,
-  cadastral_code VARCHAR(4),
   province_id INTEGER NOT NULL REFERENCES public.provinces(id),
   is_provincial_capital BOOLEAN DEFAULT FALSE,
-  nuts1 VARCHAR(10),
-  nuts2 VARCHAR(10),
-  nuts3 VARCHAR(10),
   geometry GEOMETRY(MultiPolygon, 4326)
 );
 
@@ -70,6 +62,7 @@ BEGIN
 END
 $$;
 
+-- Uniqueness (no duplicates): enforced by unique index idx_census_section_upsert in 03-init-indexes-public.sql.
 CREATE TABLE IF NOT EXISTS public.census_section (
   id SERIAL PRIMARY KEY,
   municipality_id INTEGER NOT NULL REFERENCES public.municipalities(id),

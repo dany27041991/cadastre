@@ -26,11 +26,11 @@ Le entità del modello dati si raggruppano in domini logici; ogni dominio corris
 
 | Dominio DB | Entità / tabelle | Pacchetto backend | Note |
 |------------|------------------|-------------------|------|
-| **Gerarchia amministrativa** | REGIONS, PROVINCES, MUNICIPALITIES, DISTRICTS | **territory.geo** | Confini amministrativi; usati da areas e assets per partitioning e RLS. |
+| **Gerarchia amministrativa** | REGIONS, PROVINCES, MUNICIPALITIES, SUB_MUNICIPAL_AREA | **territory.geo** | Confini amministrativi; usati da areas e assets per partitioning e RLS. |
 | **Livelli area (riferimento)** | AREA_LEVEL | **territory.areas** (o modulo **catalog** futuro) | Definisce MANAGEMENT_UNIT, FUNCTIONAL_SUBAREA, ecc.; referenziato da ASSET_AREA.level_id. |
-| **Catalogo DBT** | PRIMARY_TYPES, SECONDARY_TYPES, ATTRIBUTE_TYPES, OBJECT_CODES | **catalog** (futuro) o **territory.catalog** | Tipi e codici DBT; referenziati da ASSET_AREA e ASSET_GREEN (object_code_id). |
-| **Aree verdi** | ASSET_AREA, ASSET_AREA_HISTORY | **territory.areas** | Aree/parchi; dipendono da geo, AREA_LEVEL, OBJECT_CODES. |
-| **Asset verdi** | ASSET_GREEN, ASSET_GREEN_HISTORY | **territory.assets** | Alberi/elementi puntuali; dipendono da geo, areas (area_id), OBJECT_CODES. |
+| **Catalogo DBT** | PRIMARY_TYPES, SECONDARY_TYPES, ATTRIBUTE_TYPES | **catalog** (futuro) o **territory.catalog** | Tipi e codici DBT; referenziati da ASSET_AREA e ASSET_GREEN (attribute_type_id). |
+| **Aree verdi** | ASSET_AREA, ASSET_AREA_HISTORY | **territory.areas** | Aree/parchi; dipendono da geo, AREA_LEVEL, ATTRIBUTE_TYPES. |
+| **Asset verdi** | ASSET_GREEN, ASSET_GREEN_HISTORY | **territory.assets** | Alberi/elementi puntuali; dipendono da geo, areas (area_id), ATTRIBUTE_TYPES. |
 | **Traduzioni** | TRANSLATIONS | **shared** o modulo **i18n** (futuro) | Etichette per tabelle/enum; cross-cutting. |
 
 ---
@@ -40,9 +40,9 @@ Le entità del modello dati si raggruppano in domini logici; ogni dominio corris
 ```mermaid
 flowchart LR
     subgraph DB["Domini database"]
-        GEO[REGIONS PROVINCES MUNICIPALITIES DISTRICTS]
+        GEO[REGIONS PROVINCES MUNICIPALITIES SUB_MUNICIPAL_AREA]
         LEVEL[AREA_LEVEL]
-        DBT[PRIMARY_TYPES SECONDARY_TYPES ATTRIBUTE_TYPES OBJECT_CODES]
+        DBT[PRIMARY_TYPES SECONDARY_TYPES ATTRIBUTE_TYPES]
         AREA[ASSET_AREA ASSET_AREA_HISTORY]
         ASSET[ASSET_GREEN ASSET_GREEN_HISTORY]
         I18N[TRANSLATIONS]

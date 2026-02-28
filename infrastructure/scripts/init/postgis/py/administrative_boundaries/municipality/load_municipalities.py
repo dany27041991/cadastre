@@ -1,6 +1,7 @@
 """
 Load public.municipalities from municipality/municipalities.geojson.
 Depends on public.provinces. Properties: PRO_COM_T → istat_code, COMUNE → name, COD_REG+COD_UTS → province_id, geometry.
+Upsert on istat_code: no duplicates on re-run.
 """
 import json
 

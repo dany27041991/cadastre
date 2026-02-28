@@ -1,6 +1,7 @@
 """
 Load public.provinces from province/provinces.geojson.
 Depends on public.regions. Properties: COD_REG → region_id, COD_UTS → code, DEN_UTS/DEN_CM → name, SIGLA, geometry.
+Upsert on (code, region_id): no duplicates on re-run.
 """
 import json
 

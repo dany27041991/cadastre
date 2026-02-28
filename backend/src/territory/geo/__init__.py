@@ -1,1 +1,1 @@
-"""Geo submodule: administrative hierarchy (regions, provinces, municipalities, districts)."""
+"""Geo submodule: administrative hierarchy (regions, provinces, municipalities, sub-municipal areas)."""

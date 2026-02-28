@@ -34,12 +34,12 @@ Execution Time: 15,057 ms
 ### 🎯 HIGH PRIORITY (Implement immediately)
 
 #### 1. Partial Composite Indexes for Territorial Filters
-**Impact:** 30-50% time reduction for municipality/province/district queries  
+**Impact:** 30-50% time reduction for municipality/province/sub-municipal area queries  
 **Cost:** Medium (extra disk space ~50-150MB per partition)
 
 **Real query patterns:**
 - Always: `region_id`, `province_id`, `municipality_id`
-- Sometimes: `district_id` (only for municipalities with districts, ~40% of points)
+- Sometimes: `sub_municipal_area_id` (only for municipalities with sub-municipal areas, ~40% of points)
 
 **Recommended indexes:**
 
@@ -54,20 +54,20 @@ CREATE INDEX idx_ga_12_point_province_region
 ON cadastre.green_assets_12(geometry_type, region_id, province_id)
 WHERE geometry_type = 'point';
 
--- For DISTRICT queries (only for municipalities with districts)
-CREATE INDEX idx_ga_12_point_district_municipality_region
-ON cadastre.green_assets_12(geometry_type, region_id, municipality_id, district_id)
-WHERE geometry_type = 'point' AND district_id IS NOT NULL;
+-- For sub-municipal area queries (only for municipalities with sub-municipal areas)
+CREATE INDEX idx_ga_12_point_sub_municipal_municipality_region
+ON cadastre.green_assets_12(geometry_type, region_id, municipality_id, sub_municipal_area_id)
+WHERE geometry_type = 'point' AND sub_municipal_area_id IS NOT NULL;
 ```
 
 **Benefit:** PostgreSQL can filter geometry_type + territorial filters BEFORE applying the GIST index, greatly reducing rows to process.
 
-**Column order:** `region_id` (already partitioned) → `province_id` → `municipality_id` → `district_id` (by selectivity)
+**Column order:** `region_id` (already partitioned) → `province_id` → `municipality_id` → `sub_municipal_area_id` (by selectivity)
 
 **When to use:**
 - Municipality query: use index `*_point_municipality_region` (most cases)
 - Province query: use index `*_point_province_region`
-- District query: use index `*_point_district_municipality_region` (only for municipalities with districts)
+- Sub-municipal area query: use index `*_point_sub_municipal_municipality_region` (only for municipalities with sub-municipal areas)
 
 #### 2. Update Database Statistics
 **Impact:** 10-20% time reduction  
@@ -157,7 +157,7 @@ CREATE MATERIALIZED VIEW cadastre.green_assets_clusters_lazio AS
 ### For Immediate Production:
 1. ✅ **Implement partial composite indexes for municipality** (OPTIMIZATION 1)
    - Priority: Index `*_point_municipality_region` (most common query)
-   - Optional: Indexes for province and district if used frequently
+   - Optional: Indexes for province and sub_municipal_area if used frequently
 2. ✅ **Run ANALYZE periodically** (OPTIMIZATION 2)
 3. ✅ **Limit points for entire-region queries** (OPTIMIZATION 3)
 
