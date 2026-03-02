@@ -1,0 +1,18 @@
+{
+  "errors": {
+    "internal": "An internal error occurred. Please try again later.",
+    "not_found": "The requested resource was not found.",
+    "no_provinces_found": "No provinces found.",
+    "no_municipalities_found": "No municipalities found.",
+    "validation_error": "Validation error.",
+    "unauthorized": "Authentication required.",
+    "forbidden": "You do not have permission to perform this action.",
+    "bad_request": "Bad request.",
+    "conflict": "The request conflicts with the current state of the resource.",
+    "service_unavailable": "Service temporarily unavailable."
+  },
+  "validation": {
+    "required": "This field is required.",
+    "invalid_format": "Invalid format."
+  }
+}

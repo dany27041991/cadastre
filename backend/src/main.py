@@ -2,11 +2,21 @@
 Tree Cadastre - Backend API
 FastAPI multi-tenant for geospatial green asset management.
 """
+import os
+import time
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from territory import router as territory_router
+from core.api import core_router
 from core.config import settings
+
+# Set process timezone so datetime.now() and date/time handling use app timezone (e.g. Europe/Rome)
+os.environ["TZ"] = settings.app_timezone
+if hasattr(time, "tzset"):
+    time.tzset()
+from core.exceptions import register_exception_handlers
 from core.middleware import add_gzip_middleware
 
 app = FastAPI(
@@ -15,6 +25,7 @@ app = FastAPI(
     version="0.1.0",
 )
 
+register_exception_handlers(app)
 add_gzip_middleware(app)
 
 app.add_middleware(
@@ -25,20 +36,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(core_router)
 app.include_router(territory_router)
-
-
-@app.get("/health")
-async def health_check():
-    """Healthcheck for Docker/Kubernetes."""
-    return {"status": "healthy", "service": "tree-cadastre-backend"}
-
-
-@app.get("/")
-async def root():
-    """Root endpoint."""
-    return {
-        "service": "Tree Cadastre API",
-        "docs": "/docs",
-        "health": "/health",
-    }

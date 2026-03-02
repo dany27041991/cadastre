@@ -18,6 +18,7 @@ export const I18N_KEYS = {
   loadingGreenLayer: 'territory.loadingGreenLayer',
   loadingGreen: 'territory.loadingGreen',
   errorGeneric: 'errors.generic',
+  regionIdRequired: 'errors.regionIdRequired',
 } as const
 
 /** Territory levels used in green context resolution (avoid magic strings). */

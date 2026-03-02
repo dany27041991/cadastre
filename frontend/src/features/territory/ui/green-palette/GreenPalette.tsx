@@ -30,7 +30,8 @@ function getGreenContext(breadcrumb: BreadcrumbCrumb[]): GreenContext | null {
   }
 
   if (municipalityId == null) return null
-  return { regionId, municipalityId, subMunicipalAreaId, greenAreaId }
+  const provinceId = greenAreasCrumb?.provinceId ?? breadcrumb[1]?.id
+  return { regionId, provinceId, municipalityId, subMunicipalAreaId, greenAreaId }
 }
 
 export function GreenPalette({
@@ -89,6 +90,7 @@ export function GreenPalette({
       const geojson = await territoryApi.getGreenAssets({
         regionId: context.regionId,
         municipalityId: context.municipalityId,
+        provinceId: context.provinceId,
         subMunicipalAreaId: context.subMunicipalAreaId,
         greenAreaId: context.greenAreaId,
       })

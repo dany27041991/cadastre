@@ -4,6 +4,7 @@
 export { territoryApi, createTerritoryApi } from './api/territory.api'
 export type { TerritoryApi, TerritoryNavigationApi } from './api/territory.api'
 export { useTerritoryMap, useTerritoryNavigation } from './model'
+export { LEVEL_GREEN_AREAS, LEVEL_SUB_AREAS, I18N_KEYS } from './model/constants'
 export type {
   MapBridge,
   UseTerritoryNavigationResult,

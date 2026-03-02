@@ -13,6 +13,7 @@ import {
 export type GreenAssetParams = {
   regionId: number
   municipalityId: number
+  provinceId?: number
   subMunicipalAreaId?: number
   greenAreaId?: number
 }
@@ -21,6 +22,7 @@ export function buildGreenAssetQuery(params: GreenAssetParams): string {
   const search = new URLSearchParams()
   search.set('region_id', String(params.regionId))
   search.set('municipality_id', String(params.municipalityId))
+  if (params.provinceId != null) search.set('province_id', String(params.provinceId))
   if (params.subMunicipalAreaId != null)
     search.set('sub_municipal_area_id', String(params.subMunicipalAreaId))
   if (params.greenAreaId != null)

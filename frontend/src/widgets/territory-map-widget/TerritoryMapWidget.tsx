@@ -4,12 +4,9 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type Feature from 'ol/Feature'
-import { territoryApi, useTerritoryMap, useTerritoryNavigation, GreenPalette } from '@/features/territory'
+import { territoryApi, useTerritoryMap, useTerritoryNavigation, GreenPalette, LEVEL_GREEN_AREAS, LEVEL_SUB_AREAS } from '@/features/territory'
 import { MainContent } from '@/widgets/layout/main/MainContent'
 import 'ol/ol.css'
-
-const LEVEL_GREEN_AREAS = 'green_areas'
-const LEVEL_SUB_AREAS = 'sub_areas'
 
 export function TerritoryMapWidget() {
   const { t } = useTranslation()

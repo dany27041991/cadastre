@@ -66,10 +66,10 @@ export function patchCanvasGetContextForPerformance(): () => void {
 
 const LABEL_KEYS = ['name', 'code', 'istat_code', 'vehicle_registration_code', 'asset_type', 'species'] as const
 
-/** Fallback label when no property matches (e.g. feature without name). */
+/** Fallback when no property matches and getSelectedLabel not provided (tests / no i18n). Use refs.getSelectedLabel for i18n. */
 export const DEFAULT_LABEL_SELECTED = 'Selected'
 
-export function getFeatureLabel(props: Record<string, unknown>, id: unknown): string {
+export function getFeatureLabel(props: Record<string, unknown>, id: unknown, fallbackLabel?: string): string {
   for (const key of LABEL_KEYS) {
     const v = props[key]
     if (v != null && (typeof v === 'string' || typeof v === 'number')) {
@@ -77,7 +77,7 @@ export function getFeatureLabel(props: Record<string, unknown>, id: unknown): st
       if (s !== '') return s
     }
   }
-  return typeof id === 'number' ? `#${id}` : DEFAULT_LABEL_SELECTED
+  return typeof id === 'number' ? `#${id}` : (fallbackLabel ?? DEFAULT_LABEL_SELECTED)
 }
 
 /** Extracts numeric id from an OL feature (properties, ol_uid, or getId). */

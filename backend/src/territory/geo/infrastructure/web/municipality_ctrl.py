@@ -2,10 +2,11 @@
 
 import geobuf
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from fastapi.responses import Response
 
 from core.api.dependencies import get_municipalities_uc
+from core.exceptions import NotFoundError
 from territory.geo.infrastructure.dto.output import GeoFeatureCollectionOutput
 
 router = APIRouter(tags=["territory-geo-municipalities"])
@@ -24,7 +25,7 @@ def get_municipalities_by_province(
                 content=geobuf.encode({"type": "FeatureCollection", "features": []}),
                 media_type=GEOBUF_MEDIA_TYPE,
             )
-        raise HTTPException(status_code=404, detail="No municipalities found")
+        raise NotFoundError("errors.no_municipalities_found")
     if format == "geobuf":
         return Response(
             content=geobuf.encode(result),

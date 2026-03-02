@@ -4,6 +4,7 @@
 import type { ReactNode } from 'react'
 import { Component } from 'react'
 import { i18n } from '@/shared/i18n'
+import { I18N_KEYS } from '@/features/territory'
 
 interface Props {
   children: ReactNode
@@ -28,7 +29,7 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div role="alert">
-          {i18n.t('errors.generic')}
+          {i18n.t(I18N_KEYS.errorGeneric)}
         </div>
       )
     }

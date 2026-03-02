@@ -50,6 +50,8 @@ export interface TerritoryMapSetupRefs {
   greenUsingRawLayerRef: { current: boolean }
   /** Optional: when provided, cluster selection label is translated. */
   getClusterLabel?: (count: number) => string
+  /** Optional: when provided, fallback feature label is translated (last-resort when no name/code property found). */
+  getSelectedLabel?: () => string
 }
 
 export interface TerritoryMapSetupResult {
@@ -267,7 +269,7 @@ function setupSelectHandler(
 ): void {
   const notifySelected = (feature: Feature, label?: string) => {
     const id = getFeatureId(feature)
-    const resolvedLabel = label ?? getFeatureLabel(feature.getProperties(), id)
+    const resolvedLabel = label ?? getFeatureLabel(feature.getProperties(), id, refs.getSelectedLabel?.())
     refs.onFeatureSelectRef.current(id, resolvedLabel, feature)
   }
 

@@ -17,6 +17,7 @@ export interface BreadcrumbCrumb {
   navigable?: boolean
   subMunicipalAreaId?: number
   regionId?: number
+  provinceId?: number
   subMunicipalDrillLevel?: SubMunicipalDrillLevel
   subMunicipalDrillStack?: number[]
 }

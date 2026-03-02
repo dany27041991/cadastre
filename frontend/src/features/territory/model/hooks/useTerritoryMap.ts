@@ -19,7 +19,7 @@ import {
 import type { TFunction } from 'i18next'
 import type { Select } from 'ol/interaction'
 import type { FeatureSelectHandler, UseTerritoryMapResult } from '../../types'
-import { getClusterLabel } from '../constants'
+import { getClusterLabel, I18N_KEYS } from '../constants'
 import { isValidExtent, zoomToExtent } from '../utils/territoryMapUtils'
 import {
   buildClusteredDisplayFeatures,
@@ -55,9 +55,10 @@ function resolveGreenDisplay(
     return buildClusteredDisplayFeatures(raw, zoom, resolution)
   }
   // Cache available; zoom < threshold (raw mode handled before calling this).
-  const minZ = GREEN_CLUSTER_PRECOMPUTE_ZOOM_LEVELS[0] ?? 10
-  const maxZ = GREEN_CLUSTER_PRECOMPUTE_ZOOM_LEVELS[GREEN_CLUSTER_PRECOMPUTE_ZOOM_LEVELS.length - 1] ?? 13
-  const level = Math.min(Math.max(minZ, Math.floor(zoom)), maxZ)
+  const level = Math.min(
+    Math.max(GREEN_CLUSTER_PRECOMPUTE_ZOOM_LEVELS[0] ?? 10, Math.floor(zoom)),
+    GREEN_CLUSTER_PRECOMPUTE_ZOOM_LEVELS[GREEN_CLUSTER_PRECOMPUTE_ZOOM_LEVELS.length - 1] ?? 13
+  )
   if (lastCacheZoomRef.current === level) return null
   showingRawRef.current = false
   lastCacheZoomRef.current = level
@@ -275,7 +276,7 @@ export function useTerritoryMap(options?: UseTerritoryMapOptions): UseTerritoryM
     greenSourceRef.current.addFeature(feature.clone())
   }, [])
 
-  // Returns current green layer features (e.g. to save the single area before loading assets at leaf level).
+  /** Returns current green layer features (e.g. to save the single area before loading assets at leaf level). */
   const getGreenLayerFeatures = useCallback((): Feature[] => greenSourceRef.current.getFeatures(), [])
 
   const setGreenLayerVisible = useCallback((visible: boolean) => {
@@ -310,14 +311,14 @@ export function useTerritoryMap(options?: UseTerritoryMapOptions): UseTerritoryM
     vectorLayerRef.current?.changed()
   }, [resetGreenState])
 
-  // Clears the territory vector layer (rendered admin/area features).
+  /** Clears the territory vector layer (rendered admin/area features). */
   const clearTerritoryLayer = useCallback(() => {
     vectorSourceRef.current.clear()
     selectInteractionRef.current?.getFeatures().clear()
     vectorLayerRef.current?.changed()
   }, [])
 
-  // Clears green + territory and forces map repaint (e.g. before navigating to admin level).
+  /** Clears green + territory and forces map repaint (e.g. before navigating to admin level). */
   const clearMapVectorLayers = useCallback(() => {
     resetGreenState()
     vectorSourceRef.current.clear()
@@ -336,7 +337,7 @@ export function useTerritoryMap(options?: UseTerritoryMapOptions): UseTerritoryM
     )
   }, [fitToSourceExtent])
 
-  // Schedules showing the green layer when the next moveend fires (after zoom/fit animation).
+  /** Schedules showing the green layer when the next moveend fires (after zoom/fit animation). */
   const setGreenLayerVisibleWhenMoveEnds = useCallback(() => {
     showGreenOnMoveEndRef.current = true
   }, [])
@@ -362,6 +363,7 @@ export function useTerritoryMap(options?: UseTerritoryMapOptions): UseTerritoryM
       viewMovingRef,
       greenUsingRawLayerRef,
       getClusterLabel: t ? (count) => getClusterLabel(count, t) : undefined,
+      getSelectedLabel: t ? () => t(I18N_KEYS.selected) : undefined,
     }
     const setup = createTerritoryMapSetup(div, refs)
 

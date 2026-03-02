@@ -1,0 +1,18 @@
+{
+  "errors": {
+    "internal": "Si è verificato un errore interno. Riprova più tardi.",
+    "not_found": "La risorsa richiesta non è stata trovata.",
+    "no_provinces_found": "Nessuna provincia trovata.",
+    "no_municipalities_found": "Nessun comune trovato.",
+    "validation_error": "Errore di validazione.",
+    "unauthorized": "Autenticazione richiesta.",
+    "forbidden": "Non hai i permessi per eseguire questa azione.",
+    "bad_request": "Richiesta non valida.",
+    "conflict": "La richiesta è in conflitto con lo stato attuale della risorsa.",
+    "service_unavailable": "Servizio temporaneamente non disponibile."
+  },
+  "validation": {
+    "required": "Questo campo è obbligatorio.",
+    "invalid_format": "Formato non valido."
+  }
+}

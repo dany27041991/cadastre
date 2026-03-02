@@ -1,5 +1,6 @@
-"""Core API: use case factories for route handlers."""
+"""Core API: use case factories for route handlers and core routes."""
 
+from core.api.core_routes import router as core_router
 from core.api.dependencies import (
     get_regions_use_case,
     get_provinces_by_region_use_case,
@@ -16,6 +17,7 @@ from core.api.dependencies import (
 )
 
 __all__ = [
+    "core_router",
     "get_regions_use_case",
     "get_provinces_by_region_use_case",
     "get_municipalities_by_province_use_case",

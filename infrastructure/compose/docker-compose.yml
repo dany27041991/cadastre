@@ -100,12 +100,17 @@ services:
     container_name: catasto-backend
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-cadastre}:${POSTGRES_PASSWORD}@postgis:5432/${POSTGRES_DB:-arboreal_green_cadastre}
-      DATABASE_DIRECT_URL: postgresql://${POSTGRES_USER:-cadastre}:${POSTGRES_PASSWORD}@postgis:5432/${POSTGRES_DB:-arboreal_green_cadastre}
+      POSTGRES_HOST: postgis
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_USER: ${POSTGRES_USER:-cadastre}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-arboreal_green_cadastre}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY required}
       JWT_ALGORITHM: HS256
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
       APP_ENV: ${APP_ENV:-development}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Rome}
+      ADMIN_AREAS_CACHE_TTL_SECONDS: ${ADMIN_AREAS_CACHE_TTL_SECONDS:-86400}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:

@@ -17,6 +17,7 @@ GEOBUF_MEDIA_TYPE = "application/x-geobuf"
 def get_green_areas(
     region_id: int,
     parent_id: int | None = None,
+    province_id: int | None = None,
     municipality_id: int | None = None,
     sub_municipal_area_id: int | None = None,
     format: str | None = None,
@@ -25,7 +26,7 @@ def get_green_areas(
     Return green areas (N-level hierarchy).
     - With parent_id: children of that area.
     - Without parent_id: root areas for municipality_id (opt. sub_municipal_area_id).
-    region_id required (partitioning).
+    region_id required (partitioning). province_id recommended for hierarchical cache.
     Use ?format=geobuf for compact binary response (6-8x smaller, faster transfer).
     """
     if parent_id is None and municipality_id is None:
@@ -38,6 +39,7 @@ def get_green_areas(
     result = get_green_areas_uc().catalog_green_areas(
         region_id,
         parent_id=parent_id,
+        province_id=province_id,
         municipality_id=municipality_id,
         sub_municipal_area_id=sub_municipal_area_id,
     )

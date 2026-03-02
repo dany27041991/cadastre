@@ -6,6 +6,7 @@ import type { TerritoryLevel, BreadcrumbCrumb } from './territory'
 
 export interface GreenContext {
   regionId: number
+  provinceId?: number
   municipalityId: number
   subMunicipalAreaId?: number
   greenAreaId?: number
