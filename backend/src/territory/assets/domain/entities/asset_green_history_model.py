@@ -18,5 +18,4 @@ class AssetGreenHistoryModel(Base):
 
     asset_green_id = Column(BigInteger, nullable=False)
     municipality_id = Column(Integer, nullable=False)
-    sub_municipal_area_id = Column(Integer, nullable=True)
     snapshot = Column(JSONB, nullable=False)

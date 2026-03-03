@@ -16,7 +16,7 @@ export function createGreenAreasLevelFetchers(
 > {
   return {
     green_areas: (last) =>
-      last.regionId == null
+      last.regionId == null || last.provinceId == null
         ? Promise.reject(new Error(I18N_KEYS.regionIdRequired))
         : api.getGreenAreas({
             regionId: last.regionId,
@@ -25,8 +25,12 @@ export function createGreenAreasLevelFetchers(
             subMunicipalAreaId: last.subMunicipalAreaId,
           }),
     sub_areas: (last) =>
-      last.regionId == null
+      last.regionId == null || last.provinceId == null
         ? Promise.reject(new Error(I18N_KEYS.regionIdRequired))
-        : api.getGreenAreas({ regionId: last.regionId, parentId: last.id }),
+        : api.getGreenAreas({
+            regionId: last.regionId,
+            provinceId: last.provinceId,
+            parentId: last.id,
+          }),
   }
 }

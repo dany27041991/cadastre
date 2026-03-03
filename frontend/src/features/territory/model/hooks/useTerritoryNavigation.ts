@@ -56,10 +56,11 @@ async function loadTerritoryForGreenLevel(
   newCrumb: BreadcrumbCrumb[],
   last: BreadcrumbCrumb
 ): Promise<void> {
-  if (last.level === 'sub_areas' && last.regionId != null && newCrumb.length >= 2) {
+  if (last.level === 'sub_areas' && last.regionId != null && last.provinceId != null && newCrumb.length >= 2) {
     const parentCrumb = newCrumb[newCrumb.length - 2]
     const parentGeo = await api.getGreenAreas({
       regionId: last.regionId,
+      provinceId: last.provinceId,
       parentId: parentCrumb.id,
     })
     if (hasGeoJsonFeatures(parentGeo)) {
@@ -188,11 +189,11 @@ export function useTerritoryNavigation(
 
   const jumpToGreenAreasWhenMunicipalityHasNoSubAreas = useCallback(
     async (regionId: number, municipalityId: number, provinceId?: number) => {
-      if (!api) return
+      if (!api || provinceId == null) return
       const areasGeojson = await api.getGreenAreas({
         regionId,
-        municipalityId,
         provinceId,
+        municipalityId,
       })
       if (!hasGeoJsonFeatures(areasGeojson)) return
       setLevel('green_areas')
@@ -296,11 +297,12 @@ export function useTerritoryNavigation(
       if (clickedFeature) bridgeRef.current.showOnlyFeature(clickedFeature as Feature)
       await withLoading(async () => {
         const provinceId = breadcrumb.find((c) => c.level === 'municipalities')?.id
+        if (provinceId == null) return
         const geojson = await api.getGreenAreas({
           regionId,
+          provinceId,
           municipalityId,
           subMunicipalAreaId,
-          provinceId,
         })
         if (hasGeoJsonFeatures(geojson)) showGreenLayer(geojson)
       })
@@ -321,11 +323,14 @@ export function useTerritoryNavigation(
       setBreadcrumb((prev) => {
         const last = prev[prev.length - 1]
         if (last?.level === 'sub_areas' && last?.id === areaId) return prev
-        return [...prev, { level: 'sub_areas', id: areaId, label, regionId }]
+        const provinceId = last?.provinceId
+        return [...prev, { level: 'sub_areas', id: areaId, label, regionId, provinceId }]
       })
       if (clickedFeature) bridgeRef.current.showOnlyFeature(clickedFeature as Feature)
       await withLoading(async () => {
-        const geojson = await api.getGreenAreas({ regionId, parentId: areaId })
+        const provinceId = breadcrumb.find((c) => c.level === 'green_areas')?.provinceId ?? breadcrumb.find((c) => c.level === 'municipalities')?.id
+        if (provinceId == null) return
+        const geojson = await api.getGreenAreas({ regionId, provinceId, parentId: areaId })
         if (hasGeoJsonFeatures(geojson)) {
           showGreenLayer(geojson)
         } else if (clickedFeature) {

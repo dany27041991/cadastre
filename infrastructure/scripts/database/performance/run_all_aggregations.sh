@@ -26,7 +26,7 @@ echo "Logs in: $LOGS_DIR"
 echo ""
 
 # Esegui ogni script e salva log separato
-for f in 01_aggregations_italy.sql 02_aggregations_by_region.sql 03_aggregations_by_province.sql 04_aggregations_by_municipality.sql 05_aggregations_by_sub_municipal_area.sql 06_aggregations_by_area_level.sql 07_advanced_aggregations.sql; do
+for f in 01_aggregations_italy.sql 02_aggregations_by_region.sql 03_aggregations_by_province.sql 04_aggregations_by_municipality.sql 06_aggregations_by_area_level.sql 07_advanced_aggregations.sql; do
   LOG_NAME="${f%.sql}_${TIMESTAMP}.log"
   LOG_PATH="$LOGS_DIR/$LOG_NAME"
   
@@ -162,7 +162,6 @@ echo "  - 01_aggregations_italy_${TIMESTAMP}.log"
 echo "  - 02_aggregations_by_region_${TIMESTAMP}.log"
 echo "  - 03_aggregations_by_province_${TIMESTAMP}.log"
 echo "  - 04_aggregations_by_municipality_${TIMESTAMP}.log"
-echo "  - 05_aggregations_by_sub_municipal_area_${TIMESTAMP}.log"
 echo "  - 06_aggregations_by_area_level_${TIMESTAMP}.log"
 echo "  - 07_advanced_aggregations_${TIMESTAMP}.log"
 echo "Log combinato: $COMBINED_LOG"

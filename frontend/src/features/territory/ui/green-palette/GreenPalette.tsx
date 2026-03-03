@@ -75,7 +75,7 @@ export function GreenPalette({
   ])
 
   const handleToggleClick = useCallback(async () => {
-    if (!context) return
+    if (!context || context.provinceId == null || context.municipalityId == null) return
 
     if (isGreenLayerActive) {
       turnOffGreenLayer()
@@ -85,14 +85,13 @@ export function GreenPalette({
     setTerritoryFillVisible(false)
     onBeforeLoadingAssets?.()
     setIsLoading(true)
-    const fetchStart = performance.now()
     try {
       const geojson = await territoryApi.getGreenAssets({
         regionId: context.regionId,
-        municipalityId: context.municipalityId,
         provinceId: context.provinceId,
-        subMunicipalAreaId: context.subMunicipalAreaId,
+        municipalityId: context.municipalityId,
         greenAreaId: context.greenAreaId,
+        subMunicipalAreaId: context.subMunicipalAreaId,
       })
       loadGreenLayer(geojson)
       setGreenLayerVisible(true)

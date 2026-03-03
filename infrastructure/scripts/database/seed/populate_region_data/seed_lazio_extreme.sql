@@ -16,14 +16,13 @@
 --   - Points (P): inside gap minus a narrow buffer around lines, so P and L never intersect or overlap.
 --
 -- Performance: increase work_mem/maintenance_work_mem if the host has RAM (e.g. 1GB/2GB).
--- 6.7–6.8: loop per provincia for sub_municipal_area_id.
+-- 6.7–6.8: (obsolete)
 -- =============================================================================
 
 \echo '============================================================'
 \echo 'EXTREME SEED Lazio - START'
 \echo '============================================================'
 \timing on
-\set run_sub_municipal_area 1
 
 SET work_mem = '512MB';
 SET maintenance_work_mem = '1GB';
@@ -507,48 +506,7 @@ WHERE g.cell_idx >= 2 + g.num_lawns + g.num_hedges + g.num_flower_beds
   AND g.cell_idx < 2 + g.num_lawns + g.num_hedges + g.num_flower_beds + g.num_street_greenery
   AND (abs(hashtext(g.area_id::text || g.cell_idx::text)) % 100) < 80;
 
--- STEP 6.7–6.8: optional (psql -v run_sub_municipal_area=0 to skip, saves ~3 min).
-\if :run_sub_municipal_area
-\echo ''
-\echo '[STEP 6.7] Populating sub_municipal_area_id (green_assets)...'
-DO $$
-DECLARE r RECORD; n_updated BIGINT;
-BEGIN
-  FOR r IN SELECT DISTINCT province_id FROM _seed_municipalities_target ORDER BY province_id
-  LOOP
-    WITH matched AS (
-      SELECT DISTINCT ON (ga.ctid) ga.ctid, s.id AS sub_id
-      FROM cadastre.green_assets ga
-      INNER JOIN public.sub_municipal_area s ON s.municipality_id = ga.municipality_id AND s.geometry && ga.geometry AND ST_Intersects(s.geometry, ga.geometry)
-      WHERE ga.province_id = r.province_id
-      ORDER BY ga.ctid, s.id
-    )
-    UPDATE cadastre.green_assets ga SET sub_municipal_area_id = m.sub_id FROM matched m WHERE ga.ctid = m.ctid;
-    GET DIAGNOSTICS n_updated = ROW_COUNT;
-    RAISE NOTICE '6.7 province %: % assets', r.province_id, n_updated;
-  END LOOP;
-END $$;
-
-\echo ''
-\echo '[STEP 6.8] Populating sub_municipal_area_id (green_areas)...'
-DO $$
-DECLARE r RECORD; n_updated BIGINT;
-BEGIN
-  FOR r IN SELECT DISTINCT province_id FROM _seed_municipalities_target ORDER BY province_id
-  LOOP
-    WITH matched AS (
-      SELECT DISTINCT ON (ga.id) ga.id, s.id AS sub_id
-      FROM cadastre.green_areas ga
-      INNER JOIN public.sub_municipal_area s ON s.municipality_id = ga.municipality_id AND s.geometry && ga.geometry AND ST_Intersects(s.geometry, ga.geometry)
-      WHERE ga.province_id = r.province_id
-      ORDER BY ga.id, s.id
-    )
-    UPDATE cadastre.green_areas ga SET sub_municipal_area_id = m.sub_id FROM matched m WHERE ga.id = m.id;
-    GET DIAGNOSTICS n_updated = ROW_COUNT;
-    RAISE NOTICE '6.8 province %: % areas', r.province_id, n_updated;
-  END LOOP;
-END $$;
-\endif
+-- STEP 6.7–6.8: (obsolete)
 
 -- STEP 7: Cleanup
 \echo ''

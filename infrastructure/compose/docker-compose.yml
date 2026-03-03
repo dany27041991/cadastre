@@ -105,7 +105,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-cadastre}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-arboreal_green_cadastre}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY required}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-placeholder-do-not-use-in-production}
       JWT_ALGORITHM: HS256
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
       APP_ENV: ${APP_ENV:-development}

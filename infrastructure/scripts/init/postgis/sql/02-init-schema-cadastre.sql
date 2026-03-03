@@ -148,7 +148,6 @@ CREATE TABLE IF NOT EXISTS cadastre.green_areas (
   region_id INTEGER NOT NULL,
   province_id INTEGER NOT NULL,
   municipality_id INTEGER NOT NULL,
-  sub_municipal_area_id INTEGER REFERENCES public.sub_municipal_area(id),
   level_id BIGINT REFERENCES public.area_level(level_id),
   parent_id BIGINT,
   name VARCHAR(255) NOT NULL,
@@ -190,7 +189,6 @@ CREATE TABLE IF NOT EXISTS cadastre.asset_area_history (
   region_id INTEGER NOT NULL,
   province_id INTEGER NOT NULL,
   municipality_id INTEGER NOT NULL,
-  sub_municipal_area_id INTEGER,
   snapshot JSONB NOT NULL,
   PRIMARY KEY (history_id, region_id, province_id)
 ) PARTITION BY LIST (region_id);
@@ -207,7 +205,6 @@ CREATE TABLE IF NOT EXISTS cadastre.green_assets (
   region_id INTEGER NOT NULL,
   province_id INTEGER NOT NULL,
   municipality_id INTEGER NOT NULL,
-  sub_municipal_area_id INTEGER REFERENCES public.sub_municipal_area(id),
   attribute_type_id BIGINT REFERENCES public.attribute_types(id),
   asset_type cadastre.asset_type NOT NULL DEFAULT 'other',
   geometry_type cadastre.geometry_type NOT NULL,
@@ -258,7 +255,6 @@ CREATE TABLE IF NOT EXISTS cadastre.asset_green_history (
   region_id INTEGER NOT NULL,
   province_id INTEGER NOT NULL,
   municipality_id INTEGER NOT NULL,
-  sub_municipal_area_id INTEGER,
   snapshot JSONB NOT NULL,
   PRIMARY KEY (history_id, region_id, province_id)
 ) PARTITION BY LIST (region_id);

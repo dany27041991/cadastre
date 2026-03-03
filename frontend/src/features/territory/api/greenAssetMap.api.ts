@@ -12,21 +12,22 @@ import {
 
 export type GreenAssetParams = {
   regionId: number
+  provinceId: number
   municipalityId: number
-  provinceId?: number
-  subMunicipalAreaId?: number
   greenAreaId?: number
+  /** When set, only assets intersecting this sub-municipal area are returned. */
+  subMunicipalAreaId?: number
 }
 
 export function buildGreenAssetQuery(params: GreenAssetParams): string {
   const search = new URLSearchParams()
   search.set('region_id', String(params.regionId))
+  search.set('province_id', String(params.provinceId))
   search.set('municipality_id', String(params.municipalityId))
-  if (params.provinceId != null) search.set('province_id', String(params.provinceId))
-  if (params.subMunicipalAreaId != null)
-    search.set('sub_municipal_area_id', String(params.subMunicipalAreaId))
   if (params.greenAreaId != null)
     search.set('green_area_id', String(params.greenAreaId))
+  if (params.subMunicipalAreaId != null)
+    search.set('sub_municipal_area_id', String(params.subMunicipalAreaId))
   search.set('format', 'geobuf')
   return search.toString()
 }

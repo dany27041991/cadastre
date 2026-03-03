@@ -9,7 +9,7 @@ psycopg[binary,pool]==3.2.3
 psycopg2-binary==2.9.10
 geoalchemy2==0.15.2
 shapely==2.0.6
-geopandas==0.14.3
+geopandas>=0.14.4  # 0.14.4+ compatible with fiona 1.10+ (no fiona.path)
 pyogrio>=0.12.0
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4

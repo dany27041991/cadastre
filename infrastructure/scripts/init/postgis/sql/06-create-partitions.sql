@@ -65,7 +65,6 @@ BEGIN
       EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ga_%s_%s_asset_type ON %s(asset_type)', rec_region.id, rec_province.id, p_av_leaf);
       EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ga_%s_%s_point_munic ON %s(geometry_type, region_id, municipality_id) WHERE geometry_type = ''P''', rec_region.id, rec_province.id, p_av_leaf);
       EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ga_%s_%s_point_prov ON %s(geometry_type, region_id, province_id) WHERE geometry_type = ''P''', rec_region.id, rec_province.id, p_av_leaf);
-      EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ga_%s_%s_point_sub ON %s(geometry_type, region_id, municipality_id, sub_municipal_area_id) WHERE geometry_type = ''P'' AND sub_municipal_area_id IS NOT NULL', rec_region.id, rec_province.id, p_av_leaf);
       n_av := n_av + 1;
 
       -- green_areas leaves

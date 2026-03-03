@@ -26,6 +26,12 @@ const CLUSTER_COUNT_K_THRESHOLD = 999
 
 const GREEN_FILL = new Fill({ color: COLOR_GREEN_FILL })
 const GREEN_STROKE = new Stroke({ color: COLOR_GREEN_STROKE, width: 1.5 })
+/** Distinct style for type L (LineString): same green, thicker and dashed (e.g. hedges, rows). */
+const GREEN_LINE_STROKE = new Stroke({
+  color: COLOR_GREEN_STROKE,
+  width: 2.5,
+  lineDash: [6, 4],
+})
 const GREEN_CORE_CIRCLE = new Circle({
   radius: GREEN_CORE_RADIUS,
   fill: new Fill({ color: COLOR_GREEN_FILL_CORE }),
@@ -74,7 +80,7 @@ export function greenClusterStyleFn(feature: Feature): Style | Style[] {
     return new Style({ image: GREEN_CORE_CIRCLE, geometry: geom as Point })
   }
   if (geomType === 'LineString' || geomType === 'MultiLineString') {
-    return new Style({ stroke: GREEN_STROKE, geometry: geom })
+    return new Style({ stroke: GREEN_LINE_STROKE, geometry: geom })
   }
   if (geomType === 'Polygon' || geomType === 'MultiPolygon') {
     return new Style({ fill: GREEN_FILL, stroke: GREEN_STROKE, geometry: geom })

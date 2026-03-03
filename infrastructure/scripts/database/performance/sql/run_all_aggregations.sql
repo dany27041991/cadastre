@@ -28,10 +28,6 @@
 \ir 04_aggregations_by_municipality.sql
 
 \echo ''
-\echo '========== 05 AGGREGAZIONI PER AREA SUBCOMUNALE =========='
-\ir 05_aggregations_by_sub_municipal_area.sql
-
-\echo ''
 \echo '========== 06 AGGREGAZIONI PER AREA LIVELLO =========='
 \ir 06_aggregations_by_area_level.sql
 

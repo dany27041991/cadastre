@@ -39,7 +39,6 @@ Execution Time: 15,057 ms
 
 **Real query patterns:**
 - Always: `region_id`, `province_id`, `municipality_id`
-- Sometimes: `sub_municipal_area_id` (only for municipalities with sub-municipal areas, ~40% of points)
 
 **Recommended indexes:**
 
@@ -53,21 +52,15 @@ WHERE geometry_type = 'point';
 CREATE INDEX idx_ga_12_point_province_region
 ON cadastre.green_assets_12(geometry_type, region_id, province_id)
 WHERE geometry_type = 'point';
-
--- For sub-municipal area queries (only for municipalities with sub-municipal areas)
-CREATE INDEX idx_ga_12_point_sub_municipal_municipality_region
-ON cadastre.green_assets_12(geometry_type, region_id, municipality_id, sub_municipal_area_id)
-WHERE geometry_type = 'point' AND sub_municipal_area_id IS NOT NULL;
 ```
 
 **Benefit:** PostgreSQL can filter geometry_type + territorial filters BEFORE applying the GIST index, greatly reducing rows to process.
 
-**Column order:** `region_id` (already partitioned) → `province_id` → `municipality_id` → `sub_municipal_area_id` (by selectivity)
+**Column order:** `region_id` (already partitioned) → `province_id` → `municipality_id` (by selectivity)
 
 **When to use:**
 - Municipality query: use index `*_point_municipality_region` (most cases)
 - Province query: use index `*_point_province_region`
-- Sub-municipal area query: use index `*_point_sub_municipal_municipality_region` (only for municipalities with sub-municipal areas)
 
 #### 2. Update Database Statistics
 **Impact:** 10-20% time reduction  

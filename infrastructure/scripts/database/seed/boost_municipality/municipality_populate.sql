@@ -542,40 +542,8 @@ WHERE g.cell_idx >= 2 + g.num_lawns + g.num_hedges + g.num_flower_beds
   AND (abs(hashtext(g.area_id::text || g.cell_idx::text)) % 100) < 80;
 
 -- -----------------------------------------------------------------------------
--- STEP 7.8: Populate sub_municipal_area_id (green_assets) – CTE + correlated subquery, && for GIST (as Lazio, single municipality)
+-- STEP 7.8–7.9: (obsolete)
 -- -----------------------------------------------------------------------------
-\echo ''
-\echo '[7.8] Populating sub_municipal_area_id (green_assets)...'
-WITH matched AS (
-  SELECT ga.ctid,
-         (SELECT s.id FROM public.sub_municipal_area s
-          WHERE s.municipality_id = ga.municipality_id
-            AND s.geometry && ga.geometry
-            AND ST_Intersects(s.geometry, ga.geometry)
-          ORDER BY s.id LIMIT 1) AS sub_id
-  FROM cadastre.green_assets ga
-  WHERE ga.municipality_id IN (SELECT municipality_id FROM _seed_municipality)
-    AND EXISTS (SELECT 1 FROM public.sub_municipal_area s WHERE s.municipality_id = ga.municipality_id)
-)
-UPDATE cadastre.green_assets ga SET sub_municipal_area_id = m.sub_id FROM matched m WHERE ga.ctid = m.ctid;
-
--- -----------------------------------------------------------------------------
--- STEP 7.9: Populate sub_municipal_area_id (green_areas) – CTE + correlated subquery, && for GIST
--- -----------------------------------------------------------------------------
-\echo ''
-\echo '[7.9] Populating sub_municipal_area_id (green_areas)...'
-WITH matched AS (
-  SELECT ga.id,
-         (SELECT s.id FROM public.sub_municipal_area s
-          WHERE s.municipality_id = ga.municipality_id
-            AND s.geometry && ga.geometry
-            AND ST_Intersects(s.geometry, ga.geometry)
-          ORDER BY s.id LIMIT 1) AS sub_id
-  FROM cadastre.green_areas ga
-  WHERE ga.municipality_id IN (SELECT municipality_id FROM _seed_municipality)
-    AND EXISTS (SELECT 1 FROM public.sub_municipal_area s WHERE s.municipality_id = ga.municipality_id)
-)
-UPDATE cadastre.green_areas ga SET sub_municipal_area_id = m.sub_id FROM matched m WHERE ga.id = m.id;
 
 -- -----------------------------------------------------------------------------
 -- Cleanup and report

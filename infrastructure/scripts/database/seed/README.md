@@ -38,7 +38,39 @@ Genera aree verdi e green asset per i comuni di una o più regioni italiane (log
 
 ---
 
-## 2. Boost singolo comune – `run_boost_municipality.sh`
+## 2. Popolamento da GeoJSON (Lecce) – `run_populate_lecce.sh`
+
+Carica **aree verdi** e **asset verdi** (hedges, shrubs, trees) da GeoJSON per un comune, associando gli asset alle aree tramite contenimento spaziale. Utile per dati reali (es. Lecce) in `infrastructure/data/municipality/<comune>/`.
+
+### Uso
+
+```bash
+# Dalla root del progetto (solo Lecce, dati in infrastructure/data/municipality/lecce/)
+./infrastructure/scripts/database/seed/run_populate_lecce.sh
+```
+
+### Ordine di caricamento
+
+1. **Aree** – `areas.geojson` → `cadastre.green_areas` (livello 1 = MANAGEMENT_UNIT).
+2. **Asset** – `hedges.geojson`, `shrubs.geojson`, `trees.geojson` → `cadastre.green_assets`, con `green_area_id` impostato per contenimento spaziale (geometria asset dentro un’area).
+
+### File attesi (CRS EPSG:32633, convertiti in 4326 in scrittura)
+
+- `areas.geojson` – geometrie MultiPolygon (aree verdi).
+- `hedges.geojson` – geometrie MultiLineString (siepi) → `asset_type=hedge`, `geometry_type=L`.
+- `shrubs.geojson` – geometrie Point (arbusti) → `asset_type=other`, `geometry_type=P`.
+- `trees.geojson` – geometrie Point (alberi) → `asset_type=tree`, `geometry_type=P`.
+
+Il comune deve esistere in `public.municipalities`. Lo script elimina prima gli eventuali `green_areas` e `green_assets` del comune, poi inserisce i nuovi dati.
+
+### File coinvolti
+
+- `populate_municipality_data/load_municipality_green_data.py` – script Python (geopandas, psycopg).
+- `run_populate_lecce.sh` – runner che invoca lo script nel container `init`.
+
+---
+
+## 3. Boost singolo comune – `run_boost_municipality.sh`
 
 Esegue **pulizia** (eliminazione asset e aree esistenti per il comune) e **popolamento** (generazione di macro-aree, sub-aree e asset) per un solo comune. Utile per test o per “potenziare” un comune specifico (es. Roma) con molti più dati.
 
@@ -76,5 +108,6 @@ Il comune viene passato da terminale; negli SQL si usa la variabile psql `target
 | Popolare tutte le regioni | `./infrastructure/scripts/database/seed/run_populate_region_data.sh` |
 | Popolare alcune regioni   | `./infrastructure/scripts/database/seed/run_populate_region_data.sh lazio lombardia` |
 | Aiuto regioni              | `./infrastructure/scripts/database/seed/run_populate_region_data.sh -h` |
+| Dati Lecce da GeoJSON | `./infrastructure/scripts/database/seed/run_populate_lecce.sh` |
 | Boost comune (es. Roma)    | `./infrastructure/scripts/database/seed/run_boost_municipality.sh Roma` |
 | Boost comune con apice     | `./infrastructure/scripts/database/seed/run_boost_municipality.sh "L'Aquila"` |

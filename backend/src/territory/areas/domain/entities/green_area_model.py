@@ -20,7 +20,6 @@ class GreenAreaModel(Base):
     province_id = Column(Integer, primary_key=True, nullable=False)
 
     municipality_id = Column(Integer, nullable=False)
-    sub_municipal_area_id = Column(Integer, nullable=True)
     level_id = Column(BigInteger, nullable=True)  # FK public.area_level(level_id)
     parent_id = Column(BigInteger, nullable=True)
     name = Column(String(255), nullable=False)

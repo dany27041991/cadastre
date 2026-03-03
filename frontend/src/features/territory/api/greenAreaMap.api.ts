@@ -12,17 +12,18 @@ import {
 
 export type GreenAreasParams = {
   regionId: number
+  provinceId: number
   parentId?: number
-  provinceId?: number
   municipalityId?: number
+  /** When set, only areas intersecting this sub-municipal area are returned. */
   subMunicipalAreaId?: number
 }
 
 export function buildGreenAreasQuery(params: GreenAreasParams): string {
   const search = new URLSearchParams()
   search.set('region_id', String(params.regionId))
+  search.set('province_id', String(params.provinceId))
   if (params.parentId != null) search.set('parent_id', String(params.parentId))
-  if (params.provinceId != null) search.set('province_id', String(params.provinceId))
   if (params.municipalityId != null)
     search.set('municipality_id', String(params.municipalityId))
   if (params.subMunicipalAreaId != null)

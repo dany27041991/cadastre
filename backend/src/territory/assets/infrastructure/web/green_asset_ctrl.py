@@ -16,21 +16,21 @@ GEOBUF_MEDIA_TYPE = "application/x-geobuf"
 @router.get("/green-assets", response_model=None)
 def get_green_assets(
     region_id: int,
+    province_id: int,
     municipality_id: int,
-    province_id: int | None = None,
-    sub_municipal_area_id: int | None = None,
     green_area_id: int | None = None,
+    sub_municipal_area_id: int | None = None,
     format: str | None = None,
 ) -> GreenAssetsOutput | Response:
     """Return green assets (trees, rows, lawns, etc.) for the given area.
-    province_id recommended for hierarchical cache.
-    Use ?format=geobuf for compact binary response (6-8x smaller, faster transfer)."""
+    When sub_municipal_area_id is set, only assets intersecting that sub-municipal area are returned.
+    region_id and province_id required. Use ?format=geobuf for compact binary response."""
     result = get_green_assets_uc().catalog_green_assets(
         region_id,
         municipality_id,
         province_id=province_id,
-        sub_municipal_area_id=sub_municipal_area_id,
         green_area_id=green_area_id,
+        sub_municipal_area_id=sub_municipal_area_id,
     )
     if not result.get("features"):
         if format == "geobuf":

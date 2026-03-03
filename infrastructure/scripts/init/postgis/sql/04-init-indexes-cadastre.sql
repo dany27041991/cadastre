@@ -15,7 +15,8 @@ CREATE INDEX IF NOT EXISTS idx_green_areas_province_id ON cadastre.green_areas(p
 CREATE INDEX IF NOT EXISTS idx_green_areas_province_level ON cadastre.green_areas(province_id, level);
 CREATE INDEX IF NOT EXISTS idx_green_areas_municipality_id ON cadastre.green_areas(municipality_id);
 CREATE INDEX IF NOT EXISTS idx_green_areas_municipality_level ON cadastre.green_areas(municipality_id, level);
-CREATE INDEX IF NOT EXISTS idx_green_areas_sub_municipal_area_id ON cadastre.green_areas(sub_municipal_area_id);
+-- Roots-by-municipality: partition pruning + filter (region_id, province_id, municipality_id, parent_id IS NULL)
+CREATE INDEX IF NOT EXISTS idx_green_areas_region_province_municipality ON cadastre.green_areas(region_id, province_id, municipality_id) WHERE parent_id IS NULL;
 CREATE INDEX IF NOT EXISTS idx_green_areas_level_id ON cadastre.green_areas(level_id) WHERE level_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_green_areas_parent ON cadastre.green_areas(parent_id);
 -- name: no index (display / LIKE)
@@ -42,7 +43,6 @@ CREATE INDEX IF NOT EXISTS idx_asset_area_history_asset_area_id ON cadastre.asse
 CREATE INDEX IF NOT EXISTS idx_asset_area_history_region_id ON cadastre.asset_area_history(region_id);
 CREATE INDEX IF NOT EXISTS idx_asset_area_history_province_id ON cadastre.asset_area_history(province_id);
 CREATE INDEX IF NOT EXISTS idx_asset_area_history_municipality_id ON cadastre.asset_area_history(municipality_id);
-CREATE INDEX IF NOT EXISTS idx_asset_area_history_sub_municipal_area_id ON cadastre.asset_area_history(sub_municipal_area_id) WHERE sub_municipal_area_id IS NOT NULL;
 -- snapshot: JSONB (GIN only if querying inside JSON)
 
 -- -----------------------------------------------------------------------------
@@ -52,7 +52,6 @@ CREATE INDEX IF NOT EXISTS idx_asset_area_history_sub_municipal_area_id ON cadas
 CREATE INDEX IF NOT EXISTS idx_green_assets_region_id ON cadastre.green_assets(region_id);
 CREATE INDEX IF NOT EXISTS idx_green_assets_province_id ON cadastre.green_assets(province_id);
 CREATE INDEX IF NOT EXISTS idx_green_assets_municipality_id ON cadastre.green_assets(municipality_id);
-CREATE INDEX IF NOT EXISTS idx_green_assets_sub_municipal_area_id ON cadastre.green_assets(sub_municipal_area_id);
 CREATE INDEX IF NOT EXISTS idx_green_assets_green_area_id ON cadastre.green_assets(green_area_id);
 CREATE INDEX IF NOT EXISTS idx_green_assets_attribute_type_id ON cadastre.green_assets(attribute_type_id) WHERE attribute_type_id IS NOT NULL;
 -- asset_type, geometry_type: filters and composites (P/L/S per OBT; point = P in partial indexes below)
@@ -90,7 +89,6 @@ CREATE INDEX IF NOT EXISTS idx_asset_green_history_asset_green_id ON cadastre.as
 CREATE INDEX IF NOT EXISTS idx_asset_green_history_region_id ON cadastre.asset_green_history(region_id);
 CREATE INDEX IF NOT EXISTS idx_asset_green_history_province_id ON cadastre.asset_green_history(province_id);
 CREATE INDEX IF NOT EXISTS idx_asset_green_history_municipality_id ON cadastre.asset_green_history(municipality_id);
-CREATE INDEX IF NOT EXISTS idx_asset_green_history_sub_municipal_area_id ON cadastre.asset_green_history(sub_municipal_area_id) WHERE sub_municipal_area_id IS NOT NULL;
 -- snapshot: JSONB (GIN only if querying inside JSON)
 
 -- -----------------------------------------------------------------------------
@@ -112,7 +110,3 @@ WHERE geometry_type = 'P';
 CREATE INDEX IF NOT EXISTS idx_av_default_point_province_region
 ON cadastre.green_assets_default(geometry_type, region_id, province_id)
 WHERE geometry_type = 'P';
-
-CREATE INDEX IF NOT EXISTS idx_av_default_point_sub_municipal_municipality_region
-ON cadastre.green_assets_default(geometry_type, region_id, municipality_id, sub_municipal_area_id)
-WHERE geometry_type = 'P' AND sub_municipal_area_id IS NOT NULL;

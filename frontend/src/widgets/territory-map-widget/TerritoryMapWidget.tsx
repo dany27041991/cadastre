@@ -64,14 +64,20 @@ export function TerritoryMapWidget() {
       storedLeafRef.current = null
       return
     }
+    if (!last.provinceId) return
     const geojson =
       last.level === LEVEL_GREEN_AREAS
         ? await territoryApi.getGreenAreas({
             regionId: last.regionId,
+            provinceId: last.provinceId,
             municipalityId: last.id,
             subMunicipalAreaId: last.subMunicipalAreaId,
           })
-        : await territoryApi.getGreenAreas({ regionId: last.regionId, parentId: last.id })
+        : await territoryApi.getGreenAreas({
+            regionId: last.regionId,
+            provinceId: last.provinceId,
+            parentId: last.id,
+          })
     const isValidGeoJson =
       geojson != null &&
       (geojson as { type?: string }).type === 'FeatureCollection'

@@ -139,10 +139,6 @@ erDiagram
         BIGINT municipality_id FK
         "Reference to MUNICIPALITIES.id. Municipality (comune) owner / logical tenant identifier."
 
-        BIGINT sub_municipal_area_id FK
-        "Reference to SUBMUNICIPAL_AREA.id. Optional sub-municipal partition (zone, borough).
-         Used for performance and access control, not as official boundary definition."
-
         %% ---------- Hierarchy ----------
         BIGINT level_id FK
         "Reference to AREA_LEVEL.level_id defining the semantic hierarchy level."
@@ -253,10 +249,6 @@ erDiagram
         BIGINT municipality_id FK
         "Reference to MUNICIPALITIES.id. Municipality (comune) owner / logical tenant identifier."
 
-        BIGINT sub_municipal_area_id FK
-        "Reference to SUBMUNICIPAL_AREA.id. Optional sub-municipal partition (zone, borough).
-         Used for performance and access control, not as official boundary definition."
-
         JSONB snapshot "Full asset snapshot; validity inside JSONB: valid_from NOT NULL, valid_to nullable NULL = active, plus area_name, level_id, geometry, statuses, attributes, media, note, etc."
     }
 
@@ -280,10 +272,6 @@ erDiagram
 
         BIGINT municipality_id FK
         "Reference to MUNICIPALITIES.id. Municipality (comune) owner / logical tenant identifier."
-
-        BIGINT sub_municipal_area_id FK
-        "Reference to SUBMUNICIPAL_AREA.id. Optional sub-municipal partition (zone, borough).
-         Used for performance and access control, not as official boundary definition."
 
         %% ---------- DBT classification ----------
         BIGINT attribute_type_id FK "Reference to ATTRIBUTE_TYPES.id"
@@ -354,10 +342,6 @@ erDiagram
         BIGINT municipality_id FK
         "Reference to MUNICIPALITIES.id. Municipality (comune) owner / logical tenant identifier."
 
-        BIGINT sub_municipal_area_id FK
-        "Reference to SUBMUNICIPAL_AREA.id. Optional sub-municipal partition (zone, borough).
-         Used for performance and access control, not as official boundary definition."
-
         JSONB snapshot "Full green asset snapshot; validity inside JSONB: valid_from NOT NULL, valid_to nullable NULL = active, plus area_id, geometry, species, statuses, lifecycle, monitoring, media, note, etc."
     }
 
@@ -376,12 +360,10 @@ erDiagram
     REGIONS           ||--o{ ASSET_AREA    : region_id
     PROVINCES         ||--o{ ASSET_AREA    : province_id
     MUNICIPALITIES    ||--o{ ASSET_AREA    : municipality_id
-    SUBMUNICIPAL_AREA ||--o{ ASSET_AREA    : sub_municipal_area_id
 
     REGIONS           ||--o{ ASSET_GREEN   : region_id
     PROVINCES         ||--o{ ASSET_GREEN   : province_id
     MUNICIPALITIES    ||--o{ ASSET_GREEN   : municipality_id
-    SUBMUNICIPAL_AREA ||--o{ ASSET_GREEN   : sub_municipal_area_id
 
     PRIMARY_TYPES   ||--o{ SECONDARY_TYPES : contains
     SECONDARY_TYPES ||--o{ ATTRIBUTE_TYPES : classifies
@@ -432,6 +414,6 @@ Le basi territoriali ISTAT “Aree subcomunali” sono fornite in **tre livelli*
 - **`level`** (1, 2, 3): allineato ai tre shapefile e ai CSV `ASC_Liv_*_2021.csv`.
 - **`parent_id`** (FK su se stessa): livello 1 senza parent; livelli 2 e 3 riferiti all’area di livello superiore (risoluzione del parent in fase di import, es. per contenimento spaziale o prefisso del codice ISTAT COM_ASC).
 
-Vantaggi: un’unica tabella da mantenere, una sola geometria, vincoli e query per livello o per albero gerarchico semplici; gli asset continuano a riferire `sub_municipal_area_id` senza dover scegliere il livello a priori. In fase di import andrà popolato `parent_id` per Liv_2 e Liv_3 (es. da `ST_Contains` tra geometrie o da convenzione sui codici ISTAT).
+Vantaggi: un’unica tabella da mantenere, una sola geometria, vincoli e query per livello o per albero gerarchico semplici; In fase di import andrà popolato `parent_id` per Liv_2 e Liv_3 (es. da `ST_Contains` tra geometrie o da convenzione sui codici ISTAT).
 
 **Esplosione gerarchica:** la catena **Regione → Provincia → Comune → Area subcomunale** è percorribile in entrambe le direzioni: in discesa tramite `region_id`, `province_id`, `municipality_id` e (solo per le subcomunali) `parent_id`; in risalita leggendo le stesse FK al contrario. Esempio top-down: da una regione si ottengono le province (`province.region_id`), da una provincia i comuni (`municipality.province_id`), da un comune le aree subcomunali di livello 1 (`sub_municipal_area.municipality_id` e `level = 1`), da un’area di livello 1 le figlie con `sub_municipal_area.parent_id`.

@@ -16,8 +16,8 @@ GEOBUF_MEDIA_TYPE = "application/x-geobuf"
 @router.get("/green-areas", response_model=None)
 def get_green_areas(
     region_id: int,
+    province_id: int,
     parent_id: int | None = None,
-    province_id: int | None = None,
     municipality_id: int | None = None,
     sub_municipal_area_id: int | None = None,
     format: str | None = None,
@@ -25,9 +25,9 @@ def get_green_areas(
     """
     Return green areas (N-level hierarchy).
     - With parent_id: children of that area.
-    - Without parent_id: root areas for municipality_id (opt. sub_municipal_area_id).
-    region_id required (partitioning). province_id recommended for hierarchical cache.
-    Use ?format=geobuf for compact binary response (6-8x smaller, faster transfer).
+    - Without parent_id: root areas for municipality_id (optionally filtered by sub_municipal_area_id:
+      only areas intersecting the chosen sub-municipal area geometry).
+    region_id and province_id required. Use ?format=geobuf for compact binary response.
     """
     if parent_id is None and municipality_id is None:
         if format == "geobuf":
@@ -38,8 +38,8 @@ def get_green_areas(
         return GreenAreasOutput(features=[])
     result = get_green_areas_uc().catalog_green_areas(
         region_id,
-        parent_id=parent_id,
         province_id=province_id,
+        parent_id=parent_id,
         municipality_id=municipality_id,
         sub_municipal_area_id=sub_municipal_area_id,
     )
