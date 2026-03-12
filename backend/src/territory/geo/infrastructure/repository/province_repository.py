@@ -15,10 +15,13 @@ class ProvinceRepository:
         self._session_factory = session_factory
 
     def get_provinces_by_region(self, region_id: int) -> GeoJSONFeatureCollection:
+        geom_out = func.ST_AsGeoJSON(
+            func.ST_SimplifyPreserveTopology(ProvinceModel.geometry, 0.002), 6
+        ).cast(JSON)
         stmt = (
             select(
                 ProvinceModel.id,
-                func.ST_AsGeoJSON(ProvinceModel.geometry).cast(JSON).label("geometry"),
+                geom_out.label("geometry"),
                 ProvinceModel.code,
                 ProvinceModel.name,
                 ProvinceModel.vehicle_registration_code,

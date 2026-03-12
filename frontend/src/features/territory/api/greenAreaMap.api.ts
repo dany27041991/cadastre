@@ -17,6 +17,8 @@ export type GreenAreasParams = {
   municipalityId?: number
   /** When set, only areas intersecting this sub-municipal area are returned. */
   subMunicipalAreaId?: number
+  /** When set, returns areas contained in or intersecting this green area (spatial expansion). */
+  containedInAreaId?: number
 }
 
 export function buildGreenAreasQuery(params: GreenAreasParams): string {
@@ -26,6 +28,8 @@ export function buildGreenAreasQuery(params: GreenAreasParams): string {
   if (params.parentId != null) search.set('parent_id', String(params.parentId))
   if (params.municipalityId != null)
     search.set('municipality_id', String(params.municipalityId))
+  if (params.containedInAreaId != null)
+    search.set('contained_in_area_id', String(params.containedInAreaId))
   if (params.subMunicipalAreaId != null)
     search.set('sub_municipal_area_id', String(params.subMunicipalAreaId))
   search.set('format', 'geobuf')

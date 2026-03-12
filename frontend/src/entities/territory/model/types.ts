@@ -18,6 +18,8 @@ export interface BreadcrumbCrumb {
   subMunicipalAreaId?: number
   regionId?: number
   provinceId?: number
+  /** Municipality id (used when level is sub_areas for spatial expansion API). */
+  municipalityId?: number
   subMunicipalDrillLevel?: SubMunicipalDrillLevel
   subMunicipalDrillStack?: number[]
 }

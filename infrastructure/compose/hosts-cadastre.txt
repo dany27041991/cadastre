@@ -1,0 +1,10 @@
+# Righe da aggiungere a /etc/hosts (host) per build e risoluzione.
+# Solo gli host necessari al cadastre: Nexus (pip/npm), sim-dev/sim-coll (auth/API).
+# Aggiungere anche in Docker via extra_hosts (già in docker-compose.yml per backend e init).
+#
+# Copia le righe sotto nella tua /etc/hosts (richiede sudo).
+
+10.64.28.36 nexus3-cdp.apps.dxccdp-svil.ocp.mase.priv
+10.64.28.36 console-cdp.apps.dxccdp-svil.ocp.mase.priv
+198.18.12.135 sim-dev.mase.gov.it
+4.232.112.87 sim-coll.mase.gov.it

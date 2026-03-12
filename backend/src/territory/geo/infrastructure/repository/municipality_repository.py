@@ -17,10 +17,13 @@ class MunicipalityRepository:
     def get_municipalities_by_province(
         self, province_id: int
     ) -> GeoJSONFeatureCollection:
+        geom_out = func.ST_AsGeoJSON(
+            func.ST_SimplifyPreserveTopology(MunicipalityModel.geometry, 0.001), 6
+        ).cast(JSON)
         stmt = (
             select(
                 MunicipalityModel.id,
-                func.ST_AsGeoJSON(MunicipalityModel.geometry).cast(JSON).label("geometry"),
+                geom_out.label("geometry"),
                 MunicipalityModel.istat_code,
                 MunicipalityModel.name,
             )

@@ -95,3 +95,41 @@ class GreenAreasRepository:
             rows = self._rows_from_session(session, stmt)
         return build_green_area_feature_collection(rows)
 
+    def get_contained_or_intersecting_area(
+        self,
+        area_id: int,
+        region_id: int,
+        province_id: int,
+        municipality_id: int,
+    ) -> GeoJSONFeatureCollection:
+        """Areas at the next level contained in or overlapping the given area (not merely adjacent).
+        level = (chosen area's level) + 1; ST_Intersects and NOT ST_Touches so boundary-only contacts are excluded."""
+        area_subq = (
+            select(
+                GreenAreaModel.geometry,
+                GreenAreaModel.level,
+            )
+            .where(GreenAreaModel.id == area_id)
+            .where(GreenAreaModel.region_id == region_id)
+            .where(GreenAreaModel.province_id == province_id)
+            .where(GreenAreaModel.municipality_id == municipality_id)
+            .where(GreenAreaModel.geometry.isnot(None))
+            .limit(1)
+        )
+        area_cte = area_subq.subquery("area_ref")
+        # Next level: area_ref.level + 1
+        stmt = (
+            self._select_geojson()
+            .select_from(GreenAreaModel, area_cte)
+            .where(GreenAreaModel.region_id == region_id)
+            .where(GreenAreaModel.province_id == province_id)
+            .where(GreenAreaModel.municipality_id == municipality_id)
+            .where(GreenAreaModel.id != area_id)
+            .where(GreenAreaModel.level == area_cte.c.level + 1)
+            .where(func.ST_Intersects(GreenAreaModel.geometry, area_cte.c.geometry))
+            .where(~func.ST_Touches(GreenAreaModel.geometry, area_cte.c.geometry))
+        )
+        with self._session_factory() as session:
+            rows = self._rows_from_session(session, stmt)
+        return build_green_area_feature_collection(rows)
+

@@ -71,7 +71,10 @@ services:
   init:
     build:
       context: ../../backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.standalone
+      args:
+        PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL:-}
+        PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-}
     container_name: catasto-init
     restart: "no"
     environment:
@@ -87,6 +90,11 @@ services:
     depends_on:
       postgis:
         condition: service_healthy
+    extra_hosts:
+      - "nexus3-cdp.apps.dxccdp-svil.ocp.mase.priv:10.64.28.36"
+      - "console-cdp.apps.dxccdp-svil.ocp.mase.priv:10.64.28.36"
+      - "sim-dev.mase.gov.it:198.18.12.135"
+      - "sim-coll.mase.gov.it:4.232.112.87"
     networks:
       - catasto-network
 
@@ -96,7 +104,10 @@ services:
   backend:
     build:
       context: ../../backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.standalone
+      args:
+        PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL:-}
+        PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-}
     container_name: catasto-backend
     restart: unless-stopped
     environment:
@@ -110,9 +121,19 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
       APP_ENV: ${APP_ENV:-development}
       APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Rome}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       ADMIN_AREAS_CACHE_TTL_SECONDS: ${ADMIN_AREAS_CACHE_TTL_SECONDS:-86400}
+      # Auth (mase-utils-secu): AUTH_ENABLED=false disabilita; true + JWT_URI + MASE_API_* abilita
+      AUTH_ENABLED: ${AUTH_ENABLED:-false}
+      JWT_URI: ${JWT_URI:-}
+      MASE_API_AUTHENTICATION: ${MASE_API_AUTHENTICATION:-}
+      MASE_API_IAM: ${MASE_API_IAM:-}
+      MASE_SECU_SSL_VERIFY: ${MASE_SECU_SSL_VERIFY:-true}
+      # Debug: DEBUGPY_ENABLE=1 per attach IDE su porta 5678 (Python debugpy)
+      DEBUGPY_ENABLE: ${DEBUGPY_ENABLE:-}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
+      - "${BACKEND_DEBUG_PORT:-5678}:5678"
     volumes:
       - ../../backend:/app
       - ../scripts:/scripts:ro
@@ -123,6 +144,11 @@ services:
         condition: service_healthy
       init:
         condition: service_completed_successfully
+    extra_hosts:
+      - "nexus3-cdp.apps.dxccdp-svil.ocp.mase.priv:10.64.28.36"
+      - "console-cdp.apps.dxccdp-svil.ocp.mase.priv:10.64.28.36"
+      - "sim-dev.mase.gov.it:198.18.12.135"
+      - "sim-coll.mase.gov.it:4.232.112.87"
     networks:
       - catasto-network
     healthcheck:
@@ -133,18 +159,25 @@ services:
       start_period: 30s
 
   # ---------------------------------------------------------------------------
-  # 4. Frontend - React + Vite + OpenLayers + OSM
+  # 4. Frontend - React + Vite + OpenLayers + OSM (standalone)
   # ---------------------------------------------------------------------------
   frontend:
     build:
       context: ../../frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.standalone
     container_name: catasto-frontend
     restart: unless-stopped
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      # Utenza mockata in standalone (opzionale): FGP, utente JSON, cookie header
+      VITE_MOCK_FGP: ${VITE_MOCK_FGP:-}
+      VITE_MOCK_USER: ${VITE_MOCK_USER:-}
+      VITE_MOCK_COOKIE: ${VITE_MOCK_COOKIE:-}
+      # Debug: NODE_OPTIONS=--inspect per attach IDE su porta 9229 (Node inspector)
+      NODE_OPTIONS: ${NODE_OPTIONS:-}
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
+      - "${FRONTEND_DEBUG_PORT:-9229}:9229"
     volumes:
       - ../../frontend/src:/app/src
       - ../../frontend/index.html:/app/index.html

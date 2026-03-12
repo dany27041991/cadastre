@@ -76,7 +76,10 @@ export function TerritoryMapWidget() {
         : await territoryApi.getGreenAreas({
             regionId: last.regionId,
             provinceId: last.provinceId,
-            parentId: last.id,
+            municipalityId:
+              last.municipalityId ??
+              nav.breadcrumb.find((c) => c.level === 'green_areas')?.id,
+            containedInAreaId: last.id,
           })
     const isValidGeoJson =
       geojson != null &&

@@ -21,10 +21,13 @@ class SubMunicipalAreaRepository:
         self, municipality_id: int
     ) -> GeoJSONFeatureCollection:
         """Return all sub-municipal areas (levels 1, 2, 3) for the municipality. Ordered by level then id."""
+        geom_out = func.ST_AsGeoJSON(
+            func.ST_SimplifyPreserveTopology(SubMunicipalAreaModel.geometry, 0.001), 6
+        ).cast(JSON)
         stmt = (
             select(
                 SubMunicipalAreaModel.id,
-                func.ST_AsGeoJSON(SubMunicipalAreaModel.geometry).cast(JSON).label("geometry"),
+                geom_out.label("geometry"),
                 SubMunicipalAreaModel.code,
                 SubMunicipalAreaModel.name,
                 SubMunicipalAreaModel.level,

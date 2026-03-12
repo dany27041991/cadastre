@@ -15,9 +15,13 @@ class RegionRepository:
         self._session_factory = session_factory
 
     def get_regions(self) -> GeoJSONFeatureCollection:
+        # Simplify and reduce precision to speed up serialization and shrink payload (regions have large coastlines).
+        geom_out = func.ST_AsGeoJSON(
+            func.ST_SimplifyPreserveTopology(RegionModel.geometry, 0.002), 6
+        ).cast(JSON)
         stmt = select(
             RegionModel.id,
-            func.ST_AsGeoJSON(RegionModel.geometry).cast(JSON).label("geometry"),
+            geom_out.label("geometry"),
             RegionModel.code,
             RegionModel.name,
         ).where(RegionModel.geometry.isnot(None))

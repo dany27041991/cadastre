@@ -15,9 +15,14 @@ def _cached_green_areas(
     parent_id: int | None,
     municipality_id: int | None,
     sub_municipal_area_id: int | None = None,
+    contained_in_area_id: int | None = None,
 ) -> GeoJSONFeatureCollection:
     from territory.areas.infrastructure.repository import _green_areas_repository
     repo = _green_areas_repository()
+    if contained_in_area_id is not None and municipality_id is not None:
+        return repo.get_contained_or_intersecting_area(
+            contained_in_area_id, region_id, province_id, municipality_id
+        )
     if parent_id is not None:
         return repo.get_by_parent(parent_id, region_id)
     if municipality_id is None:
@@ -70,7 +75,13 @@ class CatalogGreenArea:
         parent_id: int | None = None,
         municipality_id: int | None = None,
         sub_municipal_area_id: int | None = None,
+        contained_in_area_id: int | None = None,
     ) -> GeoJSONFeatureCollection:
         return _cached_green_areas(
-            region_id, province_id, parent_id, municipality_id, sub_municipal_area_id
+            region_id,
+            province_id,
+            parent_id,
+            municipality_id,
+            sub_municipal_area_id,
+            contained_in_area_id,
         )

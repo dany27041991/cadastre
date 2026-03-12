@@ -152,7 +152,7 @@ export function useTerritoryNavigation(
     await withLoading(async () => {
       const geojson = await api.getRegions()
       bridgeRef.current.loadGeoJson(geojson)
-      bridgeRef.current.centerOnItaly()
+      bridgeRef.current.fitToCurrentExtent()
     })
   }, [api, withLoading, clearTerritoryState])
 
@@ -318,19 +318,24 @@ export function useTerritoryNavigation(
       clickedFeature?: unknown
     ) => {
       if (!api) return
+      const municipalityId = breadcrumb.find((c) => c.level === 'green_areas')?.id
+      const provinceId = breadcrumb.find((c) => c.level === 'green_areas')?.provinceId ?? breadcrumb.find((c) => c.level === 'municipalities')?.id
+      if (provinceId == null || municipalityId == null) return
       bridgeRef.current.clearGreenLayer()
       setLevel('sub_areas')
       setBreadcrumb((prev) => {
         const last = prev[prev.length - 1]
         if (last?.level === 'sub_areas' && last?.id === areaId) return prev
-        const provinceId = last?.provinceId
-        return [...prev, { level: 'sub_areas', id: areaId, label, regionId, provinceId }]
+        return [...prev, { level: 'sub_areas', id: areaId, label, regionId, provinceId, municipalityId }]
       })
       if (clickedFeature) bridgeRef.current.showOnlyFeature(clickedFeature as Feature)
       await withLoading(async () => {
-        const provinceId = breadcrumb.find((c) => c.level === 'green_areas')?.provinceId ?? breadcrumb.find((c) => c.level === 'municipalities')?.id
-        if (provinceId == null) return
-        const geojson = await api.getGreenAreas({ regionId, provinceId, parentId: areaId })
+        const geojson = await api.getGreenAreas({
+          regionId,
+          provinceId,
+          municipalityId,
+          containedInAreaId: areaId,
+        })
         if (hasGeoJsonFeatures(geojson)) {
           showGreenLayer(geojson)
         } else if (clickedFeature) {
@@ -340,7 +345,7 @@ export function useTerritoryNavigation(
         }
       })
     },
-    [api, withLoading, showGreenLayer, showLeafAreaFromFeature]
+    [api, breadcrumb, withLoading, showGreenLayer, showLeafAreaFromFeature]
   )
 
   const navigateTo = useCallback(
