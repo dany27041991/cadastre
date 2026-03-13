@@ -126,6 +126,7 @@ services:
       # Auth (mase-utils-secu): AUTH_ENABLED=false disabilita; true + JWT_URI + MASE_API_* abilita
       AUTH_ENABLED: ${AUTH_ENABLED:-false}
       JWT_URI: ${JWT_URI:-}
+      JWKS_INDEX: ${JWKS_INDEX:-}
       MASE_API_AUTHENTICATION: ${MASE_API_AUTHENTICATION:-}
       MASE_API_IAM: ${MASE_API_IAM:-}
       MASE_SECU_SSL_VERIFY: ${MASE_SECU_SSL_VERIFY:-true}
@@ -149,6 +150,7 @@ services:
       - "console-cdp.apps.dxccdp-svil.ocp.mase.priv:10.64.28.36"
       - "sim-dev.mase.gov.it:198.18.12.135"
       - "sim-coll.mase.gov.it:4.232.112.87"
+      - "iam.apps.psnleo01.ocp.mase.priv:10.64.24.71"
     networks:
       - catasto-network
     healthcheck:

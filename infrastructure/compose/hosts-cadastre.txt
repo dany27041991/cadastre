@@ -1,10 +1,17 @@
 # Righe da aggiungere a /etc/hosts (host) per build e risoluzione.
-# Solo gli host necessari al cadastre: Nexus (pip/npm), sim-dev/sim-coll (auth/API).
+# Host per cadastre: OpenShift (dxap-svil/coll), Nexus (pip/npm), GitLab, sim-dev/sim-coll (auth/API), IAM, dxc-webkit portali.
 # Aggiungere anche in Docker via extra_hosts (già in docker-compose.yml per backend e init).
 #
 # Copia le righe sotto nella tua /etc/hosts (richiede sudo).
 
+10.64.24.228 console-openshift-console.apps.dxap-svil.ocp.mase.priv
+10.64.24.228 oauth-openshift.apps.dxap-svil.ocp.mase.priv
+10.64.35.4 console-openshift-console.apps.dxap-coll.ocp.mase.priv
+10.64.35.4 oauth-openshift.apps.dxap-coll.ocp.mase.priv
 10.64.28.36 nexus3-cdp.apps.dxccdp-svil.ocp.mase.priv
 10.64.28.36 console-cdp.apps.dxccdp-svil.ocp.mase.priv
-198.18.12.135 sim-dev.mase.gov.it
+10.64.28.20 gitlab.cdp.dxccdp-svil.ocp.mase.priv
 4.232.112.87 sim-coll.mase.gov.it
+198.18.12.135 sim-dev.mase.gov.it
+10.64.24.228 dxc-webkit-develdxap-portali.apps.dxap-svil.ocp.mase.priv
+10.64.24.71 iam.apps.psnleo01.ocp.mase.priv
