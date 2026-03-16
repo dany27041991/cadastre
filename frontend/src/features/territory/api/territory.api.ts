@@ -1,7 +1,9 @@
 /**
  * Territory API: geo hierarchy + green areas + green assets.
+ * Di default usa authFetch (FGP + cookies) per le chiamate autenticate.
  */
 import { API_URL } from '@/shared/config/map'
+import { authFetch } from '@/shared/lib/auth'
 import {
   createFetcher,
   type FetcherOptions,
@@ -42,7 +44,7 @@ export type TerritoryApiOptions = FetcherOptions
 export function createTerritoryApi(
   options: TerritoryApiOptions = {}
 ): TerritoryApi {
-  const { baseUrl = API_URL, fetchFn = fetch } = options
+  const { baseUrl = API_URL, fetchFn = authFetch } = options
   const { fetchGeobufOrEmpty } = createFetcher(baseUrl, fetchFn)
   const greenAreaMap = createGreenAreasApi(options)
   const greenAssetMap = createGreenAssetsApi(options)

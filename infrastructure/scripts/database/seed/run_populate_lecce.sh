@@ -34,7 +34,7 @@ docker compose run --rm \
   -e DATA_DIR \
   -e DATABASE_URL \
   init \
-  python3 /scripts/database/seed/populate_municipality_data/load_municipality_green_data.py \
+  python3 /scripts/database/seed/populate_lecce_data/load_lecce_green_data.py \
   --municipality Lecce
 
 echo ""

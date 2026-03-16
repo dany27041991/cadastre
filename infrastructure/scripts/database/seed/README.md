@@ -65,7 +65,7 @@ Il comune deve esistere in `public.municipalities`. Lo script elimina prima gli 
 
 ### File coinvolti
 
-- `populate_municipality_data/load_municipality_green_data.py` – script Python (geopandas, psycopg).
+- `populate_lecce_data/load_lecce_green_data.py` – script Python (geopandas, psycopg).
 - `run_populate_lecce.sh` – runner che invoca lo script nel container `init`.
 
 ---

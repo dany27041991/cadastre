@@ -3,7 +3,10 @@
 import json
 from typing import Any
 
+from core.logger import log_invocation
 
+
+@log_invocation(log_args=True, log_result=False)
 def build_feature_collection(
     rows: list[tuple],
     property_names: list[str],

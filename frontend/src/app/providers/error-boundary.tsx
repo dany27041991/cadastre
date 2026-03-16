@@ -3,6 +3,7 @@
  */
 import type { ReactNode } from 'react'
 import { Component } from 'react'
+import { Box } from 'dxc-webkit'
 import { i18n } from '@/shared/i18n'
 import { I18N_KEYS } from '@/features/territory'
 
@@ -28,9 +29,9 @@ export class ErrorBoundary extends Component<Props, State> {
     }
     if (this.state.hasError) {
       return (
-        <div role="alert">
+        <Box as="div" role="alert">
           {i18n.t(I18N_KEYS.errorGeneric)}
-        </div>
+        </Box>
       )
     }
     return this.props.children

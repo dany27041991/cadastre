@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type Feature from 'ol/Feature'
+import { Box } from 'dxc-webkit'
 import { territoryApi, useTerritoryMap, useTerritoryNavigation, GreenPalette, LEVEL_GREEN_AREAS, LEVEL_SUB_AREAS } from '@/features/territory'
 import { MainContent } from '@/widgets/layout/main/MainContent'
 import 'ol/ol.css'
@@ -137,7 +138,7 @@ export function TerritoryMapWidget() {
   }, [])
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Box as="div" display="flex" flexDirection="column" style={{ height: '100%' }}>
       <MainContent
         mapRef={map.mapRef}
         level={nav.level}
@@ -157,6 +158,6 @@ export function TerritoryMapWidget() {
           onBeforeLoadingAssets={onBeforeLoadingAssets}
         />
       </MainContent>
-    </div>
+    </Box>
   )
 }

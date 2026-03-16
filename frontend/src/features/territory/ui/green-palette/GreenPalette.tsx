@@ -2,6 +2,7 @@
  * Tree icon button: toggles the green layer (trees, rows, lawns, etc.) for the selected area.
  */
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { Box } from 'dxc-webkit'
 import { territoryApi } from '../../api/territory.api'
 import type { BreadcrumbCrumb, GreenContext, GreenPaletteProps } from '../../types'
 import { LEVEL_GREEN_AREAS, LEVEL_SUB_AREAS } from '../../model/constants'
@@ -201,7 +202,7 @@ export function GreenPalette({
       {isLoading && (
         <LoadingOverlay />
       )}
-      <div className={styles.buttonContainer}>
+      <Box as="div" className={styles.buttonContainer}>
         <button
           type="button"
           className={buttonClassName}
@@ -211,7 +212,7 @@ export function GreenPalette({
         >
           <TreeIcon />
         </button>
-      </div>
+      </Box>
     </>
   )
 }

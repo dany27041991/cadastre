@@ -1,0 +1,21 @@
+# Tree Cadastre - Frontend standalone (React + Vite + OpenLayers)
+# Usato da cadastre/infrastructure/compose per avviare il microfrontend in modalità autonoma.
+# Con volume nominato su node_modules, l'entrypoint fa npm install all'avvio (veloce se già presente).
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Dependencies (include .npmrc so private dxc-webkit from Nexus is resolvable)
+COPY package.json package-lock.json* .npmrc ./
+RUN npm ci 2>/dev/null || npm install
+
+COPY . .
+
+# Entrypoint: npm install (aggiorna il volume se serve), poi Vite. Così node_modules nel volume
+# persistono tra i rebuild dell'immagine e non si riscaricano ogni volta.
+RUN chmod +x /app/docker-entrypoint.sh
+
+# 5173 = Vite dev server; 9229 = Node inspector (attach IDE con NODE_OPTIONS=--inspect)
+EXPOSE 5173 9229
+
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

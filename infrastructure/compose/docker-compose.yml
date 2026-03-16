@@ -182,6 +182,7 @@ services:
       - "${FRONTEND_DEBUG_PORT:-9229}:9229"
     volumes:
       - ../../frontend/src:/app/src
+      - frontend_node_modules:/app/node_modules
       - ../../frontend/index.html:/app/index.html
       - ../../frontend/vite.config.ts:/app/vite.config.ts
       - ../../frontend/tsconfig.json:/app/tsconfig.json
@@ -202,6 +203,7 @@ services:
 # =============================================================================
 volumes:
   postgis_data:
+  frontend_node_modules:
 
 # =============================================================================
 # Network

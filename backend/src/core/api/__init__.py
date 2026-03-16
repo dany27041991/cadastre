@@ -1,4 +1,4 @@
-"""Core API: use case factories for route handlers and core routes."""
+"""Core API: use case factories, auth dependencies, and core routes."""
 
 from core.api.core_routes import router as core_router
 from core.api.dependencies import (
@@ -14,6 +14,12 @@ from core.api.dependencies import (
     get_sub_municipal_areas_uc,
     get_green_areas_uc,
     get_green_assets_uc,
+    CurrentUser,
+    OptionalCurrentUser,
+    Authorized,
+    get_current_user,
+    get_authorization,
+    pre_authorize,
 )
 
 __all__ = [
@@ -30,4 +36,10 @@ __all__ = [
     "get_sub_municipal_areas_uc",
     "get_green_areas_uc",
     "get_green_assets_uc",
+    "CurrentUser",
+    "OptionalCurrentUser",
+    "Authorized",
+    "get_current_user",
+    "get_authorization",
+    "pre_authorize",
 ]

@@ -1,8 +1,12 @@
 /**
  * Shared UI components barrel.
- * Export public components as they are implemented (button, modal, spinner, icon).
+ * Componenti basati su dxc-webkit (vedi docs/ui-components-guide.md).
  */
-// export { Button } from './button'
-// export { Modal } from './modal'
-// export { Spinner } from './spinner'
-// export { Icon } from './icon'
+export {
+  Button,
+  ButtonInv,
+  Line,
+  Spinner,
+  DummyIcon,
+  type ButtonProps,
+} from "../ui-components";

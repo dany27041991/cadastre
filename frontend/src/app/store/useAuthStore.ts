@@ -1,0 +1,39 @@
+/**
+ * Store autenticazione: solo stato utente (FGP + cookies gestiti da authFetch).
+ * Nessun JWT: sessione tramite cookie e header FGP.
+ */
+import { create } from 'zustand'
+
+export interface AuthUser {
+  nome?: string
+  cognome?: string
+  email?: string
+  preferred_username?: string
+  authorities?: { authority: string }[]
+}
+
+interface AuthState {
+  user: AuthUser | null
+  isAuthenticated: boolean
+  isLoading: boolean
+  setUser: (user: AuthUser | null) => void
+  setIsLoading: (loading: boolean) => void
+  logout: () => void
+}
+
+export const useAuthStore = create<AuthState>((set) => ({
+  user: null,
+  isAuthenticated: false,
+  isLoading: false,
+  setUser: (user) =>
+    set({
+      user,
+      isAuthenticated: !!user,
+    }),
+  setIsLoading: (isLoading) => set({ isLoading }),
+  logout: () =>
+    set({
+      user: null,
+      isAuthenticated: false,
+    }),
+}))

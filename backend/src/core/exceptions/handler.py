@@ -6,8 +6,10 @@ from fastapi.responses import JSONResponse
 
 from core.exceptions.base import AppException
 from core.i18n import get_locale_from_request, translate
+from core.logger import log_invocation
 
 
+@log_invocation(log_args=True, log_result=False)
 def _app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
     locale = get_locale_from_request(request)
     message = translate(
@@ -21,6 +23,7 @@ def _app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content=body)
 
 
+@log_invocation(log_args=True, log_result=False)
 def _validation_exception_handler(
     request: Request,
     exc: RequestValidationError,
@@ -36,12 +39,14 @@ def _validation_exception_handler(
     )
 
 
+@log_invocation(log_args=True, log_result=False)
 def _generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     locale = get_locale_from_request(request)
     message = translate("errors.internal", locale)
     return JSONResponse(status_code=500, content={"message": message})
 
 
+@log_invocation(log_args=False, log_result=False)
 def register_exception_handlers(app: FastAPI) -> None:
     """Register global exception handlers (AppException, RequestValidationError, Exception)."""
     app.add_exception_handler(AppException, _app_exception_handler)
