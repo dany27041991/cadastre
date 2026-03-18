@@ -1,7 +1,7 @@
 /**
- * Bootstrap per utenza mockata in modalità standalone (es. compose senza shell).
- * Legge VITE_MOCK_FGP, VITE_MOCK_USER, VITE_MOCK_COOKIE e imposta sessionStorage,
- * store utente e (se possibile) cookie. Solo per sviluppo/test.
+ * Bootstrap mock auth in standalone mode (e.g. compose without shell).
+ * Reads VITE_MOCK_FGP, VITE_MOCK_USER, VITE_MOCK_COOKIE and sets sessionStorage,
+ * user store and (where possible) document cookies. Dev/test only.
  */
 import type { AuthUser } from '@/app/store'
 import { useAuthStore } from '@/app/store'
@@ -13,11 +13,8 @@ function applyMockFgp(): void {
   if (typeof fgp === 'string' && fgp.trim()) {
     try {
       sessionStorage.setItem(FGP_KEY, fgp.trim())
-      if (import.meta.env.DEV) {
-        console.info('[mockAuth] FGP impostato da VITE_MOCK_FGP (standalone)')
-      }
-    } catch (e) {
-      console.warn('[mockAuth] Impossibile impostare sessionStorage fgp:', e)
+    } catch {
+      /* sessionStorage unavailable */
     }
   }
 }
@@ -29,19 +26,15 @@ function applyMockUser(): void {
     const user = JSON.parse(raw) as AuthUser
     if (user && typeof user === 'object') {
       useAuthStore.getState().setUser(user)
-      if (import.meta.env.DEV) {
-        console.info('[mockAuth] Utente mock impostato da VITE_MOCK_USER (standalone)')
-      }
     }
-  } catch (e) {
-    console.warn('[mockAuth] VITE_MOCK_USER non è un JSON valido:', e)
+  } catch {
+    /* invalid JSON */
   }
 }
 
 /**
- * Imposta cookie da stringa in formato header Cookie (name=value; name2=value2).
- * Nota: cookie httpOnly non sono impostabili da JS; in dev il backend può accettare
- * comunque session/token per testing.
+ * Parse a Cookie header string (name=value; name2=value2).
+ * Note: httpOnly cookies cannot be set from JS; in dev the backend may still accept session/token for testing.
  */
 function applyMockCookie(): void {
   const cookieString = import.meta.env.VITE_MOCK_COOKIE
@@ -56,15 +49,12 @@ function applyMockCookie(): void {
       if (!name) continue
       document.cookie = `${name}=${value}; path=/; SameSite=Lax`
     }
-    if (import.meta.env.DEV && parts.length > 0) {
-      console.info('[mockAuth] Cookie mock impostati da VITE_MOCK_COOKIE (standalone)', parts.length, 'cookie')
-    }
-  } catch (e) {
-    console.warn('[mockAuth] Errore impostazione cookie mock:', e)
+  } catch {
+    /* document.cookie unavailable */
   }
 }
 
-/** Esegue il bootstrap delle credenziali mock se le variabili d’ambiente sono definite. */
+/** Run mock credential bootstrap when the corresponding env vars are set. */
 export function initMockAuth(): void {
   applyMockFgp()
   applyMockUser()

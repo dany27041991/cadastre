@@ -1,6 +1,6 @@
 /**
- * Servizio autenticazione: imposta l'utente nello store (da Single-SPA props o da API).
- * Nessun JWT: sessione tramite FGP + cookies.
+ * Auth helpers: set user in store (Single-SPA props or API).
+ * No JWT: session via FGP + cookies.
  */
 import type { AppProps } from 'single-spa'
 import type { AuthUser } from '@/app/store'
@@ -8,8 +8,8 @@ import { useAuthStore } from '@/app/store'
 
 export const authService = {
   /**
-   * Imposta l'utente dallo shell Single-SPA (customProps.user) se presente.
-   * Da chiamare in mount(props).
+   * Set user from Single-SPA shell customProps.user when present.
+   * Call from mount(props).
    */
   setUserFromProps(props: AppProps): void {
     const user = (props?.customProps as { user?: AuthUser })?.user
@@ -18,7 +18,7 @@ export const authService = {
     }
   },
 
-  /** Pulisce lo stato utente (logout lato microfrontend). */
+  /** Clear user state (microfrontend-side logout). */
   logout(): void {
     useAuthStore.getState().logout()
   },

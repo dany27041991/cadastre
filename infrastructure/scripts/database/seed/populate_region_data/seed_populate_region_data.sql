@@ -4,7 +4,7 @@
 -- Generates green areas and green assets for all municipalities in Lazio
 -- Optimized for maximum speed with set-based operations and bulk insert
 --
--- IMPORTANT: Run the entire script from the beginning (e.g. psql -f seed_lazio_extreme.sql).
+-- IMPORTANT: Run the entire script from the beginning (e.g. psql -f seed_populate_region_data.sql).
 -- Steps 1–3 create required tables (_seed_municipalities_target, _seed_scaling); step 4+ depend on them.
 --
 -- CONSTRAINT (no overlap): Green areas may contain assets of type point (P), line (L), or surface (S).
@@ -109,10 +109,10 @@ FROM _seed_scaling;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_tables WHERE tablename = '_seed_municipalities_target') THEN
-    RAISE EXCEPTION 'Seed script must be run from the beginning. Missing: _seed_municipalities_target (STEP 1). Run the full seed_lazio_extreme.sql.';
+    RAISE EXCEPTION 'Seed script must be run from the beginning. Missing: _seed_municipalities_target (STEP 1). Run the full seed_populate_region_data.sql.';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_tables WHERE tablename = '_seed_scaling') THEN
-    RAISE EXCEPTION 'Seed script must be run from the beginning. Missing: _seed_scaling (STEP 3). Run the full seed_lazio_extreme.sql.';
+    RAISE EXCEPTION 'Seed script must be run from the beginning. Missing: _seed_scaling (STEP 3). Run the full seed_populate_region_data.sql.';
   END IF;
 END $$;
 

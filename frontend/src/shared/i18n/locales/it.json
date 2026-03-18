@@ -1,0 +1,52 @@
+{
+  "territory": {
+    "italia": "Italia",
+    "appTitle": "Catasto arboreo",
+    "greenAreas": "Aree verdi",
+    "provinceSuffix": " Provincia",
+    "clusterLabel": "Cluster ({{count}})",
+    "selected": "Selezionato",
+    "navigationAria": "Navigazione territorio",
+    "back": "← Indietro",
+    "loading": "Caricamento...",
+    "loadingGreenLayer": "Caricamento layer verde",
+    "loadingGreen": "Caricamento verde...",
+    "accordion": {
+      "tableTitleAreas": "Tabella Aree Verdi",
+      "tableTitleTrees": "Tabella Alberi",
+      "showMore": "Mostra dettaglio",
+      "showLess": "Nascondi dettaglio"
+    },
+    "panel": {
+      "infoPanelSubtitle": "Pannello opzioni",
+      "legacyFiltersSection": "Altri filtri",
+      "sectionTableManagement": "Gestione tabella",
+      "sectionTableManagementSub": "Attiva o disattiva le colonne aggiuntive rispetto alle cinque predefinite.",
+      "sectionTableFilter": "Filtro tabella",
+      "sectionTableFilterSub": "Restringi le righe per colonna o su tutti i campi.",
+      "filterAllColumns": "Tutte le colonne",
+      "filterColumnLabel": "Colonna",
+      "filterColumnPlaceholder": "Dove cercare…",
+      "filterTextLabel": "Testo",
+      "filterTextPlaceholder": "Filtra valori…",
+      "optionalColumnHelper": "Campo dati: {{key}}",
+      "noOptionalColumns": "Nessuna colonna aggiuntiva disponibile.",
+      "tableContextHint": "Apri la navigazione fino alle aree verdi per gestire colonne e filtri della tabella."
+    },
+    "table": {
+      "booleanYes": "Sì",
+      "booleanNo": "No",
+      "tooltipMenuTitle": "Azioni",
+      "rowActionsMenu": "Azioni sulla riga",
+      "detail": "Dettaglio",
+      "edit": "Modifica",
+      "remove": "Rimuovi"
+    }
+  },
+  "errors": {
+    "generic": "Si è verificato un errore.",
+    "loadFailed": "Caricamento non riuscito.",
+    "regionIdRequired": "regionId richiesto",
+    "httpError": "Richiesta fallita (HTTP {{status}})."
+  }
+}

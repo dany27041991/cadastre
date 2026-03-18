@@ -1,8 +1,8 @@
 /**
- * Sidebar conforme al design dxc-webkit: header (logo + label), voci di menu.
- * Larghezza controllata dal layout (collapse fa restringere la colonna e espandere la main).
- * Workaround: in dxc-webkit il click per espandere il gruppo è solo sul SidebarItem,
- * non sulla freccia (.sidebar-arrow-icon); qui si delega il click sulla freccia al primo item.
+ * dxc-webkit sidebar: header (logo + label) and menu entries.
+ * Width is controlled by the layout (collapse narrows sidebar column, widens main).
+ * Workaround: in dxc-webkit only SidebarItem toggles group expand, not the arrow (.sidebar-arrow-icon);
+ * forward arrow clicks to the first item so the row still expands.
  */
 import { useEffect, useRef } from 'react'
 import {

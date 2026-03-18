@@ -45,8 +45,10 @@ export function GreenPalette({
   fitToGreenExtent,
   setTerritoryFillVisible,
   onBeforeLoadingAssets,
+  assetsLayerActive,
+  onAssetsLayerActiveChange,
 }: GreenPaletteProps) {
-  const [isGreenLayerActive, setIsGreenLayerActive] = useState(false)
+  const isGreenLayerActive = assetsLayerActive
   const [isLoading, setIsLoading] = useState(false)
   const lastContextKeyRef = useRef<string | null>(null)
   const prevBreadcrumbLengthRef = useRef(breadcrumb.length)
@@ -62,14 +64,14 @@ export function GreenPalette({
 
   const turnOffGreenLayer = useCallback(async () => {
     lastContextKeyRef.current = null
-    setIsGreenLayerActive(false)
+    onAssetsLayerActiveChange(false)
     if (restoreGreenAreas) {
       await restoreGreenAreas()
     } else {
       setGreenLayerVisible(false)
       clearGreenLayer()
     }
-  }, [setGreenLayerVisible, clearGreenLayer, restoreGreenAreas])
+  }, [setGreenLayerVisible, clearGreenLayer, restoreGreenAreas, onAssetsLayerActiveChange])
 
   useEffect(() => {
     if (level === LEVEL_GREEN_AREAS || level === LEVEL_SUB_AREAS) {
@@ -170,7 +172,7 @@ export function GreenPalette({
       loadGreenLayer(geojson)
       setGreenLayerVisible(true)
       setTerritoryFillVisible(false)
-      setIsGreenLayerActive(true)
+      onAssetsLayerActiveChange(true)
       fitToGreenExtent()
     } catch {
       turnOffGreenLayer()
@@ -186,6 +188,7 @@ export function GreenPalette({
     setGreenLayerVisible,
     setTerritoryFillVisible,
     fitToGreenExtent,
+    onAssetsLayerActiveChange,
   ])
 
   const isDisabled = context == null || isLoading

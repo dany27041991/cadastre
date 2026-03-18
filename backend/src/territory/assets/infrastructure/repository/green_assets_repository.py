@@ -11,6 +11,7 @@ from territory.geo.domain.entities.sub_municipal_area_model import SubMunicipalA
 from territory.assets.infrastructure.mapper import build_green_asset_feature_collection
 from territory.assets.domain.entities.green_asset_model import GreenAssetModel
 from territory.areas.domain.entities.green_area_model import GreenAreaModel
+from territory.common.infrastructure.table_serialization import orm_to_row_dict
 
 
 class GreenAssetsRepository:
@@ -117,4 +118,103 @@ class GreenAssetsRepository:
         with self._session_factory() as session:
             rows = self._rows_from_session(session, stmt)
         return build_green_asset_feature_collection(rows)
+
+    def list_table_rows(
+        self,
+        region_id: int,
+        province_id: int,
+        municipality_id: int,
+        *,
+        green_area_id: int | None = None,
+        sub_municipal_area_id: int | None = None,
+    ) -> list[dict]:
+        """Same scope as catalog_green_assets."""
+        if green_area_id is not None:
+            return self._list_rows_within_area(
+                region_id, municipality_id, green_area_id, province_id
+            )
+        if sub_municipal_area_id is not None:
+            return self._list_rows_sub_municipal(
+                region_id, province_id, municipality_id, sub_municipal_area_id
+            )
+        return self._list_rows_municipality(region_id, municipality_id, province_id)
+
+    def _list_rows_within_area(
+        self,
+        region_id: int,
+        municipality_id: int,
+        green_area_id: int,
+        province_id: int,
+    ) -> list[dict]:
+        av = GreenAssetModel
+        a = GreenAreaModel
+        area_geom = (
+            select(a.geometry)
+            .where(a.region_id == region_id)
+            .where(a.province_id == province_id)
+            .where(a.id == green_area_id)
+            .where(a.geometry.isnot(None))
+            .limit(1)
+            .scalar_subquery()
+        )
+        stmt = (
+            select(av)
+            .where(av.region_id == region_id)
+            .where(av.province_id == province_id)
+            .where(av.municipality_id == municipality_id)
+            .where(func.ST_Intersects(av.geometry, area_geom))
+        )
+        with self._session_factory() as session:
+            return [orm_to_row_dict(GreenAssetModel, m) for m in session.scalars(stmt)]
+
+    def _list_rows_municipality(
+        self, region_id: int, municipality_id: int, province_id: int
+    ) -> list[dict]:
+        av = GreenAssetModel
+        a = GreenAreaModel
+        intersects_any_root = (
+            select(1)
+            .select_from(a)
+            .where(a.region_id == av.region_id)
+            .where(a.province_id == av.province_id)
+            .where(a.municipality_id == av.municipality_id)
+            .where(a.parent_id.is_(None))
+            .where(a.geometry.isnot(None))
+            .where(func.ST_Intersects(av.geometry, a.geometry))
+        )
+        stmt = (
+            select(av)
+            .where(av.region_id == region_id)
+            .where(av.province_id == province_id)
+            .where(av.municipality_id == municipality_id)
+            .where(exists(intersects_any_root))
+        )
+        with self._session_factory() as session:
+            return [orm_to_row_dict(GreenAssetModel, m) for m in session.scalars(stmt)]
+
+    def _list_rows_sub_municipal(
+        self,
+        region_id: int,
+        province_id: int,
+        municipality_id: int,
+        sub_municipal_area_id: int,
+    ) -> list[dict]:
+        av = GreenAssetModel
+        sub_geom = (
+            select(SubMunicipalAreaModel.geometry)
+            .where(SubMunicipalAreaModel.id == sub_municipal_area_id)
+            .where(SubMunicipalAreaModel.municipality_id == municipality_id)
+            .where(SubMunicipalAreaModel.geometry.isnot(None))
+            .limit(1)
+            .scalar_subquery()
+        )
+        stmt = (
+            select(av)
+            .where(av.region_id == region_id)
+            .where(av.province_id == province_id)
+            .where(av.municipality_id == municipality_id)
+            .where(func.ST_Intersects(av.geometry, sub_geom))
+        )
+        with self._session_factory() as session:
+            return [orm_to_row_dict(GreenAssetModel, m) for m in session.scalars(stmt)]
 

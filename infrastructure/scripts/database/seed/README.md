@@ -34,7 +34,7 @@ Genera aree verdi e green asset per i comuni di una o più regioni italiane (log
 
 ### File coinvolti
 
-- `populate_region_data/seed_<slug>_extreme.sql` – uno script SQL per regione (es. `seed_lazio_extreme.sql`).
+- `populate_region_data/seed_populate_region_data.sql` – script SQL per popolamento dati di regione (es. Lazio).
 
 ---
 

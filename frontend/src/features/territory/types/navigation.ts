@@ -34,6 +34,7 @@ export interface MapBridgeGreen {
   clearMapVectorLayers: () => void
   fitToGreenExtent: () => void
   setGreenLayerVisibleWhenMoveEnds: () => void
+  ensureGreenLayerVisibleAfterFit: () => void
   /** Hide territory fill so green is not covered by gray during fit animation. */
   setTerritoryFillVisible: (visible: boolean) => void
   /** Store leaf area feature so it can be restored when navigating back via breadcrumb. */

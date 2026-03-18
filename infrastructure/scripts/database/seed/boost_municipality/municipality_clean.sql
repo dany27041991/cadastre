@@ -4,7 +4,7 @@
 -- Run before municipality_populate.sql.
 -- Target municipality: pass from terminal (run_boost_municipality.sh <comune>).
 --
--- Data model (aligned with seed_lazio_extreme.sql and municipality_populate.sql):
+-- Data model (aligned with seed_populate_region_data.sql and municipality_populate.sql):
 -- Green areas contain assets of type point (P), line (L), surface (S). No overlap: S in disjoint grid;
 -- gap = area minus S; L and P only in the gap; P in gap minus buffer(L) so L and P never overlap.
 --

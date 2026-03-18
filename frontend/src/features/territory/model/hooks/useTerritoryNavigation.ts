@@ -50,6 +50,17 @@ async function handleGreenLevelNavigation(
   }
 }
 
+function geoJsonHasFeatureId(
+  geojson: { features?: Array<{ id?: number; properties?: { id?: number } }> },
+  featureId: number
+): boolean {
+  return Boolean(
+    geojson.features?.some(
+      (f) => f.id === featureId || f.properties?.id === featureId
+    )
+  )
+}
+
 async function loadTerritoryForGreenLevel(
   api: TerritoryNavigationApi,
   bridge: MapBridge,
@@ -58,6 +69,25 @@ async function loadTerritoryForGreenLevel(
 ): Promise<void> {
   if (last.level === 'sub_areas' && last.regionId != null && last.provinceId != null && newCrumb.length >= 2) {
     const parentCrumb = newCrumb[newCrumb.length - 2]
+    if (parentCrumb.level === 'green_areas') {
+      /**
+       * green_areas crumb id is municipality_id, not a green area id.
+       * parent_id on API = children of that *green area* → wrong query if we pass municipality id.
+       * Load roots for the municipality and highlight `last` only if it is a root; otherwise
+       * skip vector outline (green layer will show sub-areas + fit).
+       */
+      const munGeo = await api.getGreenAreas({
+        regionId: last.regionId,
+        provinceId: last.provinceId,
+        municipalityId: parentCrumb.id,
+        subMunicipalAreaId: parentCrumb.subMunicipalAreaId,
+      })
+      if (hasGeoJsonFeatures(munGeo) && geoJsonHasFeatureId(munGeo, last.id)) {
+        bridge.loadGeoJsonAndShowOnlyFeatureById(munGeo, last.id)
+      }
+      return
+    }
+    /** Parent crumb is sub_areas: parentCrumb.id is a green area → API parent_id is correct. */
     const parentGeo = await api.getGreenAreas({
       regionId: last.regionId,
       provinceId: last.provinceId,
@@ -133,6 +163,7 @@ export function useTerritoryNavigation(
       bridgeRef.current.setTerritoryFillVisible(false)
       bridgeRef.current.setGreenLayerVisibleWhenMoveEnds()
       bridgeRef.current.fitToGreenExtent()
+      bridgeRef.current.ensureGreenLayerVisibleAfterFit()
     },
     []
   )
@@ -364,7 +395,9 @@ export function useTerritoryNavigation(
         clearTerritoryState()
       }
       const fetcher = levelFetchers[last.level]
-      if (!fetcher) return
+      if (!fetcher) {
+        return
+      }
 
       navigateInProgressRef.current = true
       setLevel(last.level)

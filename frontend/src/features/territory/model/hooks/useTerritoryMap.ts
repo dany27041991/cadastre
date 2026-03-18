@@ -90,6 +90,8 @@ export function useTerritoryMap(options?: UseTerritoryMapOptions): UseTerritoryM
   const greenLastCacheZoomRef = useRef<number | null>(null)
   /** True when the source is already populated with the current skip-clustering features. Avoids re-adds during zoom. */
   const greenSkipLoadedRef = useRef(false)
+  /** Invalidates pending ensureGreenLayerVisibleAfterFit (timeout / moveend) after a new navigation. */
+  const greenRevealGenRef = useRef(0)
   /** Mirrors the setup's moving flag; true between movestart and the post-moveend debounce. Suppresses clustering during animation. */
   const viewMovingRef = useRef(false)
   /** True when greenRawLayer is the active green display (zoom >= threshold). Read by setup to toggle visibility in onMoveEnd. */
@@ -290,6 +292,7 @@ export function useTerritoryMap(options?: UseTerritoryMapOptions): UseTerritoryM
   }, [])
 
   const resetGreenState = useCallback(() => {
+    greenRevealGenRef.current += 1
     greenClusterCacheRef.current = null
     greenSkipClusteringRef.current = false
     greenShowingRawRef.current = false
@@ -340,6 +343,39 @@ export function useTerritoryMap(options?: UseTerritoryMapOptions): UseTerritoryM
   /** Schedules showing the green layer when the next moveend fires (after zoom/fit animation). */
   const setGreenLayerVisibleWhenMoveEnds = useCallback(() => {
     showGreenOnMoveEndRef.current = true
+  }, [])
+
+  /**
+   * Breadcrumb back: territory fit + green fit can leave the green layer hidden if the
+   * second fit does not trigger moveend, or moveend ordering conflicts. Force visibility.
+   */
+  const ensureGreenLayerVisibleAfterFit = useCallback(() => {
+    const gen = ++greenRevealGenRef.current
+    const map = mapInstanceRef.current
+    const applyVisible = () => {
+      if (gen !== greenRevealGenRef.current) return
+      viewMovingRef.current = false
+      applyGreenClusteringRef.current?.()
+      showGreenOnMoveEndRef.current = false
+      greenVisibleRef.current = true
+      vectorLayerRef.current?.changed()
+      const useRaw = greenUsingRawLayerRef.current
+      const vis = greenVisibleRef.current
+      greenLayerRef.current?.setVisible(vis && !useRaw)
+      greenRawLayerRef.current?.setVisible(vis && useRaw)
+    }
+    if (!map) {
+      applyVisible()
+      return
+    }
+    let done = false
+    const run = () => {
+      if (gen !== greenRevealGenRef.current || done) return
+      done = true
+      applyVisible()
+    }
+    map.once('moveend', run)
+    window.setTimeout(run, 480)
   }, [])
 
   const setTerritoryFillVisible = useCallback((visible: boolean) => {
@@ -412,6 +448,7 @@ export function useTerritoryMap(options?: UseTerritoryMapOptions): UseTerritoryM
     clearMapVectorLayers,
     fitToGreenExtent,
     setGreenLayerVisibleWhenMoveEnds,
+    ensureGreenLayerVisibleAfterFit,
     setTerritoryFillVisible,
   }
 }

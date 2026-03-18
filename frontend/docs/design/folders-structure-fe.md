@@ -9,7 +9,7 @@ Documentazione della struttura del progetto frontend.
 Oltre a `src/` (codice applicativo), il progetto frontend ha:
 
 - **`public/`** – file serviti così come sono alla root (Vite). Struttura **`public/assets/`**:
-  - **`i18n/`** – traduzioni (en.json, it.json, fr.json, …), caricati a runtime da i18next-http-backend (`/assets/i18n/{{lng}}.json`);
+  - **`i18n/`** – (opzionale) non più usato per le stringhe app: le traduzioni sono in **`src/shared/i18n/locales/`** (bundle, compatibile single-spa);
   - **`images/`** – immagini (logo, banner, ecc.);
   - **`fonts/`** – font (woff2, woff, ecc.).
 - `index.html`, `vite.config.ts`, `tsconfig.json`, `package.json`, ecc.

@@ -34,7 +34,7 @@ Estende `TooltipProps` di reactstrap.
 | `title` | `string` | — | Titolo nel tooltip. |
 | `description` | `string` | — | Descrizione/testo aggiuntivo. |
 
-(Altre props reactstrap: `target`, `isOpen`, `toggle`, `placement`, `className`, `delay`, ecc.)
+(Altre props **reactstrap** ereditate dal `Tooltip` sottostante: `target`, `isOpen`, `toggle`, `placement`, `className`, **`innerClassName`** (classi sulla `.tooltip-inner`, utile per layout es. centrare il `title`), `popperClassName`, `delay`, ecc.)
 
 ---
 

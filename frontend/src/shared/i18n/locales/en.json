@@ -1,0 +1,52 @@
+{
+  "territory": {
+    "italia": "Italy",
+    "appTitle": "Tree Cadastre",
+    "greenAreas": "Green areas",
+    "provinceSuffix": " Province",
+    "clusterLabel": "Cluster ({{count}})",
+    "selected": "Selected",
+    "navigationAria": "Territory navigation",
+    "back": "← Back",
+    "loading": "Loading...",
+    "loadingGreenLayer": "Loading green layer",
+    "loadingGreen": "Loading green...",
+    "accordion": {
+      "tableTitleAreas": "Green areas table",
+      "tableTitleTrees": "Trees table",
+      "showMore": "Show details",
+      "showLess": "Hide details"
+    },
+    "panel": {
+      "infoPanelSubtitle": "Options panel",
+      "legacyFiltersSection": "Additional filters",
+      "sectionTableManagement": "Table management",
+      "sectionTableManagementSub": "Show or hide columns in addition to the five default columns.",
+      "sectionTableFilter": "Table filter",
+      "sectionTableFilterSub": "Filter rows by a single field or across all fields.",
+      "filterAllColumns": "All columns",
+      "filterColumnLabel": "Column",
+      "filterColumnPlaceholder": "Where to search…",
+      "filterTextLabel": "Text",
+      "filterTextPlaceholder": "Filter values…",
+      "optionalColumnHelper": "Data field: {{key}}",
+      "noOptionalColumns": "No extra columns available.",
+      "tableContextHint": "Navigate to green areas to manage table columns and filters."
+    },
+    "table": {
+      "booleanYes": "Yes",
+      "booleanNo": "No",
+      "tooltipMenuTitle": "Actions",
+      "rowActionsMenu": "Row actions",
+      "detail": "Details",
+      "edit": "Edit",
+      "remove": "Remove"
+    }
+  },
+  "errors": {
+    "generic": "Something went wrong.",
+    "loadFailed": "Load failed.",
+    "regionIdRequired": "regionId required",
+    "httpError": "Request failed (HTTP {{status}})."
+  }
+}

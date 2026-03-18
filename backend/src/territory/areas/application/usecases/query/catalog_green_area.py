@@ -37,3 +37,22 @@ class CatalogGreenArea:
             sub_municipal_area_id,
             contained_in_area_id,
         )
+
+    def list_green_areas_table(
+        self,
+        region_id: int,
+        *,
+        province_id: int,
+        parent_id: int | None = None,
+        municipality_id: int | None = None,
+        sub_municipal_area_id: int | None = None,
+        contained_in_area_id: int | None = None,
+    ) -> list[dict]:
+        return self._repository.list_table_rows(
+            region_id,
+            province_id,
+            parent_id=parent_id,
+            municipality_id=municipality_id,
+            sub_municipal_area_id=sub_municipal_area_id,
+            contained_in_area_id=contained_in_area_id,
+        )

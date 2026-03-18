@@ -40,6 +40,11 @@ export interface TerritoryMapGreenApi {
   fitToGreenExtent: () => void
   /** Show green layer when the next moveend fires (after zoom/fit animation). */
   setGreenLayerVisibleWhenMoveEnds: () => void
+  /**
+   * After fitToGreenExtent, ensures green layer becomes visible even when the view
+   * does not emit moveend (e.g. second fit is a no-op). Uses moveend + timeout fallback.
+   */
+  ensureGreenLayerVisibleAfterFit: () => void
   setTerritoryFillVisible: (visible: boolean) => void
 }
 

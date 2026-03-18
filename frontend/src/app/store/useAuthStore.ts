@@ -1,6 +1,6 @@
 /**
- * Store autenticazione: solo stato utente (FGP + cookies gestiti da authFetch).
- * Nessun JWT: sessione tramite cookie e header FGP.
+ * Auth store: user state only (FGP + cookies handled by authFetch).
+ * No JWT: session via cookie and FGP header.
  */
 import { create } from 'zustand'
 

@@ -1,6 +1,6 @@
 /**
  * Territory API: geo hierarchy + green areas + green assets.
- * Di default usa authFetch (FGP + cookies) per le chiamate autenticate.
+ * Uses authFetch (FGP + cookies) by default for authenticated calls.
  */
 import { API_URL } from '@/shared/config/map'
 import { authFetch } from '@/shared/lib/auth'

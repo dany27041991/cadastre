@@ -17,7 +17,7 @@ const lifecycles = singleSpaReact({
   rootComponent: AppRoot,
   errorBoundary(err: Error, errInfo: React.ErrorInfo) {
     console.error("[mase-siv] Error boundary:", err, errInfo);
-    return React.createElement("div", { role: "alert" }, "Errore nell'applicazione.");
+    return React.createElement("div", { role: "alert" }, "Application error.");
   },
 });
 

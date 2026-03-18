@@ -1,6 +1,6 @@
 /**
- * Layout principale con griglia dxc-webkit: Box, Row, Col (nessun CSS custom).
- * Sidebar + [InfoPanel opzionale] + main (breadcrumb + content); collapse della sidebar restringe la colonna sidebar e espande la main.
+ * Main shell using dxc-webkit grid: Box, Row, Col (no custom CSS).
+ * Sidebar, optional InfoPanel, main (breadcrumb + content); collapsing sidebar narrows sidebar column and widens main.
  */
 import type { ReactNode } from 'react'
 import { Box, Row, Col } from 'dxc-webkit'

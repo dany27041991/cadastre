@@ -273,7 +273,7 @@ WHERE so.geometry IS NOT NULL AND NOT ST_IsEmpty(so.geometry)
   AND (abs(hashtext(so.macro_id::text || so.name)) % 100) < 82;  /* keep ~82% of sub-areas for realistic distribution */
 
 -- -----------------------------------------------------------------------------
--- STEP 6: Green assets (P, L, S). No S in the gap; in the gap only L and P, with L and P not intersecting/overlapping (aligned with seed_lazio_extreme.sql).
+-- STEP 6: Green assets (P, L, S). No S in the gap; in the gap only L and P, with L and P not intersecting/overlapping (aligned with seed_populate_region_data.sql).
 -- Invariant: S in disjoint grid; gap = area minus S; L in gap; P in gap minus buffer(L).
 -- Grid 6 cells per sub-area (1 per surface type); area_m2 in grid.
 -- -----------------------------------------------------------------------------
@@ -499,7 +499,7 @@ WHERE g.cell_idx >= 2 AND g.cell_idx < 2 + g.num_lawns
   AND (abs(hashtext(g.area_id::text || g.cell_idx::text)) % 100) < 80;
 
 \echo '[7.5] Hedges (geometry_type S; grid, no overlap)...'
--- attribute_type_id 28 = ATT_03_101 Cespuglio macchia/tappezzante (S). Order aligned with seed_lazio_extreme: lawn, hedge, flower_bed, street_greenery.
+-- attribute_type_id 28 = ATT_03_101 Cespuglio macchia/tappezzante (S). Order aligned with seed_populate_region_data: lawn, hedge, flower_bed, street_greenery.
 INSERT INTO cadastre.green_assets (municipality_id, asset_type, geometry_type, geometry, green_area_id, region_id, province_id, attribute_type_id, species, attributes)
 SELECT g.municipality_id, 'hedge'::cadastre.asset_type, 'S'::cadastre.geometry_type, ST_SetSRID(g.cell_geom, 4326), g.area_id, g.region_id, g.province_id, 28,
        (ARRAY['Buxus sempervirens','Ligustrum vulgare','Laurus nobilis'])[1 + ((g.area_id + g.cell_idx) % 3)],

@@ -1,6 +1,6 @@
 /**
  * Shared UI components barrel.
- * Componenti basati su dxc-webkit (vedi docs/ui-components-guide.md).
+ * dxc-webkit-based components (see docs/ui-components-guide.md).
  */
 export {
   Button,

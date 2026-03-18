@@ -1,5 +1,5 @@
 /**
- * Breadcrumb applicazione con griglia dxc-webkit (Box, Row, Col) e Breadcrumb.
+ * App breadcrumb using dxc-webkit grid (Box, Row, Col) and Breadcrumb.
  */
 import { Box, Row, Col, Breadcrumb as DxcBreadcrumb, BreadcrumbItem, BreadcrumbIcon, icons } from 'dxc-webkit'
 import { APP_NAME } from '@/app/config/constants'

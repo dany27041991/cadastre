@@ -1,6 +1,6 @@
 /**
- * Componenti UI condivisi basati su dxc-webkit.
- * Allineati all’uso in cu1.5-fe-MVP3-local per coerenza con l’ecosistema MASE.
+ * Shared UI building blocks on dxc-webkit.
+ * Aligned with cu1.5-fe-MVP3-local for consistency across the MASE ecosystem.
  */
 import { Box, icons } from "dxc-webkit";
 import type { FC } from "react";

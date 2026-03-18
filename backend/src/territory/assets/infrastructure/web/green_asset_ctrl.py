@@ -46,3 +46,21 @@ def get_green_assets(
             media_type=GEOBUF_MEDIA_TYPE,
         )
     return GreenAssetsOutput.model_validate(result)
+
+
+@router.get("/green-assets/filter", response_model=None)
+def get_green_assets_filter(
+    region_id: int,
+    province_id: int,
+    municipality_id: int,
+    green_area_id: int | None = None,
+    sub_municipal_area_id: int | None = None,
+) -> list[dict]:
+    """Dati assets verdi filtrati (stessi query param di GET /green-assets)."""
+    return get_green_assets_uc().list_green_assets_table(
+        region_id,
+        municipality_id,
+        province_id=province_id,
+        green_area_id=green_area_id,
+        sub_municipal_area_id=sub_municipal_area_id,
+    )

@@ -1,6 +1,6 @@
 @import 'dxc-webkit/dist/assets/style.css';
 
-/* Altezza piena viewport: sidebar e info panel occupano tutta l'altezza */
+/* Full viewport height: sidebar and info panel fill available height */
 html,
 body {
   height: 100%;
@@ -14,7 +14,7 @@ body {
   flex-direction: column;
 }
 
-/* Accordion "Dettaglio risultati": titolo e icona in primary */
+/* Results detail accordion: title and icon use primary color */
 .accordion-detail-results .accordion-header .accordion-button {
   color: var(--primary);
 }
@@ -24,111 +24,7 @@ body {
   fill: transparent;
 }
 
-/* Tabella compatta: padding body ridotto */
-.compact-table .table tbody td,
-.compact-table table tbody td {
-  padding-top: 2px !important;
-  padding-bottom: 2px !important;
-  margin: 0 !important;
-  vertical-align: middle;
-}
-/* Intestazione tabella: padding aumentato */
-.compact-table .table thead th,
-.compact-table table thead th {
-  padding: 8px 10px !important;
-  margin: 0 !important;
-  vertical-align: middle;
-}
-.compact-table .table,
-.compact-table table {
-  margin-bottom: 4px;
-}
-
-/* Bottoni tabella e paginazione: size sm */
-.compact-table .btn {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.875rem;
-}
-.compact-table .more-options-icon,
-.compact-table .action-icon {
-  width: 1.25rem;
-  height: 1.25rem;
-  min-width: 1.25rem;
-  min-height: 1.25rem;
-}
-.compact-table .actions-menu-item {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.875rem;
-}
-.compact-table [class*="dropdown"] {
-  font-size: 0.875rem;
-  padding: 0.25rem 0.5rem;
-}
-
-/* Paginazione dxc-webkit: variante small, contenuto centrato */
-.compact-table .custom-pagination.pagination-wrapper {
-  gap: 0.5rem;
-  display: flex;
-  align-items: center;
-}
-.compact-table .custom-pagination * {
-  height: initial !important;
-}
-.compact-table .custom-pagination li.pag-item {
-  min-width: 1.75rem;
-  height: 1.75rem;
-  font-size: 0.75rem;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-}
-.compact-table .custom-pagination li.pag-item .pag-link {
-  font-size: 0.75rem;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-}
-.compact-table .custom-pagination li.pag-item .pag-link[aria-current] {
-  font-size: 0.875rem;
-}
-.compact-table .custom-pagination li.pag-item:has(.pag-link[aria-current]) {
-  width: 1.75rem;
-  height: 1.75rem;
-}
-.compact-table .custom-pagination .arrow-icon {
-  width: 1.25rem;
-  height: 1.25rem;
-}
-.compact-table .custom-pagination .prev-page,
-.compact-table .custom-pagination .next-page {
-  width: 2rem;
-  height: 2rem;
-  min-width: 2rem;
-  min-height: 2rem;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-}
-.compact-table .custom-pagination .prev-page .pag-link,
-.compact-table .custom-pagination .next-page .pag-link {
-  padding: 0;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  width: 100%;
-  height: 100%;
-}
-.compact-table .custom-pagination .pages-list {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-/* Sidebar: sfondo occupa tutta l'altezza disponibile */
+/* Sidebar: background fills available height */
 .external-container.sidebar-light,
 .external-container.sidebar-dark {
   height: 100%;
@@ -145,13 +41,13 @@ body {
   flex-direction: column;
 }
 
-/* Sidebar: click su icona del gruppo dropdown passa al parent (espansione funziona) */
+/* Sidebar: group icon clicks bubble so dropdown expand still works */
 .sidebar-group-first-item-container .sidebar-group-first-item svg,
 .sidebar-group-first-item-container .sidebar-group-first-item .icon {
   pointer-events: none;
 }
 
-/* Sidebar: hover su freccia o su tutta la riga mostra lo stesso background dell’item */
+/* Sidebar: hover on arrow or full row matches item hover background */
 .sidebar-light .sidebar-container .sidebar-group-first-item-container:hover .sidebar-group-first-item {
   background: var(--background-primary-hover);
   color: var(--text-white);

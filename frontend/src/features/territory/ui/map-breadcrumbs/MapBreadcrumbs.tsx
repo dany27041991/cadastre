@@ -1,6 +1,6 @@
 /**
  * Breadcrumb navigation above the content. Traversable and clickable.
- * Usa Chip dxc-webkit (size sm), senza CSS custom.
+ * Uses dxc-webkit Chip (sm), no custom CSS.
  */
 import { useTranslation } from 'react-i18next'
 import { Box, Chip, Text, icons } from 'dxc-webkit'

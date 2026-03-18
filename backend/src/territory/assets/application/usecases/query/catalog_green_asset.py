@@ -39,3 +39,20 @@ class CatalogGreenAsset:
             green_area_id,
             sub_municipal_area_id,
         )
+
+    def list_green_assets_table(
+        self,
+        region_id: int,
+        municipality_id: int,
+        *,
+        province_id: int,
+        green_area_id: int | None = None,
+        sub_municipal_area_id: int | None = None,
+    ) -> list[dict]:
+        return self._repository.list_table_rows(
+            region_id,
+            province_id,
+            municipality_id,
+            green_area_id=green_area_id,
+            sub_municipal_area_id=sub_municipal_area_id,
+        )
