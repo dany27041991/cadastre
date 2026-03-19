@@ -13,7 +13,7 @@ def _green_assets_repository() -> GreenAssetsRepository:
 
 
 def get_green_assets_use_case() -> CatalogGreenAsset:
-    return CatalogGreenAsset(_green_assets_repository())
+    return CatalogGreenAsset(_green_assets_repository(), get_session)
 
 
 __all__ = ["GreenAssetsRepository", "get_green_assets_use_case"]

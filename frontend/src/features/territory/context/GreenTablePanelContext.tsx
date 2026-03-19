@@ -1,5 +1,9 @@
 /**
  * Shared state between InfoPanel options and the green areas/trees map table.
+ *
+ * Server-side mode: the context no longer holds the full row array in memory.
+ * GreenDataTable owns its own paginated fetch; the context only holds the UI
+ * state that is shared across the InfoPanel (column picker, filter inputs).
  */
 import {
   createContext,
@@ -9,6 +13,8 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+
+import { isGreenTableIdColumn } from '../lib/greenTableColumnVisibility'
 
 export interface GreenTablePanelContextValue {
   readonly extraColumns: string[]
@@ -23,11 +29,9 @@ export interface GreenTablePanelContextValue {
   readonly setTablePanelActive: (v: boolean) => void
   readonly registerTableColumns: (allKeys: string[], defaultFive: string[]) => void
   readonly resetPanelState: () => void
-  /** Accordion + InfoPanel visible only when the API returns table rows. */
+  /** Accordion + InfoPanel visible only when the table endpoint confirms rows exist. */
   readonly mapTableAccordionVisible: boolean
   readonly setMapTableAccordionVisible: (v: boolean) => void
-  readonly greenTableRows: Record<string, unknown>[]
-  readonly setGreenTableRows: (rows: Record<string, unknown>[]) => void
 }
 
 const GreenTablePanelContext = createContext<GreenTablePanelContextValue | null>(null)
@@ -40,7 +44,6 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
   const [allColumnKeys, setAllColumnKeys] = useState<string[]>([])
   const [tablePanelActive, setTablePanelActive] = useState(false)
   const [mapTableAccordionVisible, setMapTableAccordionVisible] = useState(false)
-  const [greenTableRows, setGreenTableRows] = useState<Record<string, unknown>[]>([])
 
   const resetPanelState = useCallback(() => {
     setExtraColumns([])
@@ -51,6 +54,12 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
   const registerTableColumns = useCallback((allKeys: string[], defaultFive: string[]) => {
     setAllColumnKeys(allKeys)
     setOptionalColumnKeys(allKeys.filter((k) => !defaultFive.includes(k)))
+    setExtraColumns((prev) => prev.filter((k) => allKeys.includes(k)))
+    setFilterColumnKey((prev) => {
+      if (!prev) return prev
+      if (!allKeys.includes(prev) || isGreenTableIdColumn(prev)) return ''
+      return prev
+    })
   }, [])
 
   const toggleExtraColumn = useCallback((key: string) => {
@@ -75,8 +84,6 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
       resetPanelState,
       mapTableAccordionVisible,
       setMapTableAccordionVisible,
-      greenTableRows,
-      setGreenTableRows,
     }),
     [
       extraColumns,
@@ -89,7 +96,6 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
       registerTableColumns,
       resetPanelState,
       mapTableAccordionVisible,
-      greenTableRows,
     ]
   )
 

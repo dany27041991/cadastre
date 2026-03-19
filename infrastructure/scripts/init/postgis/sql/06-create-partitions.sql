@@ -61,10 +61,14 @@ BEGIN
         'CREATE TABLE IF NOT EXISTS %s PARTITION OF %s FOR VALUES IN (%s)',
         p_av_leaf, p_av_region, rec_province.id
       );
-      EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ga_%s_%s_geom ON %s USING GIST(geometry)', rec_region.id, rec_province.id, p_av_leaf);
-      EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ga_%s_%s_asset_type ON %s(asset_type)', rec_region.id, rec_province.id, p_av_leaf);
+      -- NOTE: idx_green_assets_geom and idx_green_assets_asset_type on the parent already
+      -- propagate to each leaf automatically; no need to create them here again.
       EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ga_%s_%s_point_munic ON %s(geometry_type, region_id, municipality_id) WHERE geometry_type = ''P''', rec_region.id, rec_province.id, p_av_leaf);
       EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ga_%s_%s_point_prov ON %s(geometry_type, region_id, province_id) WHERE geometry_type = ''P''', rec_region.id, rec_province.id, p_av_leaf);
+      -- Composite territorial filter (within this leaf region_id + province_id are constant, so effective key is municipality_id).
+      EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ga_%s_%s_muni ON %s(municipality_id)', rec_region.id, rec_province.id, p_av_leaf);
+      -- Covering index for direct green_area lookup per municipality (future bypass of ST_Intersects).
+      EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ga_%s_%s_muni_area ON %s(municipality_id, green_area_id) WHERE green_area_id IS NOT NULL', rec_region.id, rec_province.id, p_av_leaf);
       n_av := n_av + 1;
 
       -- green_areas leaves
@@ -72,7 +76,7 @@ BEGIN
         'CREATE TABLE IF NOT EXISTS %s PARTITION OF %s FOR VALUES IN (%s)',
         p_ar_leaf, p_ar_region, rec_province.id
       );
-      EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ar_%s_%s_geom ON %s USING GIST(geometry)', rec_region.id, rec_province.id, p_ar_leaf);
+      -- NOTE: idx_green_areas_geom on the parent already propagates to each leaf automatically.
       n_ar := n_ar + 1;
 
       -- asset_area_history leaves

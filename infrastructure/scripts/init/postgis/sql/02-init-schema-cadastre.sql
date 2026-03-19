@@ -206,7 +206,7 @@ CREATE TABLE IF NOT EXISTS cadastre.green_assets (
   province_id INTEGER NOT NULL,
   municipality_id INTEGER NOT NULL,
   attribute_type_id BIGINT REFERENCES public.attribute_types(id),
-  asset_type cadastre.asset_type NOT NULL DEFAULT 'other',
+  asset_type cadastre.asset_type NOT NULL,
   geometry_type cadastre.geometry_type NOT NULL,
   geometry GEOMETRY(Geometry, 4326) NOT NULL,
   family VARCHAR(80),

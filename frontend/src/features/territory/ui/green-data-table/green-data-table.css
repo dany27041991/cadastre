@@ -44,6 +44,82 @@
   padding: 0.25rem 0.5rem;
 }
 
+/* "Results per page" dropdown text (dxc-webkit) */
+.compact-table .icon-label-set .dropdown-display-button-text {
+  font-size: 0.75rem !important;
+  line-height: 1.1 !important;
+}
+
+/* "Go to page" / dropdown trigger (dxc-webkit) */
+.compact-table .container-dropdown .dropdown-button.dropdown-primary {
+  font-size: 0.75rem !important;
+  line-height: 1.1 !important;
+  padding: 0.2rem 0.45rem !important;
+  min-height: 0 !important;
+}
+
+/**
+ * Stack page-jump toolbar above the table (see .green-data-table-layout).
+ */
+.green-data-table-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Custom "go to page" number field (replaces dxc-webkit go-to dropdown) */
+.green-data-table-page-jump {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0 0.15rem;
+  font-size: 0.75rem;
+  box-sizing: border-box;
+}
+.green-data-table-page-jump--top {
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-bottom: 0.45rem;
+  order: -1; /* stays above CustomTable if flex order is ever changed */
+}
+.green-data-table-page-jump-label {
+  color: var(--gray-600, #6c757d);
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+}
+.green-data-table-page-jump-suffix {
+  color: var(--gray-600, #6c757d);
+}
+.green-data-table-page-jump-input {
+  width: 3.25rem;
+  min-width: 0;
+  padding: 0.15rem 0.35rem;
+  font-size: inherit;
+  line-height: 1.2;
+  border: 1px solid var(--gray-400, #ced4da);
+  border-radius: 4px;
+  text-align: center;
+  box-sizing: border-box;
+}
+.green-data-table-page-jump-input:disabled {
+  opacity: 0.6;
+}
+.green-data-table-page-jump-input::-webkit-outer-spin-button,
+.green-data-table-page-jump-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.green-data-table-page-jump-input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
 /* dxc-webkit pagination: small variant */
 .compact-table .custom-pagination.pagination-wrapper {
   gap: 0.5rem;
@@ -54,15 +130,15 @@
   height: initial !important;
 }
 .compact-table .custom-pagination li.pag-item {
-  min-width: 1.75rem;
-  height: 1.75rem;
-  font-size: 0.75rem;
+  min-width: 2rem;
+  height: 2rem;
+  font-size: 0.68rem;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
 }
 .compact-table .custom-pagination li.pag-item .pag-link {
-  font-size: 0.75rem;
+  font-size: 0.62rem !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -72,11 +148,11 @@
   padding: 0;
 }
 .compact-table .custom-pagination li.pag-item .pag-link[aria-current] {
-  font-size: 0.875rem;
+  font-size: 0.64rem !important;
 }
 .compact-table .custom-pagination li.pag-item:has(.pag-link[aria-current]) {
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 2rem;
+  height: 2rem;
 }
 .compact-table .custom-pagination .arrow-icon {
   width: 1.25rem;
@@ -84,10 +160,10 @@
 }
 .compact-table .custom-pagination .prev-page,
 .compact-table .custom-pagination .next-page {
-  width: 2rem;
-  height: 2rem;
-  min-width: 2rem;
-  min-height: 2rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  min-width: 2.25rem;
+  min-height: 2.25rem;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;

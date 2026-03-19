@@ -18,6 +18,20 @@ body {
 .accordion-detail-results .accordion-header .accordion-button {
   color: var(--primary);
 }
+.accordion-detail-results .accordion-header .accordion-button {
+  /* Reduce vertical gap between accordion title and body. */
+  padding-top: 0.35rem !important;
+  padding-bottom: 0.35rem !important;
+  margin: 0 !important;
+}
+.accordion-detail-results .accordion-body {
+  /* Pull body closer to the header for this specific accordion. */
+  padding-top: 0.25rem !important;
+  margin-top: 0 !important;
+}
+.accordion-detail-results .accordion-collapse {
+  margin-top: 0 !important;
+}
 .accordion-detail-results .accordion-header .accordion-button .icon,
 .accordion-detail-results .accordion-header .accordion-button svg {
   stroke: var(--primary) !important;

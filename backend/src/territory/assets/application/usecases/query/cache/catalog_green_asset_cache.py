@@ -23,9 +23,7 @@ def get_cached_green_assets(
 
     repo = _green_assets_repository()
     if green_area_id is not None:
-        return repo.get_within_area(
-            region_id, municipality_id, green_area_id, province_id
-        )
+        return repo.get_within_area(region_id, province_id, municipality_id, green_area_id)
     if sub_municipal_area_id is not None:
         key = (region_id, province_id, municipality_id, sub_municipal_area_id)
         if key in _green_asset_cache:
@@ -38,7 +36,7 @@ def get_cached_green_assets(
     key = (region_id, province_id, municipality_id)
     if key in _green_asset_cache:
         return _green_asset_cache[key]
-    result = repo.get_within_municipality(region_id, municipality_id, province_id)
+    result = repo.get_within_municipality(region_id, province_id, municipality_id)
     _green_asset_cache[key] = result
     return result
 

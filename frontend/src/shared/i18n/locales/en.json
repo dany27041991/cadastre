@@ -40,7 +40,11 @@
       "rowActionsMenu": "Row actions",
       "detail": "Details",
       "edit": "Edit",
-      "remove": "Remove"
+      "remove": "Remove",
+      "emptyRows": "No rows for the selected context.",
+      "goToPageLabel": "Page",
+      "goToPageAria": "Page number, from 1 to {{max}}",
+      "goToPageOf": "of {{total}}"
     }
   },
   "errors": {

@@ -60,6 +60,10 @@ CREATE INDEX IF NOT EXISTS idx_green_assets_geometry_type ON cadastre.green_asse
 CREATE INDEX IF NOT EXISTS idx_green_assets_asset_type_province ON cadastre.green_assets(asset_type, province_id);
 -- geometry: spatial
 CREATE INDEX IF NOT EXISTS idx_green_assets_geom ON cadastre.green_assets USING GIST(geometry);
+-- Covering index for direct green_area lookups per municipality (bypass of ST_Intersects).
+CREATE INDEX IF NOT EXISTS idx_green_assets_municipality_area
+  ON cadastre.green_assets(municipality_id, green_area_id)
+  WHERE green_area_id IS NOT NULL;
 -- family, genus, variety: no index (display / search)
 -- species: filter by species
 CREATE INDEX IF NOT EXISTS idx_green_assets_species ON cadastre.green_assets(species)

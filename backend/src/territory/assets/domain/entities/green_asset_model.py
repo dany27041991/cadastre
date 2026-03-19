@@ -23,7 +23,7 @@ class GreenAssetModel(Base):
     municipality_id = Column(Integer, nullable=False)
     attribute_type_id = Column(BigInteger, nullable=True)  # FK public.attribute_types(id)
 
-    asset_type = Column(String(30), nullable=False, server_default=text("'other'"))  # cadastre.asset_type enum
+    asset_type = Column(String(30), nullable=False)  # cadastre.asset_type enum
     geometry_type = Column(String(20), nullable=False)  # cadastre.geometry_type enum
     geometry = Column(Geometry(geometry_type="GEOMETRY", srid=4326), nullable=False)
 

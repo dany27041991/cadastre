@@ -40,7 +40,11 @@
       "rowActionsMenu": "Azioni sulla riga",
       "detail": "Dettaglio",
       "edit": "Modifica",
-      "remove": "Rimuovi"
+      "remove": "Rimuovi",
+      "emptyRows": "Nessuna riga per il contesto selezionato.",
+      "goToPageLabel": "Pagina",
+      "goToPageAria": "Numero pagina, da 1 a {{max}}",
+      "goToPageOf": "di {{total}}"
     }
   },
   "errors": {

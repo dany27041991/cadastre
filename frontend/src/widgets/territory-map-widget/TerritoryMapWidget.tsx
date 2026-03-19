@@ -19,10 +19,6 @@ import {
   buildGreenAssetsTableQuery,
 } from '@/features/territory/lib/greenTableParams'
 import { useGreenTablePanel } from '@/features/territory/context/GreenTablePanelContext'
-import {
-  fetchGreenAreasTable,
-  fetchGreenAssetsTable,
-} from '@/features/territory/api/greenTable.api'
 import { MainContent } from '@/widgets/layout/main/MainContent'
 import 'ol/ol.css'
 
@@ -78,7 +74,7 @@ export function TerritoryMapWidget() {
   const nav = useTerritoryNavigation(mapBridge, { api: territoryApi, t })
   const [greenAssetsLayerActive, setGreenAssetsLayerActive] = useState(false)
 
-  const showGreenTableAccordion = shouldShowGreenDataAccordion(nav.level, nav.breadcrumb)
+  const showGreenTableAccordion = shouldShowGreenDataAccordion(nav.level)
   const areasTableQuery = useMemo(
     () => buildGreenAreasTableQuery(nav.level, nav.breadcrumb),
     [nav.level, nav.breadcrumb]
@@ -93,64 +89,23 @@ export function TerritoryMapWidget() {
     registerTableColumns,
     resetPanelState,
     setMapTableAccordionVisible,
-    setGreenTableRows,
-    mapTableAccordionVisible,
   } = useGreenTablePanel()
 
   const tableQueryReady =
     showGreenTableAccordion &&
     (greenAssetsLayerActive ? assetsTableQuery != null : areasTableQuery != null)
 
+  // Reset panel state when the table scope changes or becomes unavailable.
+  // GreenDataTable owns the actual fetch; this effect only handles teardown.
   useEffect(() => {
     if (!tableQueryReady) {
-      setGreenTableRows([])
       setMapTableAccordionVisible(false)
       setTablePanelActive(false)
       registerTableColumns([], [])
       resetPanelState()
-      return
-    }
-    const fetchKey = greenAssetsLayerActive ? assetsTableQuery! : areasTableQuery!
-    let cancelled = false
-    setMapTableAccordionVisible(false)
-    setTablePanelActive(false)
-    const run = greenAssetsLayerActive
-      ? fetchGreenAssetsTable(fetchKey)
-      : fetchGreenAreasTable(fetchKey)
-    run
-      .then((data) => {
-        if (cancelled) return
-        const rows = Array.isArray(data) ? data : []
-        setGreenTableRows(rows)
-        if (rows.length > 0) {
-          resetPanelState()
-          setMapTableAccordionVisible(true)
-          setTablePanelActive(true)
-        } else {
-          setMapTableAccordionVisible(false)
-          setTablePanelActive(false)
-          registerTableColumns([], [])
-          resetPanelState()
-        }
-      })
-      .catch(() => {
-        if (cancelled) return
-        setGreenTableRows([])
-        setMapTableAccordionVisible(false)
-        setTablePanelActive(false)
-        registerTableColumns([], [])
-        resetPanelState()
-      })
-    return () => {
-      cancelled = true
     }
   }, [
     tableQueryReady,
-    showGreenTableAccordion,
-    greenAssetsLayerActive,
-    areasTableQuery,
-    assetsTableQuery,
-    setGreenTableRows,
     setMapTableAccordionVisible,
     setTablePanelActive,
     registerTableColumns,
@@ -244,7 +199,7 @@ export function TerritoryMapWidget() {
         breadcrumb={nav.breadcrumb}
         onLoadRegions={nav.loadRegions}
         onNavigateTo={nav.navigateTo}
-        showGreenTableAccordion={mapTableAccordionVisible}
+        showGreenTableAccordion={tableQueryReady}
         greenAssetsLayerActive={greenAssetsLayerActive}
         areasTableQuery={areasTableQuery}
         assetsTableQuery={assetsTableQuery}
