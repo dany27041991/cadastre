@@ -14,6 +14,24 @@ body {
   flex-direction: column;
 }
 
+/* Geoinsight bundle assumes MASE shell header offset; reset in standalone Vite dev. */
+[aria-label='Map view'] > div > div,
+[aria-label='Map view'] > div > div > div {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+map-widget {
+  display: block !important;
+  margin-top: 0 !important;
+  min-height: 100% !important;
+  height: 100% !important;
+  width: 100% !important;
+}
+
 /* Results detail accordion: title and icon use primary color */
 .accordion-detail-results .accordion-header .accordion-button {
   color: var(--primary);
@@ -99,4 +117,23 @@ body {
 }
 .sidebar-dark .sidebar-container .sidebar-group-first-item-container:hover .sidebar-arrow-icon .icon {
   stroke: var(--icon-white) !important;
+}
+
+/* Green circle loader — dxc-webkit Loader (type="circle") tinted with the
+   success token and rotated for an indeterminate loading state. */
+.green-circle-loader .progress-bar {
+  stroke: var(--success);
+}
+.green-circle-loader .progress-value {
+  /* Indeterminate spinner: the circle Loader renders the value text unconditionally. */
+  display: none;
+}
+.green-circle-loader .progress-svg {
+  transform-origin: center;
+  animation: green-circle-loader-spin 1s linear infinite;
+}
+@keyframes green-circle-loader-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

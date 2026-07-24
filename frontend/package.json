@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "node node_modules/vite/bin/vite.js",
     "build": "node node_modules/vite/bin/vite.js build",
+    "test": "node node_modules/vitest/vitest.mjs run",
     "preview": "node node_modules/vite/bin/vite.js preview",
     "start": "webpack serve --config webpack.config.cjs --port 3003",
     "start:standalone": "webpack serve --config webpack.config.cjs --env standalone",
@@ -14,11 +15,14 @@
     "install:nexus": "NODE_TLS_REJECT_UNAUTHORIZED=0 npm install"
   },
   "dependencies": {
+    "@mase/commons-client": "^1.4.0",
+    "@mase/commons-event": "^1.3.0",
+    "@mase/commons-geoinsight": "^1.4.0",
+    "@mase/commons-utility": "^1.4.0",
     "dxc-webkit": "1.6.0",
     "flatgeobuf": "^4.4.0",
     "geobuf": "^3.0.2",
     "i18next": "^25.8.13",
-    "ol": "^10.3.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-i18next": "^16.5.4",
@@ -26,14 +30,15 @@
     "react-toastify": "^11.0.5",
     "single-spa": "^5.9.3",
     "single-spa-react": "^6.0.2",
+    "terraformer-wkt-parser": "^1.2.1",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
     "@babel/core": "^7.23.3",
+    "@babel/plugin-transform-runtime": "^7.23.3",
     "@babel/preset-env": "^7.23.3",
     "@babel/preset-react": "^7.23.3",
     "@babel/preset-typescript": "^7.23.3",
-    "@babel/plugin-transform-runtime": "^7.23.3",
     "@babel/runtime": "^7.23.3",
     "@types/geobuf": "^3.0.4",
     "@types/react": "^18.3.12",
@@ -44,12 +49,13 @@
     "ts-config-single-spa": "^3.0.0",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
+    "vitest": "^4.1.10",
     "webpack": "^5.98.0",
     "webpack-cli": "^6.0.1",
-    "webpack-merge": "^5.8.0",
-    "webpack-dev-server": "^5.2.3",
     "webpack-config-single-spa-react": "^4.0.0",
     "webpack-config-single-spa-react-ts": "^4.0.0",
-    "webpack-config-single-spa-ts": "^4.0.0"
+    "webpack-config-single-spa-ts": "^4.0.0",
+    "webpack-dev-server": "^5.2.3",
+    "webpack-merge": "^5.8.0"
   }
 }

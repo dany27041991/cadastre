@@ -2,7 +2,7 @@
  * Shared UI building blocks on dxc-webkit.
  * Aligned with cu1.5-fe-MVP3-local for consistency across the MASE ecosystem.
  */
-import { Box, icons } from "dxc-webkit";
+import { Box, Loader, icons } from "dxc-webkit";
 import type { FC } from "react";
 
 interface SVGRProps {
@@ -35,7 +35,6 @@ export const Button: FC<ButtonProps> = ({
   title,
   iconName,
   onClick,
-  danger,
   disabled,
 }) => {
   const IconComponent = icons[iconName];
@@ -93,10 +92,18 @@ export const Line: FC = () => (
   <hr style={{ borderColor: "var(--ol-subtle-foreground-color, #ccc)" }} />
 );
 
-export const Spinner: FC<{ size?: "s" | "m" | "l" }> = () => (
-  <Box as="div" className="progress-spinner progress-spinner-active" role="status">
-    <span className="visually-hidden">Caricamento...</span>
-  </Box>
+const SPINNER_SIZE_MAP = { s: "sm", m: "md", l: "lg" } as const;
+
+/** Loading indicator backed by the dxc-webkit Loader (circle, green). */
+export const Spinner: FC<{ size?: "s" | "m" | "l" }> = ({ size = "m" }) => (
+  <Loader
+    type="circle"
+    size={SPINNER_SIZE_MAP[size]}
+    value={50}
+    showPercentage={false}
+    className="green-circle-loader"
+    ariaLabelProgressBar="Caricamento"
+  />
 );
 
 export { DummyIcon };

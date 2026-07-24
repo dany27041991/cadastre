@@ -5,7 +5,6 @@ National SaaS webapp for census and management of geospatial green assets of Ita
 ## Architecture
 
 - **PostgreSQL + PostGIS**: geospatial database with partitioning by ISTAT code
-- **PgBouncer**: connection pooling for thousands of connections
 - **Redis**: cache for frequent queries
 - **FastAPI**: multi-tenant backend with JWT authentication
 - **React + OpenLayers + OSM**: frontend with interactive map
@@ -103,5 +102,5 @@ docker compose run --rm init python3 /scripts/init/postgis/py/administrative_bou
 ## Notes
 
 - **infrastructure/scripts/init/postgis**: `sql/` 01 (public schema), 02 (cadastre schema), 03 (indexes public), 04 (indexes cadastre), then **administrative_boundaries/load_geojson.py**, then 06 (partitions), then 05 (autovacuum on leaf partitions) are run by **run-init.sh**. GRANTs use `POSTGRES_USER` from `.env` (default `cadastre`); if you change it, update `sql/02-init-schema-cadastre.sql`. Backend and frontend use **sub_municipal_area** (sub-municipal areas) for navigation; green areas and green assets are filtered by region, province, and municipality only.
-- **Backend**: uses PgBouncer for queries; `DATABASE_DIRECT_URL` for migrations
+- **Backend**: connects directly to PostGIS; SQLAlchemy connection pool in-process
 - **Frontend**: `VITE_API_URL` must point to the backend (localhost in dev, public URL in prod)

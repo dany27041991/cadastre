@@ -12,7 +12,7 @@ Questo documento propone la **mappatura tra domini funzionali (e API backend) e 
 
 | Aspetto | Situazione attuale | Cosa migliora la struttura |
 |--------|---------------------|-----------------------------|
-| **Confini e naming** | app, shared, entities, features (territory-map, green-asset-explorer, green-area-explorer), widgets | Esplicitare i **contract**: ogni feature/widget espone solo API pubblica (index.ts); tipi e dettagli interni restano nascosti |
+| **Confini e naming** | app, shared, entities, features (territory, territory-map-geoinsight, green-asset-explorer, green-area-explorer), widgets | Esplicitare i **contract**: ogni feature/widget espone solo API pubblica (index.ts); tipi e dettagli interni restano nascosti |
 | **Dipendenze** | app → widgets → features → entities → shared | Regole **scritte e verificabili** (es. lint sui path: features non importano da altre features; shared/entities non importano da app, features, widgets) |
 | **Allineamento al backend** | API territory, green areas, green assets rispecchiano backend | Criteri di **evoluzione**: quando aggiungere una feature (es. catalog), quando introdurre un nuovo widget |
 | **Separazione dei layer** | app, shared, entities, features, widgets | Chiarire **cosa vive dove**: chiamate HTTP in features/*/api o shared/lib/http; stato e orchestrazione in features/*/model; UI generica in shared/ui; dominio puro in entities |
@@ -24,7 +24,8 @@ Questo documento propone la **mappatura tra domini funzionali (e API backend) e 
 
 | Dominio / API backend | Modulo frontend | Contenuto tipico |
 |------------------------|-----------------|-------------------|
-| **Gerarchia geo + aree + asset (mappa)** | **features/territory-map** + api interna | useTerritoryMap, useMapLayers, fetchers; territory.api, greenAreaMap.api, greenAssetMap.api; MapContainer, MapHeader, MapLayersToggle. |
+| **Gerarchia geo + aree + asset (navigazione e dati mappa)** | **features/territory** + api interna | useTerritoryNavigation, useGreenAssetsLayer, fetchers; territory.api, greenAreaMap.api, greenAssetMap.api, greenTable.api; MapHeader, MapBreadcrumbs, GreenDataTable, LoadingOverlay. |
+| **Motore mappa Geoinsight (rendering, adapter, clustering viewport)** | **features/territory-map-geoinsight** | GeoinsightMapContainer, GeoinsightFocusContainer; useGeoinsightMapBridge; adapter (green layers, viewport cluster, selezione, runtime vendor); pipeline payload cluster. Consuma i tipi/contract di features/territory. |
 | **Green assets (tabella, filtri, paginazione)** | **features/green-asset-explorer** + api interna | useGreenAssetTable (table-core), filters.config, columns.config, query; GreenAssetExplorer.api; GreenAssetTable, GreenAssetFilters, GreenAssetToolbar. |
 | **Green areas (tabella, filtri, paginazione)** | **features/green-area-explorer** + api interna | useGreenAreaTable (table-core), filters.config, columns.config, query; GreenAreaExplorer.api; GreenAreaTable, GreenAreaFilters, GreenAreaToolbar. |
 | **Dominio puro (tipi, schema, mapper)** | **entities/** (territory, green-area, green-asset) | types.ts, schema.ts, mapper.ts; nessuna chiamata API né UI. |
@@ -44,7 +45,8 @@ flowchart LR
     end
 
     subgraph FE["Moduli frontend"]
-        feat_territory_map[features/territory-map]
+        feat_territory[features/territory]
+        feat_territory_map_gi[features/territory-map-geoinsight]
         feat_green_asset[features/green-asset-explorer]
         feat_green_area[features/green-area-explorer]
         entities[entities]
@@ -52,19 +54,22 @@ flowchart LR
         widgets[widgets]
     end
 
-    territory_api --> feat_territory_map
+    territory_api --> feat_territory
     territory_api --> feat_green_asset
     territory_api --> feat_green_area
     catalog_api -.-> FE
 
-    feat_territory_map --> entities
-    feat_territory_map --> shared
+    feat_territory --> entities
+    feat_territory --> shared
+    feat_territory_map_gi --> feat_territory
+    feat_territory_map_gi --> shared
     feat_green_asset --> entities
     feat_green_asset --> shared
     feat_green_area --> entities
     feat_green_area --> shared
 
-    widgets --> feat_territory_map
+    widgets --> feat_territory
+    widgets --> feat_territory_map_gi
     widgets --> feat_green_asset
     widgets --> feat_green_area
     widgets --> shared
@@ -93,7 +98,8 @@ flowchart TB
     end
 
     subgraph features_layer["Features"]
-        territory_map[features/territory-map]
+        territory[features/territory]
+        territory_map_gi[features/territory-map-geoinsight]
         green_asset[features/green-asset-explorer]
         green_area[features/green-area-explorer]
     end
@@ -114,7 +120,8 @@ flowchart TB
     app --> green_asset_w
     app --> green_area_w
 
-    territory_w --> territory_map
+    territory_w --> territory
+    territory_w --> territory_map_gi
     territory_w --> shared
     green_asset_w --> green_asset
     green_asset_w --> shared
@@ -122,10 +129,12 @@ flowchart TB
     green_area_w --> shared
     layout --> shared
 
-    territory_map --> ent_territory
-    territory_map --> ent_green_area
-    territory_map --> ent_green_asset
-    territory_map --> shared
+    territory --> ent_territory
+    territory --> ent_green_area
+    territory --> ent_green_asset
+    territory --> shared
+    territory_map_gi --> territory
+    territory_map_gi --> shared
     green_asset --> ent_green_asset
     green_asset --> shared
     green_area --> ent_green_area
@@ -134,6 +143,7 @@ flowchart TB
 
 - **Consentito:** app → widgets; widgets → features, shared; features → entities, shared; entities e shared non importano da app, widgets, features.
 - **Non consentito:** features → features; shared → features, entities, app, widgets; entities → app, features, widgets, shared (oltre a tipi puri se necessario).
+- **Eccezione documentata:** `territory-map-geoinsight → territory` — il motore mappa consuma i contract (tipi, lib geometriche) della feature territory; la dipendenza è a senso unico (territory non importa mai dal motore mappa).
 
 ---
 
@@ -155,7 +165,8 @@ flowchart TB
         end
 
         subgraph features["features"]
-            territory_map[territory-map model api ui]
+            territory[territory model api lib types ui]
+            territory_map_gi[territory-map-geoinsight model lib ui]
             green_asset[green-asset-explorer model api ui]
             green_area[green-area-explorer model api ui]
         end
@@ -222,10 +233,10 @@ Rendere queste regole **verificabili** (es. ESLint con restrizione sui path o st
 ## 8. Riepilogo e passi successivi
 
 - **Allineamento con il backend:**  
-  Le API in features (territory-map, green-asset-explorer, green-area-explorer) riflettono i contesti backend (geo, areas, assets). Un futuro modulo backend **catalog** può diventare una feature dedicata e un eventuale widget.
+  Le API in features (territory, green-asset-explorer, green-area-explorer) riflettono i contesti backend (geo, areas, assets). Un futuro modulo backend **catalog** può diventare una feature dedicata e un eventuale widget.
 
 - **Struttura modulare:**  
-  **app** (bootstrap, router, providers), **widgets** (composizione), **features** (un use-case per cartella: territory-map, green-asset-explorer, green-area-explorer), **entities** (dominio puro), **shared** (ui, lib, hooks, config, types). Dipendenze a senso unico: app → widgets → features → entities → shared.
+  **app** (bootstrap, router, providers), **widgets** (composizione), **features** (un use-case per cartella: territory, territory-map-geoinsight, green-asset-explorer, green-area-explorer), **entities** (dominio puro), **shared** (ui, lib, hooks, config, types). Dipendenze a senso unico: app → widgets → features → entities → shared.
 
 - **Riferimenti:**  
   - [folders-structure-fe.md](./folders-structure-fe.md) – struttura dettagliata delle cartelle e convenzioni  

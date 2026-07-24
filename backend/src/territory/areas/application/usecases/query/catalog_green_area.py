@@ -20,6 +20,24 @@ from territory.areas.application.usecases.query.cache import (
 
 __all__ = ["CatalogGreenArea", "invalidate_cache", "invalidate_cache_for_municipality"]
 
+# Viewport rendering: areas are polygons, only meaningful from this zoom up.
+VIEWPORT_AREAS_MIN_ZOOM = 12.0
+# Cap per viewport response; largest areas win when exceeded.
+VIEWPORT_AREAS_MAX_FEATURES = 500
+
+_EMPTY_COLLECTION: GeoJSONFeatureCollection = {"type": "FeatureCollection", "features": []}
+
+
+# Web Mercator ground resolution at equator (m/px) for zoom 0, 256px tiles.
+_MERCATOR_RESOLUTION_Z0_M_PER_PX = 156543.03392804097
+_METERS_PER_DEGREE = 111_320.0
+
+
+def viewport_simplify_tolerance_deg(zoom: float) -> float:
+    """Simplification tolerance ≈ 1 screen pixel at the given zoom, in degrees."""
+    meters_per_px = _MERCATOR_RESOLUTION_Z0_M_PER_PX / (2.0**zoom)
+    return meters_per_px / _METERS_PER_DEGREE
+
 
 class CatalogGreenArea:
     """With parent_id: children of that area. Without: root areas for municipality. Region and province required."""
@@ -52,11 +70,40 @@ class CatalogGreenArea:
             contained_in_area_id,
         )
 
+    @log_invocation(log_args=True, log_result=False)
+    def viewport_green_areas(
+        self,
+        bbox: tuple[float, float, float, float],
+        zoom: float,
+        *,
+        region_id: int | None = None,
+        province_id: int | None = None,
+        municipality_id: int | None = None,
+        sub_municipal_area_id: int | None = None,
+    ) -> GeoJSONFeatureCollection:
+        """Root green areas intersecting the viewport bbox, simplified for the zoom.
+
+        Below VIEWPORT_AREAS_MIN_ZOOM areas are not rendered (admin/grid
+        clusters cover those bands), so return an empty collection cheaply.
+        """
+        if zoom < VIEWPORT_AREAS_MIN_ZOOM:
+            return _EMPTY_COLLECTION
+        result = self._repository.get_roots_in_bbox(
+            bbox,
+            simplify_tolerance_deg=viewport_simplify_tolerance_deg(zoom),
+            limit=VIEWPORT_AREAS_MAX_FEATURES,
+            region_id=region_id,
+            province_id=province_id,
+            municipality_id=municipality_id,
+            sub_municipal_area_id=sub_municipal_area_id,
+        )
+        return result
+
     def list_green_areas_table_paged(
         self,
-        region_id: int,
-        province_id: int,
-        municipality_id: int,
+        region_id: int | None,
+        province_id: int | None,
+        municipality_id: int | None,
         *,
         sub_municipal_area_id: int | None = None,
         contained_in_area_id: int | None = None,

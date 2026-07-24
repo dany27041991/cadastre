@@ -120,23 +120,54 @@ src/
 │
 ├── features/                                   # Logica applicativa per use-case
 │   │
-│   ├── territory-map/                          # Esplorazione geografica
-│   │   ├── model/
-│   │   │   ├── useTerritoryMap.ts
-│   │   │   ├── useMapLayers.ts
-│   │   │   └── fetchers/
-│   │   │       ├── loadTerritoryLevel.ts
-│   │   │       └── loadGreenLayers.ts
-│   │   │
+│   ├── territory/                              # Navigazione territoriale + dati verde
 │   │   ├── api/
+│   │   │   ├── fetcher.ts                      # Fetch geobuf/JSON condiviso
 │   │   │   ├── territory.api.ts
 │   │   │   ├── greenAreaMap.api.ts
-│   │   │   └── greenAssetMap.api.ts
+│   │   │   ├── greenAssetMap.api.ts
+│   │   │   └── greenTable.api.ts
+│   │   │
+│   │   ├── context/
+│   │   │   └── GreenTablePanelContext.tsx
+│   │   │
+│   │   ├── lib/                                # Utility pure (drill, identità feature, tabella)
+│   │   │
+│   │   ├── model/
+│   │   │   ├── constants/
+│   │   │   ├── fetchers/
+│   │   │   │   ├── levelFetchers.ts
+│   │   │   │   └── mapNavigationFetchers.ts
+│   │   │   └── hooks/
+│   │   │       ├── useTerritoryNavigation.ts
+│   │   │       └── useGreenAssetsLayer.ts
+│   │   │
+│   │   ├── types/
 │   │   │
 │   │   ├── ui/
-│   │   │   ├── MapContainer.tsx
-│   │   │   ├── MapHeader.tsx
-│   │   │   └── MapLayersToggle.tsx
+│   │   │   ├── map-header/
+│   │   │   ├── map-breadcrumbs/
+│   │   │   ├── green-data-table/
+│   │   │   └── loading-overlay/
+│   │   │
+│   │   └── index.ts
+│   │
+│   │
+│   ├── territory-map-geoinsight/               # Motore mappa Geoinsight (adapter vendor)
+│   │   ├── lib/                                # WKT, stili asset, bbox viewport, geometrie cluster
+│   │   │
+│   │   ├── model/
+│   │   │   ├── adapter/                        # geoinsightMapAdapter + moduli (green layers,
+│   │   │   │                                   # viewport cluster, selezione, runtime vendor)
+│   │   │   ├── hooks/
+│   │   │   │   └── useGeoinsightMapBridge.ts
+│   │   │   ├── greenClusterPipeline.ts
+│   │   │   ├── geometryRegistry.ts
+│   │   │   └── eventBridge.ts
+│   │   │
+│   │   ├── ui/
+│   │   │   ├── GeoinsightMapContainer.tsx
+│   │   │   └── GeoinsightFocusContainer.tsx
 │   │   │
 │   │   └── index.ts
 │   │
@@ -188,6 +219,8 @@ src/
 │   │
 │   ├── territory-map-widget/
 │   │   ├── TerritoryMapWidget.tsx
+│   │   ├── useTerritoryMapBridge.ts
+│   │   ├── useTerritoryMapEffects.ts
 │   │   └── index.ts
 │   │
 │   ├── green-asset-explorer-widget/

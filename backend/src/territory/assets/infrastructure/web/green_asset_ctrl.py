@@ -6,7 +6,7 @@ from typing import Literal
 
 import geobuf
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 
 from core.api.dependencies import get_green_assets_uc
@@ -53,12 +53,49 @@ def get_green_assets(
     return GreenAssetsOutput.model_validate(result)
 
 
+@router.get("/green-assets/viewport", response_model=None)
+def get_green_assets_viewport(
+    bbox: str = Query(..., description="minLon,minLat,maxLon,maxLat (EPSG:4326)"),
+    zoom: float = Query(..., ge=0, le=22),
+    region_id: int | None = None,
+    province_id: int | None = None,
+    municipality_id: int | None = None,
+    sub_municipal_area_id: int | None = None,
+    green_area_id: int | None = None,
+    output_format: str | None = Query(None, alias="format"),
+) -> GreenAssetsOutput | Response:
+    """Viewport-sized green assets for map rendering at national scale.
+
+    Returns raw assets at the vendor's last zoom level, PostGIS clusters otherwise.
+    Cluster features carry cluster_count / cluster_key / cluster_bbox properties.
+    Territory filters are optional: omit them for a nationwide view."""
+    try:
+        parts = [float(p) for p in bbox.split(",")]
+    except ValueError:
+        parts = []
+    if len(parts) != 4:
+        raise HTTPException(status_code=422, detail="bbox must be minLon,minLat,maxLon,maxLat")
+    result = get_green_assets_uc().viewport_green_assets(
+        (parts[0], parts[1], parts[2], parts[3]),
+        zoom,
+        region_id=region_id,
+        province_id=province_id,
+        municipality_id=municipality_id,
+        sub_municipal_area_id=sub_municipal_area_id,
+        green_area_id=green_area_id,
+    )
+    if not result.get("features"):
+        return _empty_response(output_format)
+    if output_format == "geobuf":
+        return Response(content=geobuf.encode(result), media_type=GEOBUF_MEDIA_TYPE)
+    return GreenAssetsOutput.model_validate(result)
+
 
 @router.get("/green-assets/table", response_model=GreenTablePageOut)
 def get_green_assets_table(
-    region_id: int,
-    province_id: int,
-    municipality_id: int,
+    region_id: int | None = None,
+    province_id: int | None = None,
+    municipality_id: int | None = None,
     green_area_id: int | None = None,
     sub_municipal_area_id: int | None = None,
     # Pagination

@@ -1,11 +1,11 @@
 /**
  * Map bridge and navigation state/options.
  */
-import type Feature from 'ol/Feature'
 import type { TFunction } from 'i18next'
 import type { GeoJSONFeatureCollection } from '@/shared/types'
 import type { TerritoryNavigationApi } from './api'
 import type { TerritoryLevel, BreadcrumbCrumb } from './territory'
+import type { TerritoryMapFeature } from './mapFeature'
 
 export interface MapBridgeGeo {
   loadGeoJson: (geojson: GeoJSONFeatureCollection) => void
@@ -14,35 +14,49 @@ export interface MapBridgeGeo {
     featureId: number
   ) => void
   fitToCurrentExtent: () => void
-  centerOnItaly: () => void
 }
 
 export interface MapBridgeFeature {
-  showOnlyFeature: (feature: Feature) => void
+  showOnlyFeature: (feature: TerritoryMapFeature) => void
 }
 
 export interface MapBridgeGreen {
   loadGreenLayer: (
     geojson: GeoJSONFeatureCollection,
-    options?: { skipClustering?: boolean }
+    options?: { skipFit?: boolean }
+  ) => void
+  /** Server viewport mode: data fetched per bbox+zoom (national-scale rendering). */
+  loadGreenLayerViewport: (
+    fetcher: (
+      bbox: [number, number, number, number],
+      zoom: number
+    ) => Promise<GeoJSONFeatureCollection>,
+    areasFetcher?: (
+      bbox: [number, number, number, number],
+      zoom: number
+    ) => Promise<GeoJSONFeatureCollection>
   ) => void
   /** Load a single feature into the green layer (e.g. leaf area with no sub-areas). */
-  loadGreenLayerFromFeature: (feature: Feature) => void
+  loadGreenLayerFromFeature: (
+    feature: TerritoryMapFeature,
+    options?: { skipFit?: boolean }
+  ) => void
   setGreenLayerVisible: (visible: boolean) => void
   clearGreenLayer: () => void
   clearTerritoryLayer: () => void
   clearMapVectorLayers: () => void
-  fitToGreenExtent: () => void
+  fitToGreenExtent: (includeTerritoryBbox?: boolean) => void
   setGreenLayerVisibleWhenMoveEnds: () => void
   ensureGreenLayerVisibleAfterFit: () => void
   /** Hide territory fill so green is not covered by gray during fit animation. */
   setTerritoryFillVisible: (visible: boolean) => void
   /** Store leaf area feature so it can be restored when navigating back via breadcrumb. */
-  storeLeafAreaForRestore?: (areaId: number, feature: Feature) => void
-  /** Retrieve stored leaf area for sub_areas level (returns null if not found or id mismatch). */
-  getStoredLeafArea?: (areaId: number) => Feature | null
+  storeLeafAreaForRestore?: (areaId: number, feature: TerritoryMapFeature) => void
+  getStoredLeafArea?: (areaId: number) => TerritoryMapFeature | null
   /** Clear stored leaf area (e.g. when navigating to region/province/municipality/sub-municipal area). */
   clearStoredLeafArea?: () => void
+  /** Geoinsight: exclude expanded sub-area ids from click hit-test (parent outline vs children). */
+  syncDrillContext: (excludeAreaIds: number[]) => void
 }
 
 export type MapBridge = MapBridgeGeo & MapBridgeFeature & MapBridgeGreen
@@ -51,6 +65,11 @@ export interface UseTerritoryNavigationOptions {
   api?: TerritoryNavigationApi
   /** Optional i18n translate; when provided, breadcrumb labels use translations. */
   t?: TFunction
+  /**
+   * When the green-assets toggle is on, green-level navigation must not replace
+   * the viewport cluster layer with area polygons (that race killed clusters).
+   */
+  isAssetsLayerActive?: () => boolean
 }
 
 export interface TerritoryNavigationState {
@@ -82,6 +101,8 @@ export interface TerritoryNavigationLoaders {
     label: string,
     clickedFeature?: unknown
   ) => Promise<void>
+  /** Re-apply map layers for the current breadcrumb level (after Geoinsight re-init). */
+  resyncMapLayers: () => Promise<void>
 }
 
 export interface TerritoryNavigationActions {

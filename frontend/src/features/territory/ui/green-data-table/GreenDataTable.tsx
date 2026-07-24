@@ -9,7 +9,7 @@
 import './green-data-table.css'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Box, CustomTable, Text } from 'dxc-webkit'
+import { Box, CustomTable, Loader, Text } from 'dxc-webkit'
 import { useGreenTablePanel } from '../../context/GreenTablePanelContext'
 import { labelizeGreenColumn } from '../../lib/greenTableColumnLabel'
 import { filterGreenTableNonIdKeys } from '../../lib/greenTableColumnVisibility'
@@ -192,7 +192,6 @@ export function GreenDataTable({
     filterColumnKey,
     registerTableColumns,
     setTablePanelActive,
-    setMapTableAccordionVisible,
   } = useGreenTablePanel()
 
   const baseQuery = showGreenAssets ? assetsTableQuery : areasTableQuery
@@ -257,8 +256,9 @@ export function GreenDataTable({
   }, [pageData?.total_pages, pageData])
 
   // Core fetch effect — runs when any fetch-relevant param changes.
+  // baseQuery may be an empty string (nationwide scope): still a valid query.
   useEffect(() => {
-    if (!baseQuery) {
+    if (baseQuery == null) {
       setPageData(null)
       return
     }
@@ -285,10 +285,9 @@ export function GreenDataTable({
         setLoading(false)
         // Fire panel callbacks only once per territory scope to avoid redundant
         // state updates on every page/sort/filter change.
-        if (data.total > 0 && !panelInitialized.current) {
+        if (!panelInitialized.current) {
           panelInitialized.current = true
-          setTablePanelActive(true)
-          setMapTableAccordionVisible(true)
+          setTablePanelActive(data.total > 0)
         }
       })
       .catch(() => {
@@ -309,7 +308,6 @@ export function GreenDataTable({
     debouncedFilter,
     filterColumnKey,
     setTablePanelActive,
-    setMapTableAccordionVisible,
   ])
 
   // Derive column metadata from the current page.
@@ -323,7 +321,7 @@ export function GreenDataTable({
   )
 
   useEffect(() => {
-    if (!baseQuery || rawRows.length === 0) return
+    if (baseQuery == null || rawRows.length === 0) return
     registerTableColumns(allKeys, defaultFive)
   }, [baseQuery, allKeys, defaultFive, registerTableColumns, rawRows.length])
 
@@ -416,13 +414,33 @@ export function GreenDataTable({
   // Render
   // -------------------------------------------------------------------------
 
-  if (!baseQuery) return null
+  // Empty string is a valid nationwide query (all territory filters omitted).
+  if (baseQuery == null) return null
 
   if (loading && !pageData) {
     return (
-      <Box as="div" className="green-data-table" padding="m" style={{ width: '100%' }}>
-        <Text font="f1-body-sm" style={{ color: 'var(--gray-600, #6c757d)' }}>
-          {t('territory.table.loading', 'Caricamento dati...')}
+      <Box
+        as="div"
+        className="green-data-table"
+        padding="m"
+        style={{
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '0.75rem',
+        }}
+      >
+        <Loader
+          type="circle"
+          size="lg"
+          value={50}
+          showPercentage={false}
+          className="green-circle-loader"
+        />
+        <Text font="f1-body-sm" style={{ fontWeight: 600, color: 'var(--success)' }}>
+          {t('territory.loading')}
         </Text>
       </Box>
     )

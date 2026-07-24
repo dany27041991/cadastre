@@ -8,7 +8,7 @@
     "selected": "Selezionato",
     "navigationAria": "Navigazione territorio",
     "back": "← Indietro",
-    "loading": "Caricamento...",
+    "loading": "Caricamento",
     "loadingGreenLayer": "Caricamento layer verde",
     "loadingGreen": "Caricamento verde...",
     "accordion": {
@@ -31,7 +31,9 @@
       "filterTextPlaceholder": "Filtra valori…",
       "optionalColumnHelper": "Campo dati: {{key}}",
       "noOptionalColumns": "Nessuna colonna aggiuntiva disponibile.",
-      "tableContextHint": "Apri la navigazione fino alle aree verdi per gestire colonne e filtri della tabella."
+      "tableContextHint": "Apri la navigazione fino alle aree verdi per gestire colonne e filtri della tabella.",
+      "managedAreasToggle": "Aree Gestite",
+      "greenAssetsToggle": "Assets Verdi"
     },
     "table": {
       "booleanYes": "Sì",

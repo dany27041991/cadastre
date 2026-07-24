@@ -49,4 +49,8 @@ psql -q -h postgis -U "$U" -d "$D" -f /scripts/init/postgis/sql/06-create-partit
 echo "Init: autovacuum tuning on leaf partitions (05, after 06 so all leaves exist)..."
 psql -q -h postgis -U "$U" -d "$D" -f /scripts/init/postgis/sql/05-autovacuum-tuning.sql
 
+echo "Init: viewport cluster materialized views (07-08, empty until asset seed + refresh)..."
+psql -q -h postgis -U "$U" -d "$D" -f /scripts/init/postgis/sql/07-matview-green-asset-admin-clusters.sql
+psql -q -h postgis -U "$U" -d "$D" -f /scripts/init/postgis/sql/08-matview-green-asset-grid-clusters.sql
+
 echo "Init done."

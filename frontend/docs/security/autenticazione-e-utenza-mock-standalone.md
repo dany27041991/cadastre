@@ -189,6 +189,50 @@ VITE_MOCK_USER={"preferred_username":"utente16@mase","nome":"Giulio Cesare","cog
 - I cookie impostati da JavaScript **non** possono essere `httpOnly`; il backend potrebbe aspettarsi cookie impostati dalla risposta IAM (Set-Cookie httpOnly).
 - Per replicare una sessione reale (es. con `access_token`, `JSESSIONID`, ecc.) si può: incollare la stringa in `VITE_MOCK_COOKIE` (una riga, eventualmente tra virgolette nel `.env`), oppure impostare i cookie manualmente in DevTools (Application → Cookies) dopo aver aperto l’app.
 
+### Rinnovo credenziali mock (scadenza token/cookie)
+
+I valori in `VITE_MOCK_FGP` e `VITE_MOCK_COOKIE` sono **copie statiche** di una sessione sim-dev. L’`access_token` (JWT) scade tipicamente dopo pochi minuti; quando scade, le API Geoinsight su sim-dev rispondono **401 Unauthorized** e la mappa standalone resta bianca, anche se `VITE_MOCK_USER` continua a mostrare l’utente in UI.
+
+**Account di sviluppo sim-dev** (solo ambiente collaudo, VPN MASE attiva):
+
+| Campo | Valore |
+|-------|--------|
+| Username | `utente16@mase` |
+| Password | `admin` |
+
+**Procedura di aggiornamento (preferita — API `user/logged`)**
+
+1. Apri https://sim-dev.mase.gov.it/portalediaccesso/ ed effettua il login (`utente16@mase` / `admin`, VPN attiva).
+2. DevTools (F12) → **Network** → filtra `logged` → seleziona:
+   ```
+   POST https://sim-dev.mase.gov.it/core/api/authorization/user/logged
+   Stato: 200
+   ```
+3. Tab **Headers** → **Request Headers** → copia:
+   - **`fgp`** → valore per `VITE_MOCK_FGP`
+   - **`Cookie`** → valore completo per `VITE_MOCK_COOKIE` (tasto destro → **Copy value**; non usare la vista riassunta: Firefox tronca `access_token` con `…`)
+4. Aggiorna `cadastre/infrastructure/compose/.env` (e `frontend/.env.local` se presente), oppure:
+   ```bash
+   node infrastructure/scripts/renew-mock-credentials.mjs \
+     --fgp '<fgp>' --cookie '<Cookie completo>'
+   ```
+5. Riavvia il frontend (Docker o `npm run dev`).
+
+**Procedura alternativa (Application / console)**
+
+- **Application → Session Storage** → `fgp`; **Cookies** → componi la stringa Cookie.
+- Console su sim-dev:
+  ```javascript
+  copy(JSON.stringify({ fgp: sessionStorage.getItem('fgp'), cookie: document.cookie }))
+  ```
+  Usare solo se `document.cookie` contiene `access_token`; altrimenti preferire `user/logged`.
+
+**Verifica rapida** con il frontend avviato, una richiesta a  
+`/core/api/geoinsight/v1/webgis/config/toc_layers?webgis_id=155&cu_id=PNRR`  
+(via proxy Vite su `localhost:5173`) deve restituire JSON con i layer, non `{"message":"Unauthorized"}`.
+
+Vedi anche [geoinsight-migration-spike-plan.md](../../../docs/design/geoinsight-migration-spike-plan.md) per `VITE_GEOINSIGHT_*` e proxy sim-dev.
+
 ---
 
 ## Riepilogo

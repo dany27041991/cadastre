@@ -8,7 +8,7 @@
     "selected": "Selected",
     "navigationAria": "Territory navigation",
     "back": "← Back",
-    "loading": "Loading...",
+    "loading": "Loading",
     "loadingGreenLayer": "Loading green layer",
     "loadingGreen": "Loading green...",
     "accordion": {
@@ -31,7 +31,9 @@
       "filterTextPlaceholder": "Filter values…",
       "optionalColumnHelper": "Data field: {{key}}",
       "noOptionalColumns": "No extra columns available.",
-      "tableContextHint": "Navigate to green areas to manage table columns and filters."
+      "tableContextHint": "Navigate to green areas to manage table columns and filters.",
+      "managedAreasToggle": "Managed areas",
+      "greenAssetsToggle": "Green assets"
     },
     "table": {
       "booleanYes": "Yes",

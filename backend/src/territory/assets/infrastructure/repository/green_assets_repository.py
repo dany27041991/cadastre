@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, Literal
 
-from sqlalchemy import ColumnElement, or_, select, func, exists
+from sqlalchemy import ColumnElement, or_, select, func, exists, text as sql_text
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Session, load_only
 
@@ -126,6 +127,26 @@ def _build_asset_filter_conditions(
     return conditions
 
 
+@dataclass(frozen=True)
+class ViewportCluster:
+    """One aggregate for the viewport endpoint (grid cell or admin unit).
+
+    Grid clusters carry the centroid in Web Mercator (merc_x/merc_y); admin
+    clusters carry it as lon/lat and a stable admin_key (e.g. "R12", "P12_58").
+    """
+
+    cell_x: int
+    cell_y: int
+    count: int
+    merc_x: float
+    merc_y: float
+    bbox: tuple[float, float, float, float]
+    sample_id: int
+    admin_key: str | None = None
+    lon: float | None = None
+    lat: float | None = None
+
+
 class GreenAssetsRepository:
     def __init__(self, session_factory: Callable[[], Session]) -> None:
         self._session_factory = session_factory
@@ -232,14 +253,263 @@ class GreenAssetsRepository:
         return build_green_asset_feature_collection(rows)
 
     # ------------------------------------------------------------------
+    # Viewport queries (bbox in EPSG:4326) — national-scale map rendering
+    # ------------------------------------------------------------------
+
+    def get_admin_clusters_in_bbox(
+        self,
+        level: str,
+        bbox: tuple[float, float, float, float],
+        region_id: int | None = None,
+        province_id: int | None = None,
+        municipality_id: int | None = None,
+        sub_municipal_area_id: int | None = None,
+    ) -> list[ViewportCluster]:
+        """Pre-aggregated clusters per admin unit (materialized view, low zooms).
+
+        Levels: region, province, municipality, sub_municipal. Response cost is
+        O(#admin units in bbox) regardless of asset volume, which keeps national
+        views fast at any dataset size.
+        """
+        stmt = sql_text(
+            """
+            SELECT level, region_id, province_id, municipality_id, sub_municipal_area_id,
+                   asset_count, sample_id,
+                   ST_X(centroid), ST_Y(centroid),
+                   ST_XMin(extent), ST_YMin(extent), ST_XMax(extent), ST_YMax(extent)
+            FROM cadastre.green_asset_admin_clusters
+            WHERE level = :level
+              AND centroid && ST_MakeEnvelope(:minx, :miny, :maxx, :maxy, 4326)
+              AND (:region_id IS NULL OR region_id = :region_id)
+              AND (:province_id IS NULL OR province_id = :province_id)
+              AND (:municipality_id IS NULL OR municipality_id = :municipality_id)
+              AND (:sub_municipal_area_id IS NULL OR sub_municipal_area_id = :sub_municipal_area_id)
+            """
+        )
+        params = {
+            "level": level,
+            "minx": bbox[0],
+            "miny": bbox[1],
+            "maxx": bbox[2],
+            "maxy": bbox[3],
+            "region_id": region_id,
+            "province_id": province_id,
+            "municipality_id": municipality_id,
+            "sub_municipal_area_id": sub_municipal_area_id,
+        }
+        with self._session_factory() as session:
+            rows = session.execute(stmt, params).all()
+        clusters: list[ViewportCluster] = []
+        for r in rows:
+            key_parts = [str(part) for part in (r[1], r[2], r[3], r[4]) if part is not None]
+            clusters.append(
+                ViewportCluster(
+                    cell_x=0,
+                    cell_y=0,
+                    count=int(r[5]),
+                    merc_x=0.0,
+                    merc_y=0.0,
+                    bbox=(float(r[9]), float(r[10]), float(r[11]), float(r[12])),
+                    sample_id=int(r[6]),
+                    admin_key=f"{r[0][0].upper()}{'_'.join(key_parts)}",
+                    lon=float(r[7]),
+                    lat=float(r[8]),
+                )
+            )
+        return clusters
+
+    def _bbox_conditions(
+        self,
+        bbox: tuple[float, float, float, float],
+        region_id: int | None = None,
+        province_id: int | None = None,
+        municipality_id: int | None = None,
+        sub_municipal_area_id: int | None = None,
+        green_area_id: int | None = None,
+    ) -> list[ColumnElement[bool]]:
+        """WHERE clauses for a viewport query: partition pruning + GIST bbox intersect.
+
+        sub_municipal_area_id / green_area_id add an ST_Intersects with the scope
+        geometry so the response never leaks assets outside the selected admin area.
+        """
+        av = GreenAssetModel
+        envelope = func.ST_MakeEnvelope(bbox[0], bbox[1], bbox[2], bbox[3], 4326)
+        conditions: list[ColumnElement[bool]] = [
+            av.geometry.isnot(None),
+            av.geometry.intersects(envelope),
+        ]
+        if region_id is not None:
+            conditions.append(av.region_id == region_id)
+        if province_id is not None:
+            conditions.append(av.province_id == province_id)
+        if municipality_id is not None:
+            conditions.append(av.municipality_id == municipality_id)
+        if sub_municipal_area_id is not None:
+            sub_geom = (
+                select(SubMunicipalAreaModel.geometry)
+                .where(SubMunicipalAreaModel.id == sub_municipal_area_id)
+                .where(SubMunicipalAreaModel.geometry.isnot(None))
+                .limit(1)
+                .scalar_subquery()
+            )
+            conditions.append(func.ST_Intersects(av.geometry, sub_geom))
+        if green_area_id is not None:
+            area_geom = (
+                select(GreenAreaModel.geometry)
+                .where(GreenAreaModel.id == green_area_id)
+                .where(GreenAreaModel.geometry.isnot(None))
+                .limit(1)
+                .scalar_subquery()
+            )
+            conditions.append(func.ST_Intersects(av.geometry, area_geom))
+        return conditions
+
+    def get_raw_in_bbox(
+        self,
+        bbox: tuple[float, float, float, float],
+        limit: int,
+        region_id: int | None = None,
+        province_id: int | None = None,
+        municipality_id: int | None = None,
+        sub_municipal_area_id: int | None = None,
+        green_area_id: int | None = None,
+    ) -> GeoJSONFeatureCollection:
+        """Individual assets inside the bbox (raw mode below the cluster threshold)."""
+        stmt = (
+            self._select_geojson()
+            .where(*self._bbox_conditions(
+                bbox, region_id, province_id, municipality_id,
+                sub_municipal_area_id, green_area_id,
+            ))
+            .limit(limit)
+        )
+        with self._session_factory() as session:
+            rows = self._rows_from_session(session, stmt)
+        return build_green_asset_feature_collection(rows)
+
+    def get_grid_clusters_from_matview(
+        self,
+        zoom_level: int,
+        bbox: tuple[float, float, float, float],
+        region_id: int | None = None,
+        province_id: int | None = None,
+        municipality_id: int | None = None,
+    ) -> list[ViewportCluster]:
+        """Pre-aggregated grid cells for one zoom level (materialized view).
+
+        Same grid as get_clusters_in_bbox (see 08-matview SQL: cell math mirrors
+        viewport_grid.grid_cell_size_m) but served from an indexed matview: a
+        live aggregation measured 200-414ms on dense bboxes, this is ~18ms.
+        Cells split per admin unit in the view are re-aggregated here (SUM /
+        count-weighted centroid), so unscoped and scoped responses share keys.
+        """
+        stmt = sql_text(
+            """
+            SELECT cell_x, cell_y,
+                   SUM(asset_count)::bigint AS cnt,
+                   SUM(merc_x * asset_count) / SUM(asset_count) AS mx,
+                   SUM(merc_y * asset_count) / SUM(asset_count) AS my,
+                   ST_XMin(ST_Extent(extent)), ST_YMin(ST_Extent(extent)),
+                   ST_XMax(ST_Extent(extent)), ST_YMax(ST_Extent(extent)),
+                   MIN(sample_id)
+            FROM cadastre.green_asset_grid_clusters
+            WHERE zoom_level = :zoom_level
+              AND extent && ST_MakeEnvelope(:minx, :miny, :maxx, :maxy, 4326)
+              AND (CAST(:region_id AS integer) IS NULL OR region_id = :region_id)
+              AND (CAST(:province_id AS integer) IS NULL OR province_id = :province_id)
+              AND (CAST(:municipality_id AS integer) IS NULL OR municipality_id = :municipality_id)
+            GROUP BY cell_x, cell_y
+            """
+        )
+        params = {
+            "zoom_level": zoom_level,
+            "minx": bbox[0],
+            "miny": bbox[1],
+            "maxx": bbox[2],
+            "maxy": bbox[3],
+            "region_id": region_id,
+            "province_id": province_id,
+            "municipality_id": municipality_id,
+        }
+        with self._session_factory() as session:
+            rows = session.execute(stmt, params).all()
+        return [
+            ViewportCluster(
+                cell_x=int(r[0]),
+                cell_y=int(r[1]),
+                count=int(r[2]),
+                merc_x=float(r[3]),
+                merc_y=float(r[4]),
+                bbox=(float(r[5]), float(r[6]), float(r[7]), float(r[8])),
+                sample_id=int(r[9]),
+            )
+            for r in rows
+        ]
+
+    def get_clusters_in_bbox(
+        self,
+        bbox: tuple[float, float, float, float],
+        cell_size_m: float,
+        region_id: int | None = None,
+        province_id: int | None = None,
+        municipality_id: int | None = None,
+        sub_municipal_area_id: int | None = None,
+        green_area_id: int | None = None,
+    ) -> list[ViewportCluster]:
+        """Grid-cell aggregates inside the bbox (cluster mode).
+
+        The grid uses Web Mercator cells of cell_size_m, mirroring the frontend
+        grid so cluster geom_ids stay stable across pans (diff mount).
+        Aggregation runs entirely in PostGIS: only one row per cell is returned.
+        """
+        av = GreenAssetModel
+        centroid_3857 = func.ST_Transform(func.ST_Centroid(av.geometry), 3857)
+        cell_x = func.floor(func.ST_X(centroid_3857) / cell_size_m).label("cell_x")
+        cell_y = func.floor(func.ST_Y(centroid_3857) / cell_size_m).label("cell_y")
+        extent = func.ST_Extent(av.geometry)
+        stmt = (
+            select(
+                cell_x,
+                cell_y,
+                func.count(av.id).label("count"),
+                func.avg(func.ST_X(centroid_3857)).label("merc_x"),
+                func.avg(func.ST_Y(centroid_3857)).label("merc_y"),
+                func.ST_XMin(extent),
+                func.ST_YMin(extent),
+                func.ST_XMax(extent),
+                func.ST_YMax(extent),
+                func.min(av.id).label("sample_id"),
+            )
+            .where(*self._bbox_conditions(
+                bbox, region_id, province_id, municipality_id,
+                sub_municipal_area_id, green_area_id,
+            ))
+            .group_by(cell_x, cell_y)
+        )
+        with self._session_factory() as session:
+            rows = session.execute(stmt).all()
+        return [
+            ViewportCluster(
+                cell_x=int(r[0]),
+                cell_y=int(r[1]),
+                count=int(r[2]),
+                merc_x=float(r[3]),
+                merc_y=float(r[4]),
+                bbox=(float(r[5]), float(r[6]), float(r[7]), float(r[8])),
+                sample_id=int(r[9]),
+            )
+            for r in rows
+        ]
+
+    # ------------------------------------------------------------------
     # Paginated + filtered + sorted table query (server-side)
     # ------------------------------------------------------------------
 
     def list_table_rows_paged(
         self,
-        region_id: int,
-        province_id: int,
-        municipality_id: int,
+        region_id: int | None,
+        province_id: int | None,
+        municipality_id: int | None,
         *,
         green_area_id: int | None = None,
         sub_municipal_area_id: int | None = None,
@@ -249,35 +519,42 @@ class GreenAssetsRepository:
         sort_dir: Literal["asc", "desc"] = "asc",
         filters: dict[str, Any] | None = None,
     ) -> tuple[list[dict], int]:
-        """Return one page of rows and the total count matching all filters."""
+        """Return one page of rows and the total count matching all filters.
+
+        Territory filters are optional: omit them for a nationwide table.
+        """
         av = GreenAssetModel
 
-        # Territory scope — same logic as list_table_rows.
-        conditions: list[ColumnElement[bool]] = [
-            av.region_id == region_id,
-            av.province_id == province_id,
-            av.municipality_id == municipality_id,
-        ]
+        conditions: list[ColumnElement[bool]] = []
+        if region_id is not None:
+            conditions.append(av.region_id == region_id)
+        if province_id is not None:
+            conditions.append(av.province_id == province_id)
+        if municipality_id is not None:
+            conditions.append(av.municipality_id == municipality_id)
         if green_area_id is not None:
-            area_geom = (
+            area_geom_stmt = (
                 select(GreenAreaModel.geometry)
-                .where(GreenAreaModel.region_id == region_id)
-                .where(GreenAreaModel.province_id == province_id)
                 .where(GreenAreaModel.id == green_area_id)
                 .where(GreenAreaModel.geometry.isnot(None))
-                .limit(1)
-                .scalar_subquery()
             )
+            if region_id is not None:
+                area_geom_stmt = area_geom_stmt.where(GreenAreaModel.region_id == region_id)
+            if province_id is not None:
+                area_geom_stmt = area_geom_stmt.where(GreenAreaModel.province_id == province_id)
+            area_geom = area_geom_stmt.limit(1).scalar_subquery()
             conditions.append(func.ST_Intersects(av.geometry, area_geom))
         elif sub_municipal_area_id is not None:
-            sub_geom = (
+            sub_geom_stmt = (
                 select(SubMunicipalAreaModel.geometry)
                 .where(SubMunicipalAreaModel.id == sub_municipal_area_id)
-                .where(SubMunicipalAreaModel.municipality_id == municipality_id)
                 .where(SubMunicipalAreaModel.geometry.isnot(None))
-                .limit(1)
-                .scalar_subquery()
             )
+            if municipality_id is not None:
+                sub_geom_stmt = sub_geom_stmt.where(
+                    SubMunicipalAreaModel.municipality_id == municipality_id
+                )
+            sub_geom = sub_geom_stmt.limit(1).scalar_subquery()
             conditions.append(func.ST_Intersects(av.geometry, sub_geom))
         else:
             conditions.append(av.green_area_id.isnot(None))

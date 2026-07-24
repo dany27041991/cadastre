@@ -4,7 +4,6 @@
  */
 export type {
   GreenAreasParams,
-  GreenAssetParams,
   TerritoryGeoApi,
   TerritoryGreenAreasApi,
   TerritoryNavigationApi,

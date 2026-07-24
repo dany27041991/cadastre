@@ -174,7 +174,13 @@ def load_areas(
                 INSERT INTO cadastre.green_areas (
                     region_id, province_id, municipality_id, name, level, level_id,
                     geometry_type, geometry, attributes, attribute_type_id
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, ST_SetSRID(ST_GeomFromText(%s), %s), %s, %s)
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s,
+                    -- Source polygons can self-intersect; invalid geometries make the map
+                    -- vendor's JSTS click hit-test throw TopologyException on every click.
+                    ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_SetSRID(ST_GeomFromText(%s), %s)), 3)),
+                    %s, %s
+                )
                 RETURNING id
                 """,
                 (
@@ -348,6 +354,13 @@ def main() -> int:
 
             print("Loading green assets (hedges, shrubs, trees)...")
             load_assets(conn, data_dir, areas_gdf, municipality_id, province_id, region_id, asset_att_ids)
+
+            # Viewport cluster matviews aggregate green_assets; without a refresh
+            # the map would keep serving pre-load (or empty) clusters.
+            print("Refreshing viewport cluster materialized views...")
+            with conn.cursor() as cur:
+                cur.execute("REFRESH MATERIALIZED VIEW cadastre.green_asset_admin_clusters")
+                cur.execute("REFRESH MATERIALIZED VIEW cadastre.green_asset_grid_clusters")
 
         print("Done.")
         return 0

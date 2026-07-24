@@ -108,6 +108,62 @@ class GreenAreasRepository:
             GreenAreaModel.region_id,
         ).where(GreenAreaModel.geometry.isnot(None))
 
+    def get_roots_in_bbox(
+        self,
+        bbox: tuple[float, float, float, float],
+        simplify_tolerance_deg: float,
+        limit: int,
+        region_id: int | None = None,
+        province_id: int | None = None,
+        municipality_id: int | None = None,
+        sub_municipal_area_id: int | None = None,
+    ) -> GeoJSONFeatureCollection:
+        """Root green areas intersecting the bbox (viewport map rendering).
+
+        Geometries are simplified to the display resolution (tolerance in
+        degrees ≈ 1px at the requested zoom) so payload size tracks the screen,
+        not the source precision. Largest areas first when the cap is hit.
+        sub_municipal_area_id restricts to areas intersecting that sub-area.
+        """
+        ar = GreenAreaModel
+        envelope = func.ST_MakeEnvelope(bbox[0], bbox[1], bbox[2], bbox[3], 4326)
+        geometry_out = func.ST_AsGeoJSON(
+            func.ST_SimplifyPreserveTopology(ar.geometry, simplify_tolerance_deg)
+        ).cast(JSON)
+        stmt = (
+            select(
+                ar.id,
+                geometry_out.label("geometry"),
+                ar.name,
+                ar.level,
+                ar.parent_id,
+                ar.region_id,
+            )
+            .where(ar.geometry.isnot(None))
+            .where(ar.parent_id.is_(None))
+            .where(ar.geometry.intersects(envelope))
+            .order_by(func.ST_Area(ar.geometry).desc())
+            .limit(limit)
+        )
+        if region_id is not None:
+            stmt = stmt.where(ar.region_id == region_id)
+        if province_id is not None:
+            stmt = stmt.where(ar.province_id == province_id)
+        if municipality_id is not None:
+            stmt = stmt.where(ar.municipality_id == municipality_id)
+        if sub_municipal_area_id is not None:
+            sub_geom = (
+                select(SubMunicipalAreaModel.geometry)
+                .where(SubMunicipalAreaModel.id == sub_municipal_area_id)
+                .where(SubMunicipalAreaModel.geometry.isnot(None))
+                .limit(1)
+                .scalar_subquery()
+            )
+            stmt = stmt.where(func.ST_Intersects(ar.geometry, sub_geom))
+        with self._session_factory() as session:
+            rows = self._rows_from_session(session, stmt)
+        return build_green_area_feature_collection(rows)
+
     def _rows_from_session(self, session: Session, stmt) -> list[tuple]:
         result = session.execute(stmt)
         return [tuple(row) for row in result.all()]
@@ -237,9 +293,9 @@ class GreenAreasRepository:
 
     def list_table_rows_paged(
         self,
-        region_id: int,
-        province_id: int,
-        municipality_id: int,
+        region_id: int | None,
+        province_id: int | None,
+        municipality_id: int | None,
         *,
         sub_municipal_area_id: int | None = None,
         contained_in_area_id: int | None = None,
@@ -250,27 +306,31 @@ class GreenAreasRepository:
         sort_dir: Literal["asc", "desc"] = "asc",
         filters: dict[str, Any] | None = None,
     ) -> tuple[list[dict], int]:
-        """Return one page of rows and the total count matching all filters."""
+        """Return one page of rows and the total count matching all filters.
+
+        Territory filters are optional: omit them for a nationwide table.
+        """
         ar = GreenAreaModel
 
         # --- Territory WHERE conditions ---
-        conditions: list = [
-            ar.region_id == region_id,
-            ar.province_id == province_id,
-            ar.municipality_id == municipality_id,
-        ]
+        conditions: list = []
+        if region_id is not None:
+            conditions.append(ar.region_id == region_id)
+        if province_id is not None:
+            conditions.append(ar.province_id == province_id)
+        if municipality_id is not None:
+            conditions.append(ar.municipality_id == municipality_id)
         if parent_id is not None:
             conditions.append(ar.parent_id == parent_id)
         elif contained_in_area_id is not None:
-            area_subq = (
-                select(ar.geometry, ar.level)
-                .where(ar.id == contained_in_area_id)
-                .where(ar.region_id == region_id)
-                .where(ar.province_id == province_id)
-                .where(ar.municipality_id == municipality_id)
-                .where(ar.geometry.isnot(None))
-                .limit(1)
-            )
+            area_subq = select(ar.geometry, ar.level).where(ar.id == contained_in_area_id)
+            if region_id is not None:
+                area_subq = area_subq.where(ar.region_id == region_id)
+            if province_id is not None:
+                area_subq = area_subq.where(ar.province_id == province_id)
+            if municipality_id is not None:
+                area_subq = area_subq.where(ar.municipality_id == municipality_id)
+            area_subq = area_subq.where(ar.geometry.isnot(None)).limit(1)
             area_cte = area_subq.subquery("area_ref")
             intersection_geom = func.ST_Intersection(ar.geometry, area_cte.c.geometry)
             overlap_m2 = func.ST_Area(cast(intersection_geom, Geography))
@@ -280,14 +340,16 @@ class GreenAreasRepository:
                 overlap_m2 >= _MIN_GREEN_AREA_INTERSECTION_M2,
             ]
         elif sub_municipal_area_id is not None:
-            sub_geom = (
+            sub_geom_stmt = (
                 select(SubMunicipalAreaModel.geometry)
                 .where(SubMunicipalAreaModel.id == sub_municipal_area_id)
-                .where(SubMunicipalAreaModel.municipality_id == municipality_id)
                 .where(SubMunicipalAreaModel.geometry.isnot(None))
-                .limit(1)
-                .scalar_subquery()
             )
+            if municipality_id is not None:
+                sub_geom_stmt = sub_geom_stmt.where(
+                    SubMunicipalAreaModel.municipality_id == municipality_id
+                )
+            sub_geom = sub_geom_stmt.limit(1).scalar_subquery()
             conditions += [
                 ar.parent_id.is_(None),
                 func.ST_Intersects(ar.geometry, sub_geom),

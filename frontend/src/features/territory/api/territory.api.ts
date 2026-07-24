@@ -14,10 +14,10 @@ import { createGreenAssetsApi, type GreenAssetsApi } from './greenAssetMap.api'
 
 export type { GeoJSONFeatureCollection, FetcherOptions } from './fetcher'
 export { EMPTY_GEOJSON, createFetcher, type Fetcher } from './fetcher'
-export type { GreenAreasParams } from './greenAreaMap.api'
-export type { GreenAssetParams } from './greenAssetMap.api'
-export { buildGreenAreasQuery } from './greenAreaMap.api'
-export { buildGreenAssetQuery } from './greenAssetMap.api'
+export type { GreenAreasParams, GreenAreaViewportParams } from './greenAreaMap.api'
+export type { GreenAssetViewportParams } from './greenAssetMap.api'
+export { buildGreenAreasQuery, buildGreenAreasViewportQuery } from './greenAreaMap.api'
+export { buildGreenAssetViewportQuery } from './greenAssetMap.api'
 
 const GEOBUF = 'format=geobuf'
 
@@ -65,7 +65,8 @@ export function createTerritoryApi(
         `/api/territory/municipalities/${municipalityId}/sub-municipal-areas?${GEOBUF}`
       ),
     getGreenAreas: greenAreaMap.getGreenAreas,
-    getGreenAssets: greenAssetMap.getGreenAssets,
+    getGreenAreasViewport: greenAreaMap.getGreenAreasViewport,
+    getGreenAssetsViewport: greenAssetMap.getGreenAssetsViewport,
   }
 }
 

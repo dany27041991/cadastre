@@ -1,9 +1,5 @@
 /**
- * Territory feature model: hooks and data fetchers (state + orchestration).
+ * Territory feature model exports.
  */
-export { useTerritoryMap } from './hooks/useTerritoryMap'
-export type { FeatureSelectHandler, UseTerritoryMapResult, UseTerritoryMapOptions } from './hooks/useTerritoryMap'
 export { useTerritoryNavigation } from './hooks/useTerritoryNavigation'
-export type { MapBridge, UseTerritoryNavigationResult, UseTerritoryNavigationOptions } from './hooks/useTerritoryNavigation'
-export { createLevelFetchers } from './fetchers/mapNavigationFetchers'
-export { createGreenAreasLevelFetchers } from './fetchers/levelFetchers'
+export type { FeatureSelectHandler } from '../types/map'

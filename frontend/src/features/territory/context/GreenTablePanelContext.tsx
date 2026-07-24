@@ -16,6 +16,13 @@ import {
 
 import { isGreenTableIdColumn } from '../lib/greenTableColumnVisibility'
 
+export interface GreenAssetsLayerControls {
+  readonly active: boolean
+  readonly loading: boolean
+  readonly available: boolean
+  readonly setActive: (active: boolean) => void | Promise<void>
+}
+
 export interface GreenTablePanelContextValue {
   readonly extraColumns: string[]
   readonly toggleExtraColumn: (key: string) => void
@@ -29,9 +36,11 @@ export interface GreenTablePanelContextValue {
   readonly setTablePanelActive: (v: boolean) => void
   readonly registerTableColumns: (allKeys: string[], defaultFive: string[]) => void
   readonly resetPanelState: () => void
-  /** Accordion + InfoPanel visible only when the table endpoint confirms rows exist. */
+  /** Accordion open state (table sections in the InfoPanel follow it). */
   readonly mapTableAccordionVisible: boolean
   readonly setMapTableAccordionVisible: (v: boolean) => void
+  readonly greenAssetsLayer: GreenAssetsLayerControls | null
+  readonly registerGreenAssetsLayer: (controls: GreenAssetsLayerControls | null) => void
 }
 
 const GreenTablePanelContext = createContext<GreenTablePanelContextValue | null>(null)
@@ -44,6 +53,23 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
   const [allColumnKeys, setAllColumnKeys] = useState<string[]>([])
   const [tablePanelActive, setTablePanelActive] = useState(false)
   const [mapTableAccordionVisible, setMapTableAccordionVisible] = useState(false)
+  const [greenAssetsLayer, setGreenAssetsLayer] = useState<GreenAssetsLayerControls | null>(null)
+
+  const registerGreenAssetsLayer = useCallback((controls: GreenAssetsLayerControls | null) => {
+    setGreenAssetsLayer((prev) => {
+      if (controls == null) return prev == null ? prev : null
+      if (
+        prev != null &&
+        prev.active === controls.active &&
+        prev.loading === controls.loading &&
+        prev.available === controls.available &&
+        prev.setActive === controls.setActive
+      ) {
+        return prev
+      }
+      return controls
+    })
+  }, [])
 
   const resetPanelState = useCallback(() => {
     setExtraColumns([])
@@ -84,6 +110,8 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
       resetPanelState,
       mapTableAccordionVisible,
       setMapTableAccordionVisible,
+      greenAssetsLayer,
+      registerGreenAssetsLayer,
     }),
     [
       extraColumns,
@@ -96,6 +124,8 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
       registerTableColumns,
       resetPanelState,
       mapTableAccordionVisible,
+      greenAssetsLayer,
+      registerGreenAssetsLayer,
     ]
   )
 

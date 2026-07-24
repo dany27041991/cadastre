@@ -5,7 +5,7 @@
 # - Schema + seeds: created on first start via docker-entrypoint-initdb.d (sql only).
 # - Admin boundaries (regions, provinces, municipalities, sections, submunicipal):
 #   populated by init service after postgis is healthy (run-init.sh).
-# - Redis/PgBouncer/ClickHouse/PgAdmin removed; add back if needed.
+# - Redis/ClickHouse/PgAdmin removed; add back if needed.
 # =============================================================================
 
 name: catasto-arboreo-platform
@@ -161,7 +161,7 @@ services:
       start_period: 30s
 
   # ---------------------------------------------------------------------------
-  # 4. Frontend - React + Vite + OpenLayers + OSM (standalone)
+  # 4. Frontend - React + Vite + Geoinsight (standalone)
   # ---------------------------------------------------------------------------
   frontend:
     build:
@@ -171,6 +171,10 @@ services:
     restart: unless-stopped
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      VITE_GEOINSIGHT_WEBGIS_ID: ${VITE_GEOINSIGHT_WEBGIS_ID:-155}
+      VITE_GEOINSIGHT_CU_ID: ${VITE_GEOINSIGHT_CU_ID:-PNRR}
+      VITE_GEOINSIGHT_MAP_ID: ${VITE_GEOINSIGHT_MAP_ID:-1}
+      VITE_MASE_API_ORIGIN: ${VITE_MASE_API_ORIGIN:-https://sim-dev.mase.gov.it}
       # Utenza mockata in standalone (opzionale): FGP, utente JSON, cookie header
       VITE_MOCK_FGP: ${VITE_MOCK_FGP:-}
       VITE_MOCK_USER: ${VITE_MOCK_USER:-}
@@ -183,8 +187,14 @@ services:
     volumes:
       - ../../frontend/src:/app/src
       - frontend_node_modules:/app/node_modules
+      - ../../frontend/package.json:/app/package.json
+      - ../../frontend/package-lock.json:/app/package-lock.json
+      - ../../frontend/.npmrc:/app/.npmrc
       - ../../frontend/index.html:/app/index.html
       - ../../frontend/vite.config.ts:/app/vite.config.ts
+      - ../../frontend/scripts:/app/scripts:ro
+      - ../../frontend/public:/app/public
+      - ../../frontend/docker-entrypoint.sh:/app/docker-entrypoint.sh
       - ../../frontend/tsconfig.json:/app/tsconfig.json
       - ../../frontend/tsconfig.node.json:/app/tsconfig.node.json
     depends_on:

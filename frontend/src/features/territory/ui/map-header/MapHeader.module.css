@@ -1,47 +1,48 @@
 .header {
-  padding: 0.75rem 1rem;
-  background: #1a5f2a;
-  color: white;
-  font-weight: bold;
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .nav {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.25rem;
-  font-size: 0.9rem;
-  font-weight: normal;
 }
 
 .button {
-  padding: 0.25rem 0.5rem;
-  background: rgba(255, 255, 255, 0.2);
-  border: none;
-  border-radius: 4px;
-  color: white;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.35rem 0.65rem;
+  background: transparent;
+  color: #1a5f2a;
   cursor: pointer;
+  font: inherit;
 }
 
 .button:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(26, 95, 42, 0.08);
 }
 
 .buttonActive {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(26, 95, 42, 0.15);
+  border-color: rgba(26, 95, 42, 0.25);
+  font-weight: 600;
 }
 
 .breadcrumbItem {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
 }
 
 .separator {
-  opacity: 0.7;
+  margin: 0 0.25rem;
+  color: #9ca3af;
 }
 
 .backButton {
@@ -49,6 +50,7 @@
 }
 
 .loading {
-  font-size: 0.85rem;
-  opacity: 0.9;
+  margin-left: auto;
+  color: #6b7280;
+  font-size: 0.875rem;
 }

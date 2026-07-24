@@ -12,7 +12,7 @@ export const authService = {
    * Call from mount(props).
    */
   setUserFromProps(props: AppProps): void {
-    const user = (props?.customProps as { user?: AuthUser })?.user
+    const user = (props as AppProps & { customProps?: { user?: AuthUser } }).customProps?.user
     if (user) {
       useAuthStore.getState().setUser(user)
     }

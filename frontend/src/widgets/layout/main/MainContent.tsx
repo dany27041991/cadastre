@@ -1,24 +1,29 @@
 /**
  * Main content: territory breadcrumb, map, and accordion with live green areas/assets table.
  */
-import { useState, useCallback, type ReactNode, type RefObject } from 'react'
+import { useState, useCallback, useEffect, type ReactNode } from 'react'
+import { MAP_UI_OVERLAY_Z_INDEX } from '@/features/territory-map-geoinsight/ui/geoinsightMapStyle'
 import { useTranslation } from 'react-i18next'
 import { Box, Accordion, AccordionItem, AccordionHeader, AccordionBody } from 'dxc-webkit'
 import { MapBreadcrumbs, type MapBreadcrumbsProps } from '@/features/territory'
 import { GreenDataTable } from '@/features/territory/ui/green-data-table/GreenDataTable'
+import { LoadingOverlay } from '@/features/territory/ui/loading-overlay/LoadingOverlay'
+import { useGreenTablePanelOptional } from '@/features/territory/context/GreenTablePanelContext'
 
 export interface MainContentProps extends MapBreadcrumbsProps {
-  readonly mapRef: RefObject<HTMLDivElement | null>
-  readonly children: ReactNode
+  /** Geoinsight map slot. */
+  readonly mapOverlay: ReactNode
+  readonly children?: ReactNode
   /** Whether the green data table accordion is visible (drill-down flow). */
   readonly showGreenTableAccordion: boolean
   readonly greenAssetsLayerActive: boolean
   readonly areasTableQuery: string | null
   readonly assetsTableQuery: string | null
+  readonly greenAssetsLayerLoading?: boolean
 }
 
 export function MainContent({
-  mapRef,
+  mapOverlay,
   children,
   level,
   breadcrumb,
@@ -28,16 +33,32 @@ export function MainContent({
   greenAssetsLayerActive,
   areasTableQuery,
   assetsTableQuery,
+  greenAssetsLayerLoading = false,
 }: MainContentProps) {
   const { t } = useTranslation()
+  const panel = useGreenTablePanelOptional()
   const [accordionOpen, setAccordionOpen] = useState('')
   const accordionTitle = greenAssetsLayerActive
     ? t('territory.accordion.tableTitleTrees')
     : t('territory.accordion.tableTitleAreas')
 
-  const toggleAccordion = useCallback((id: string) => {
-    setAccordionOpen((prev) => (prev === id ? '' : id))
-  }, [])
+  const toggleAccordion = useCallback(
+    (id: string) => {
+      setAccordionOpen((prev) => {
+        const next = prev === id ? '' : id
+        panel?.setMapTableAccordionVisible(next === id)
+        return next
+      })
+    },
+    [panel]
+  )
+
+  useEffect(() => {
+    if (!showGreenTableAccordion) {
+      setAccordionOpen('')
+      panel?.setMapTableAccordionVisible(false)
+    }
+  }, [showGreenTableAccordion, panel])
 
   return (
     <Box as="div" display="flex" flexDirection="column" style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
@@ -67,12 +88,20 @@ export function MainContent({
             minWidth: 0,
           }}
         >
-          <div
-            ref={mapRef as RefObject<HTMLDivElement>}
-            style={{ width: '100%', height: '100%', position: 'absolute', inset: 0 }}
+          <Box
+            as="div"
+            style={{
+              width: '100%',
+              height: '100%',
+              position: 'absolute',
+              inset: 0,
+              minHeight: 0,
+            }}
           >
+            {mapOverlay}
             {children}
-          </div>
+            {greenAssetsLayerLoading && <LoadingOverlay />}
+          </Box>
         </Box>
         {showGreenTableAccordion && (
           <Accordion
@@ -85,7 +114,7 @@ export function MainContent({
               left: '1rem',
               right: '1rem',
               backgroundColor: 'white',
-              zIndex: 10,
+              zIndex: MAP_UI_OVERLAY_Z_INDEX,
             }}
           >
             <AccordionItem

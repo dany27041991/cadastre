@@ -12,6 +12,7 @@ import {
   icons,
 } from 'dxc-webkit'
 import { useGreenTablePanelOptional } from '@/features/territory/context/GreenTablePanelContext'
+import { GreenAssetsLayerToggle } from './GreenAssetsLayerToggle'
 import { GreenTablePanelSections } from './GreenTablePanelSections'
 
 const OPTIONS = [
@@ -78,6 +79,7 @@ export function InfoPanelContent() {
             paddingRight: '1rem',
           }}
         >
+          <GreenAssetsLayerToggle />
           {panel != null && (
             <Box as="div" style={{ marginTop: '0.5rem' }}>
               <GreenTablePanelSections />

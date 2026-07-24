@@ -2,7 +2,7 @@
  * Overlay shown while the green layer is loading.
  */
 import { useTranslation } from 'react-i18next'
-import { Box } from 'dxc-webkit'
+import { Loader, Text } from 'dxc-webkit'
 import { I18N_KEYS } from '../../model/constants'
 import styles from './LoadingOverlay.module.css'
 
@@ -14,8 +14,16 @@ export function LoadingOverlay() {
       aria-live="polite"
       aria-label={t(I18N_KEYS.loadingGreenLayer)}
     >
-      <Box as="div" className={styles.spinner} />
-      <span className={styles.label}>{t(I18N_KEYS.loadingGreen)}</span>
+      <Loader
+        type="circle"
+        size="lg"
+        value={50}
+        showPercentage={false}
+        className="green-circle-loader"
+      />
+      <Text font="f1-body-md" style={{ fontWeight: 600, color: 'var(--success)' }}>
+        {t(I18N_KEYS.loading)}
+      </Text>
     </output>
   )
 }

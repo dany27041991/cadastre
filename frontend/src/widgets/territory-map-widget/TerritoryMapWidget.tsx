@@ -1,80 +1,58 @@
 /**
- * Territory map widget: map + navigation + green palette composition.
+ * Territory map widget: Geoinsight map + navigation + green palette.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type Feature from 'ol/Feature'
 import { Box } from 'dxc-webkit'
 import {
   territoryApi,
-  useTerritoryMap,
   useTerritoryNavigation,
-  GreenPalette,
   LEVEL_GREEN_AREAS,
   LEVEL_SUB_AREAS,
 } from '@/features/territory'
-import { shouldShowGreenDataAccordion } from '@/features/territory/lib/greenTableAccordion'
+import { useGreenAssetsLayer } from '@/features/territory/model/hooks/useGreenAssetsLayer'
 import {
   buildGreenAreasTableQuery,
   buildGreenAssetsTableQuery,
 } from '@/features/territory/lib/greenTableParams'
+import { filterGreenAreaChildren } from '@/features/territory/lib/greenAreaDrill'
 import { useGreenTablePanel } from '@/features/territory/context/GreenTablePanelContext'
 import { MainContent } from '@/widgets/layout/main/MainContent'
-import 'ol/ol.css'
+import {
+  GeoinsightFocusContainer,
+  GeoinsightMapContainer,
+  useGeoinsightMapBridge,
+} from '@/features/territory-map-geoinsight'
+import { useTerritoryMapBridge } from './useTerritoryMapBridge'
+import {
+  useTerritoryMapDrillSync,
+  useTerritoryMapFeatureSelect,
+  useTerritoryMapLeafCleanup,
+  useTerritoryMapResync,
+} from './useTerritoryMapEffects'
 
 export function TerritoryMapWidget() {
   const { t } = useTranslation()
-  const map = useTerritoryMap({ t })
-  const storedLeafRef = useRef<{ id: number; feature: Feature } | null>(null)
-
-  const mapBridge = useMemo(
-    () => ({
-      loadGeoJson: map.loadGeoJson,
-      loadGeoJsonAndShowOnlyFeatureById: map.loadGeoJsonAndShowOnlyFeatureById,
-      fitToCurrentExtent: map.fitToCurrentExtent,
-      centerOnItaly: map.centerOnItaly,
-      showOnlyFeature: map.showOnlyFeature,
-      loadGreenLayer: map.loadGreenLayer,
-      loadGreenLayerFromFeature: map.loadGreenLayerFromFeature,
-      setGreenLayerVisible: map.setGreenLayerVisible,
-      clearGreenLayer: map.clearGreenLayer,
-      clearTerritoryLayer: map.clearTerritoryLayer,
-      clearMapVectorLayers: map.clearMapVectorLayers,
-      fitToGreenExtent: map.fitToGreenExtent,
-      setGreenLayerVisibleWhenMoveEnds: map.setGreenLayerVisibleWhenMoveEnds,
-      ensureGreenLayerVisibleAfterFit: map.ensureGreenLayerVisibleAfterFit,
-      setTerritoryFillVisible: map.setTerritoryFillVisible,
-      storeLeafAreaForRestore: (areaId: number, feature: Feature) => {
-        storedLeafRef.current = { id: areaId, feature }
-      },
-      getStoredLeafArea: (areaId: number): Feature | null =>
-        storedLeafRef.current?.id === areaId ? storedLeafRef.current.feature : null,
-      clearStoredLeafArea: () => {
-        storedLeafRef.current = null
-      },
-    }),
-    [
-      map.loadGeoJson,
-      map.loadGeoJsonAndShowOnlyFeatureById,
-      map.fitToCurrentExtent,
-      map.centerOnItaly,
-      map.showOnlyFeature,
-      map.loadGreenLayer,
-      map.loadGreenLayerFromFeature,
-      map.setGreenLayerVisible,
-      map.clearGreenLayer,
-      map.clearTerritoryLayer,
-      map.clearMapVectorLayers,
-      map.fitToGreenExtent,
-      map.setGreenLayerVisibleWhenMoveEnds,
-      map.ensureGreenLayerVisibleAfterFit,
-      map.setTerritoryFillVisible,
-    ]
-  )
-  const nav = useTerritoryNavigation(mapBridge, { api: territoryApi, t })
+  const map = useGeoinsightMapBridge()
+  const mapBridge = useTerritoryMapBridge(map)
   const [greenAssetsLayerActive, setGreenAssetsLayerActive] = useState(false)
+  const greenAssetsLayerActiveRef = useRef(greenAssetsLayerActive)
+  greenAssetsLayerActiveRef.current = greenAssetsLayerActive
+  const nav = useTerritoryNavigation(mapBridge, {
+    api: territoryApi,
+    t,
+    isAssetsLayerActive: () => greenAssetsLayerActiveRef.current,
+  })
 
-  const showGreenTableAccordion = shouldShowGreenDataAccordion(nav.level)
+  useTerritoryMapFeatureSelect({ map, handleFeatureSelect: nav.handleFeatureSelect })
+  useTerritoryMapDrillSync({ map, level: nav.level, breadcrumb: nav.breadcrumb })
+  useTerritoryMapLeafCleanup({
+    breadcrumb: nav.breadcrumb,
+    clearStoredLeafArea: mapBridge.clearStoredLeafArea,
+  })
+
+  const handleMapReady = useTerritoryMapResync({ map, resyncMapLayers: nav.resyncMapLayers })
+
   const areasTableQuery = useMemo(
     () => buildGreenAreasTableQuery(nav.level, nav.breadcrumb),
     [nav.level, nav.breadcrumb]
@@ -84,42 +62,19 @@ export function TerritoryMapWidget() {
     [nav.breadcrumb]
   )
 
-  const {
-    setTablePanelActive,
-    registerTableColumns,
-    resetPanelState,
-    setMapTableAccordionVisible,
-  } = useGreenTablePanel()
+  const { registerGreenAssetsLayer } = useGreenTablePanel()
 
-  const tableQueryReady =
-    showGreenTableAccordion &&
-    (greenAssetsLayerActive ? assetsTableQuery != null : areasTableQuery != null)
-
-  // Reset panel state when the table scope changes or becomes unavailable.
-  // GreenDataTable owns the actual fetch; this effect only handles teardown.
-  useEffect(() => {
-    if (!tableQueryReady) {
-      setMapTableAccordionVisible(false)
-      setTablePanelActive(false)
-      registerTableColumns([], [])
-      resetPanelState()
-    }
-  }, [
-    tableQueryReady,
-    setMapTableAccordionVisible,
-    setTablePanelActive,
-    registerTableColumns,
-    resetPanelState,
-  ])
-
-  const restoreGreenAreas = useCallback(async () => {
+  const restoreGreenAreas = useCallback(async (options?: { skipFit?: boolean }) => {
+    const skipFit = options?.skipFit
     const last = nav.breadcrumb[nav.breadcrumb.length - 1]
     if (!last?.regionId || (last.level !== LEVEL_GREEN_AREAS && last.level !== LEVEL_SUB_AREAS)) {
       map.clearGreenLayer()
-      storedLeafRef.current = null
+      mapBridge.clearStoredLeafArea?.()
       return
     }
     if (!last.provinceId) return
+    const storedLeaf =
+      last.level === LEVEL_SUB_AREAS ? mapBridge.getStoredLeafArea?.(last.id) ?? null : null
     const geojson =
       last.level === LEVEL_GREEN_AREAS
         ? await territoryApi.getGreenAreas({
@@ -137,87 +92,107 @@ export function TerritoryMapWidget() {
             containedInAreaId: last.id,
           })
     const isValidGeoJson =
-      geojson != null &&
-      (geojson as { type?: string }).type === 'FeatureCollection'
+      geojson != null && (geojson as { type?: string }).type === 'FeatureCollection'
     const hasFeatures = Boolean(isValidGeoJson && geojson.features?.length)
-    const storedLeaf =
-      last.level === LEVEL_SUB_AREAS && !hasFeatures && storedLeafRef.current?.id === last.id
-        ? storedLeafRef.current.feature
-        : null
-    if (storedLeaf) {
-      map.loadGreenLayerFromFeature(storedLeaf)
-    } else if (isValidGeoJson) {
-      map.loadGreenLayer(geojson, { skipClustering: true })
+    if (last.level === LEVEL_SUB_AREAS) {
+      if (isValidGeoJson) {
+        const childrenGeojson = filterGreenAreaChildren(geojson, last.id)
+        if (childrenGeojson.features?.length) {
+          map.setTerritoryFillVisible(false)
+          map.loadGreenLayer(childrenGeojson, { skipFit })
+        } else if (storedLeaf) {
+          map.loadGreenLayerFromFeature(storedLeaf, { skipFit })
+        } else {
+          map.clearGreenLayer()
+        }
+      } else if (storedLeaf) {
+        map.loadGreenLayerFromFeature(storedLeaf, { skipFit })
+      } else {
+        map.clearGreenLayer()
+      }
+    } else if (isValidGeoJson && hasFeatures) {
+      map.setTerritoryFillVisible(false)
+      map.loadGreenLayer(geojson, { skipFit })
     } else {
       map.clearGreenLayer()
     }
     map.setGreenLayerVisible(true)
-  }, [
-    nav.breadcrumb,
-    map.loadGreenLayer,
-    map.loadGreenLayerFromFeature,
-    map.setGreenLayerVisible,
-    map.clearGreenLayer,
-  ])
+  }, [nav.breadcrumb, map, mapBridge])
 
   const onBeforeLoadingAssets = useCallback(() => {
     const features = map.getGreenLayerFeatures()
     if (features.length === 1) {
-      const f = features[0]
-      const id = (f.get('id') ?? f.getId()) as number | undefined
-      if (id == null) {
-        storedLeafRef.current = null
-      } else {
-        storedLeafRef.current = { id: Number(id), feature: f }
-      }
-    } else {
-      storedLeafRef.current = null
+      mapBridge.storeLeafAreaForRestore?.(features[0].id, features[0])
+      return
     }
-  }, [map.getGreenLayerFeatures])
-
-  useEffect(() => {
-    map.setOnFeatureSelect(nav.handleFeatureSelect)
-  }, [map.setOnFeatureSelect, nav.handleFeatureSelect])
-
-  useEffect(() => {
     const last = nav.breadcrumb[nav.breadcrumb.length - 1]
-    if (last?.level !== LEVEL_GREEN_AREAS && last?.level !== LEVEL_SUB_AREAS) {
-      storedLeafRef.current = null
+    if (last?.level === LEVEL_SUB_AREAS && mapBridge.getStoredLeafArea?.(last.id)) {
+      return
     }
-  }, [nav.breadcrumb])
+    mapBridge.clearStoredLeafArea?.()
+  }, [map, mapBridge, nav.breadcrumb])
+
+  const greenAssetsLayer = useGreenAssetsLayer({
+    breadcrumb: nav.breadcrumb,
+    level: nav.level,
+    loadGreenLayerViewport: map.loadGreenLayerViewport,
+    setGreenLayerVisible: map.setGreenLayerVisible,
+    clearGreenLayer: map.clearGreenLayer,
+    restoreGreenAreas,
+    fitToGreenExtent: map.fitToGreenExtent,
+    setTerritoryFillVisible: map.setTerritoryFillVisible,
+    onBeforeLoadingAssets,
+    assetsLayerActive: greenAssetsLayerActive,
+    onAssetsLayerActiveChange: setGreenAssetsLayerActive,
+  })
+
+  const setActiveRef = useRef(greenAssetsLayer.setActive)
+  setActiveRef.current = greenAssetsLayer.setActive
+
+  const stableSetActive = useCallback((active: boolean) => {
+    void setActiveRef.current(active)
+  }, [])
 
   useEffect(() => {
-    nav.loadRegions()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    registerGreenAssetsLayer({
+      active: greenAssetsLayerActive,
+      loading: greenAssetsLayer.loading,
+      available: greenAssetsLayer.available,
+      setActive: stableSetActive,
+    })
+    return () => registerGreenAssetsLayer(null)
+  }, [
+    greenAssetsLayerActive,
+    greenAssetsLayer.loading,
+    greenAssetsLayer.available,
+    stableSetActive,
+    registerGreenAssetsLayer,
+  ])
+
+  const mapOverlay = (
+    <GeoinsightFocusContainer>
+      <GeoinsightMapContainer
+        onFeatureInfo={map.handleFeatureInfo}
+        onDrawnGeometryInfo={map.handleDrawnGeometryInfo}
+        onReady={handleMapReady}
+      />
+    </GeoinsightFocusContainer>
+  )
 
   return (
     <Box as="div" display="flex" flexDirection="column" style={{ height: '100%' }}>
       <MainContent
-        mapRef={map.mapRef}
+        mapOverlay={mapOverlay}
         level={nav.level}
         breadcrumb={nav.breadcrumb}
         onLoadRegions={nav.loadRegions}
         onNavigateTo={nav.navigateTo}
-        showGreenTableAccordion={tableQueryReady}
+        showGreenTableAccordion
         greenAssetsLayerActive={greenAssetsLayerActive}
         areasTableQuery={areasTableQuery}
         assetsTableQuery={assetsTableQuery}
-      >
-        <GreenPalette
-          breadcrumb={nav.breadcrumb}
-          level={nav.level}
-          loadGreenLayer={map.loadGreenLayer}
-          setGreenLayerVisible={map.setGreenLayerVisible}
-          clearGreenLayer={map.clearGreenLayer}
-          restoreGreenAreas={restoreGreenAreas}
-          fitToGreenExtent={map.fitToGreenExtent}
-          setTerritoryFillVisible={map.setTerritoryFillVisible}
-          onBeforeLoadingAssets={onBeforeLoadingAssets}
-          assetsLayerActive={greenAssetsLayerActive}
-          onAssetsLayerActiveChange={setGreenAssetsLayerActive}
-        />
-      </MainContent>
+        greenAssetsLayerLoading={greenAssetsLayer.loading}
+      />
     </Box>
   )
 }
