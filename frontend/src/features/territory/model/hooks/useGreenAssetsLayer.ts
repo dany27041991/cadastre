@@ -3,6 +3,12 @@
  * Available at every administrative level: with an empty breadcrumb the
  * clusters cover the whole national territory; each breadcrumb selection
  * narrows the scope (region, province, municipality, sub-municipal area).
+ *
+ * Companion green-area polygons in viewport mode are optional and follow the
+ * same zoom gate as before (GREEN_AREAS_VIEWPORT_MIN_ZOOM on the adapter).
+ * When assets are on, areas are fetched only if `areasLayerActive` is true.
+ * When assets are off and areas are on, an areas-only viewport mode keeps the
+ * area polygons visible (same zoom gate).
  */
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import type { GeoJSONFeatureCollection } from '@/shared/types'
@@ -13,6 +19,11 @@ import {
   greenContextKey,
   isGreenMapLevel,
 } from '../../lib/greenMapContext'
+
+const EMPTY_FEATURE_COLLECTION: GeoJSONFeatureCollection = {
+  type: 'FeatureCollection',
+  features: [],
+}
 
 export interface UseGreenAssetsLayerOptions {
   readonly breadcrumb: BreadcrumbCrumb[]
@@ -36,30 +47,54 @@ export interface UseGreenAssetsLayerOptions {
   readonly onBeforeLoadingAssets?: () => void
   readonly assetsLayerActive: boolean
   readonly onAssetsLayerActiveChange: (active: boolean) => void
+  /** Independent green-areas toggle. */
+  readonly areasLayerActive: boolean
+  readonly onAreasLayerActiveChange: (active: boolean) => void
 }
 
 export interface UseGreenAssetsLayerResult {
   readonly loading: boolean
   readonly available: boolean
-  readonly setActive: (active: boolean) => void
+  readonly setAssetsActive: (active: boolean) => void
+  readonly setAreasActive: (active: boolean) => void
 }
 
-function startViewportMode(
-  context: GreenContext,
-  loadGreenLayerViewport: UseGreenAssetsLayerOptions['loadGreenLayerViewport']
-): void {
-  const scope = {
+type ViewportFetcher = UseGreenAssetsLayerOptions['loadGreenLayerViewport']
+
+function scopeFromContext(context: GreenContext) {
+  return {
     regionId: context.regionId,
     provinceId: context.provinceId,
     municipalityId: context.municipalityId,
     subMunicipalAreaId: context.subMunicipalAreaId,
   }
+}
+
+function areasFetcherFor(context: GreenContext) {
+  const scope = scopeFromContext(context)
+  return (bbox: [number, number, number, number], zoom: number) =>
+    territoryApi.getGreenAreasViewport({ bbox, zoom, ...scope })
+}
+
+function startViewportMode(
+  context: GreenContext,
+  loadGreenLayerViewport: ViewportFetcher,
+  includeAreas: boolean
+): void {
+  const scope = scopeFromContext(context)
   const greenAreaId = context.greenAreaId
-  loadGreenLayerViewport(
-    (bbox, zoom) =>
-      territoryApi.getGreenAssetsViewport({ bbox, zoom, greenAreaId, ...scope }),
-    (bbox, zoom) => territoryApi.getGreenAreasViewport({ bbox, zoom, ...scope })
-  )
+  const assetsFetcher = (bbox: [number, number, number, number], zoom: number) =>
+    territoryApi.getGreenAssetsViewport({ bbox, zoom, greenAreaId, ...scope })
+  loadGreenLayerViewport(assetsFetcher, includeAreas ? areasFetcherFor(context) : undefined)
+}
+
+/** Assets off + areas on: keep area polygons via empty assets + areas companion. */
+function startAreasOnlyViewportMode(
+  context: GreenContext,
+  loadGreenLayerViewport: ViewportFetcher
+): void {
+  const emptyAssets = async () => EMPTY_FEATURE_COLLECTION
+  loadGreenLayerViewport(emptyAssets, areasFetcherFor(context))
 }
 
 export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGreenAssetsLayerResult {
@@ -69,36 +104,46 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     loadGreenLayerViewport,
     setGreenLayerVisible,
     clearGreenLayer,
-    restoreGreenAreas,
     fitToGreenExtent,
     setTerritoryFillVisible,
     onBeforeLoadingAssets,
     assetsLayerActive,
     onAssetsLayerActiveChange,
+    areasLayerActive,
+    onAreasLayerActiveChange,
   } = options
 
   const [loading, setLoading] = useState(false)
   const lastContextKeyRef = useRef<string | null>(null)
+  const areasLayerActiveRef = useRef(areasLayerActive)
+  areasLayerActiveRef.current = areasLayerActive
 
   const context = useMemo(() => getGreenContext(breadcrumb), [breadcrumb])
   const contextKey = useMemo(() => greenContextKey(context), [context])
   const greenLevel = isGreenMapLevel(level)
 
-  const turnOffGreenLayer = useCallback(
-    async (options?: { skipFit?: boolean }) => {
-      lastContextKeyRef.current = null
-      onAssetsLayerActiveChange(false)
-      if (greenLevel && restoreGreenAreas) {
-        await restoreGreenAreas(options)
-        return
-      }
-      // At administrative levels the territory polygons are still mounted:
-      // dropping the green layer is enough.
-      setGreenLayerVisible(false)
-      clearGreenLayer()
-    },
-    [greenLevel, setGreenLayerVisible, clearGreenLayer, restoreGreenAreas, onAssetsLayerActiveChange]
-  )
+  const turnOffAssetsLayer = useCallback(async () => {
+    lastContextKeyRef.current = null
+    onAssetsLayerActiveChange(false)
+    if (areasLayerActiveRef.current) {
+      // Keep areas visible: switch to areas-only viewport (same zoom gate).
+      setLoading(true)
+      startAreasOnlyViewportMode(context, loadGreenLayerViewport)
+      setGreenLayerVisible(true)
+      lastContextKeyRef.current = contextKey
+      setLoading(false)
+      return
+    }
+    setGreenLayerVisible(false)
+    clearGreenLayer()
+  }, [
+    context,
+    contextKey,
+    loadGreenLayerViewport,
+    setGreenLayerVisible,
+    clearGreenLayer,
+    onAssetsLayerActiveChange,
+  ])
 
   const loadAssetsForContext = useCallback(async () => {
     if (greenLevel) {
@@ -109,7 +154,7 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     }
     setLoading(true)
     lastContextKeyRef.current = contextKey
-    startViewportMode(context, loadGreenLayerViewport)
+    startViewportMode(context, loadGreenLayerViewport, areasLayerActiveRef.current)
     setGreenLayerVisible(true)
     onAssetsLayerActiveChange(true)
     setLoading(false)
@@ -125,8 +170,7 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     onBeforeLoadingAssets,
   ])
 
-  // While the layer is active, follow the administrative selection: any
-  // breadcrumb change (deeper or shallower) refetches with the new scope.
+  // Follow breadcrumb while assets viewport is active.
   useEffect(() => {
     if (!assetsLayerActive) return
     if (contextKey === lastContextKeyRef.current) return
@@ -137,7 +181,7 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
       onBeforeLoadingAssets?.()
     }
     setLoading(true)
-    startViewportMode(context, loadGreenLayerViewport)
+    startViewportMode(context, loadGreenLayerViewport, areasLayerActiveRef.current)
     setGreenLayerVisible(true)
     if (greenLevel) fitToGreenExtent()
     setLoading(false)
@@ -153,7 +197,26 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     onBeforeLoadingAssets,
   ])
 
-  const setActive = useCallback(
+  // Follow breadcrumb while areas-only viewport is active (assets off).
+  useEffect(() => {
+    if (assetsLayerActive || !areasLayerActive) return
+    if (contextKey === lastContextKeyRef.current) return
+
+    lastContextKeyRef.current = contextKey
+    setLoading(true)
+    startAreasOnlyViewportMode(context, loadGreenLayerViewport)
+    setGreenLayerVisible(true)
+    setLoading(false)
+  }, [
+    assetsLayerActive,
+    areasLayerActive,
+    contextKey,
+    context,
+    loadGreenLayerViewport,
+    setGreenLayerVisible,
+  ])
+
+  const setAssetsActive = useCallback(
     async (active: boolean) => {
       if (loading) return
       if (active) {
@@ -162,11 +225,52 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
         return
       }
       if (!assetsLayerActive) return
-      // Manual toggle keeps the user's zoom level: no fit-to-extent on restore.
-      await turnOffGreenLayer({ skipFit: true })
+      await turnOffAssetsLayer()
     },
-    [loading, assetsLayerActive, loadAssetsForContext, turnOffGreenLayer]
+    [loading, assetsLayerActive, loadAssetsForContext, turnOffAssetsLayer]
   )
 
-  return { loading, available: true, setActive }
+  const setAreasActive = useCallback(
+    async (active: boolean) => {
+      if (loading) return
+      if (active === areasLayerActive) return
+      onAreasLayerActiveChange(active)
+
+      if (assetsLayerActive) {
+        // Re-arm assets viewport: include/exclude companion areas.
+        setLoading(true)
+        startViewportMode(context, loadGreenLayerViewport, active)
+        setGreenLayerVisible(true)
+        lastContextKeyRef.current = contextKey
+        setLoading(false)
+        return
+      }
+
+      // Assets off: areas-only viewport or clear.
+      if (active) {
+        setLoading(true)
+        startAreasOnlyViewportMode(context, loadGreenLayerViewport)
+        setGreenLayerVisible(true)
+        lastContextKeyRef.current = contextKey
+        setLoading(false)
+        return
+      }
+      lastContextKeyRef.current = null
+      setGreenLayerVisible(false)
+      clearGreenLayer()
+    },
+    [
+      loading,
+      areasLayerActive,
+      assetsLayerActive,
+      onAreasLayerActiveChange,
+      context,
+      contextKey,
+      loadGreenLayerViewport,
+      setGreenLayerVisible,
+      clearGreenLayer,
+    ]
+  )
+
+  return { loading, available: true, setAssetsActive, setAreasActive }
 }

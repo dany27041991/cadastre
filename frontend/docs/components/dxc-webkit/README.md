@@ -26,7 +26,7 @@ Export principale: `dist/main.js` → `export * from './components'` e `export *
 | [Input e SearchInput](05-input-searchinput.md) | `Input`, `SearchInput`, `FormSearchInput`, `FoldableSearchInput` |
 | [Table](06-table.md) | `CustomTable`, `TableColumn`, `TableRow`, `TableAction`, paginazione |
 | [Badge, Spinner, Upload](07-badge-spinner-upload.md) | `Badge`, `Spinner`, `Upload` |
-| [Icone](08-icons.md) | `icons` (elenco e uso con `SVGRProps`) |
+| [Icone](08-icons.md) | `icons` (elenco e uso con `SVGRProps`) — [gallery PNG](./icons/README.md) |
 | [Accordion](10-accordion.md) | `Accordion`, `AccordionItem`, `AccordionHeader`, `AccordionBody` |
 | [Alert](11-alert.md) | `Alert` |
 | [Avatar](12-avatar.md) | `Avatar` |

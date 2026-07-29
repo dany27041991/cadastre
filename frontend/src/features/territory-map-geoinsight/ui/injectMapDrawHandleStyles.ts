@@ -44,6 +44,61 @@ const SINGLE_MAP_PANEL_CSS = `
     }
   `
 
+/**
+ * Soft primary frame around the active map canvas (2px — CU reference).
+ */
+const MAP_ACTIVE_BORDER_CSS = `
+    .mw-map-container,
+    .mw-map-container--active {
+      border: 2px solid rgb(64, 158, 255) !important;
+      outline: none !important;
+      box-shadow: none !important;
+      box-sizing: border-box !important;
+    }
+    .mw-viewer,
+    .mw-viewer-panel {
+      background: transparent !important;
+    }
+  `
+
+/**
+ * Default Geoinsight docks `.mw-panel-toolbar` beside the map and offsets
+ * `.mw-viewer-panel` with `left: 46px`. CU reference floats the toolbar over
+ * the map (inset + rounded), with the canvas full-bleed underneath.
+ */
+const FLOATING_TOOLBAR_CSS = `
+    .mw-viewer-panel {
+      left: 0 !important;
+      right: 0 !important;
+      top: 0 !important;
+      bottom: 0 !important;
+      width: 100% !important;
+    }
+    .mw-maps,
+    .mw-maps-item.siv-map-panel-active,
+    .mw-map-container,
+    .ol-viewport {
+      width: 100% !important;
+      left: 0 !important;
+    }
+    .mw-panel-toolbar {
+      left: 0.75rem !important;
+      top: 0.75rem !important;
+      bottom: auto !important;
+      height: auto !important;
+      max-height: calc(100% - 1.5rem) !important;
+      width: 48px !important;
+      border-radius: 12px !important;
+      z-index: 200 !important;
+    }
+    .mw-panel-toolbar .mw-toolbar {
+      height: auto !important;
+      max-height: none !important;
+    }
+  `
+
+const SHADOW_OVERRIDE_CSS = `${DRAW_HANDLE_CSS}\n${SINGLE_MAP_PANEL_CSS}\n${MAP_ACTIVE_BORDER_CSS}\n${FLOATING_TOOLBAR_CSS}`
+
 function scoreMapPanel(item: Element): number {
   const canvas = item.querySelector('.ol-viewport canvas')
   if (!canvas) return 0
@@ -71,12 +126,13 @@ function pickActiveMapPanel(items: Element[]): Element | null {
 }
 
 function injectShadowStyles(root: ShadowRoot): void {
-  if (!root.getElementById(STYLE_ID)) {
-    const style = document.createElement('style')
+  let style = root.getElementById(STYLE_ID) as HTMLStyleElement | null
+  if (!style) {
+    style = document.createElement('style')
     style.id = STYLE_ID
-    style.textContent = `${DRAW_HANDLE_CSS}\n${SINGLE_MAP_PANEL_CSS}`
     root.appendChild(style)
   }
+  style.textContent = SHADOW_OVERRIDE_CSS
 }
 
 /**

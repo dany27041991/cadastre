@@ -70,6 +70,11 @@ export interface UseTerritoryNavigationOptions {
    * the viewport cluster layer with area polygons (that race killed clusters).
    */
   isAssetsLayerActive?: () => boolean
+  /**
+   * When false, drill-down must not mount green-area polygons (Aree Gestite off).
+   * Defaults to true when omitted — preserves prior behaviour.
+   */
+  isAreasLayerActive?: () => boolean
 }
 
 export interface TerritoryNavigationState {

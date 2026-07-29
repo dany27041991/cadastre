@@ -36,12 +36,17 @@ export function TerritoryMapWidget() {
   const map = useGeoinsightMapBridge()
   const mapBridge = useTerritoryMapBridge(map)
   const [greenAssetsLayerActive, setGreenAssetsLayerActive] = useState(false)
+  /** Default off: both layer toggles start disabled. */
+  const [greenAreasLayerActive, setGreenAreasLayerActive] = useState(false)
   const greenAssetsLayerActiveRef = useRef(greenAssetsLayerActive)
   greenAssetsLayerActiveRef.current = greenAssetsLayerActive
+  const greenAreasLayerActiveRef = useRef(greenAreasLayerActive)
+  greenAreasLayerActiveRef.current = greenAreasLayerActive
   const nav = useTerritoryNavigation(mapBridge, {
     api: territoryApi,
     t,
     isAssetsLayerActive: () => greenAssetsLayerActiveRef.current,
+    isAreasLayerActive: () => greenAreasLayerActiveRef.current,
   })
 
   useTerritoryMapFeatureSelect({ map, handleFeatureSelect: nav.handleFeatureSelect })
@@ -144,28 +149,39 @@ export function TerritoryMapWidget() {
     onBeforeLoadingAssets,
     assetsLayerActive: greenAssetsLayerActive,
     onAssetsLayerActiveChange: setGreenAssetsLayerActive,
+    areasLayerActive: greenAreasLayerActive,
+    onAreasLayerActiveChange: setGreenAreasLayerActive,
   })
 
-  const setActiveRef = useRef(greenAssetsLayer.setActive)
-  setActiveRef.current = greenAssetsLayer.setActive
+  const setAssetsActiveRef = useRef(greenAssetsLayer.setAssetsActive)
+  setAssetsActiveRef.current = greenAssetsLayer.setAssetsActive
+  const setAreasActiveRef = useRef(greenAssetsLayer.setAreasActive)
+  setAreasActiveRef.current = greenAssetsLayer.setAreasActive
 
-  const stableSetActive = useCallback((active: boolean) => {
-    void setActiveRef.current(active)
+  const stableSetAssetsActive = useCallback((active: boolean) => {
+    void setAssetsActiveRef.current(active)
+  }, [])
+  const stableSetAreasActive = useCallback((active: boolean) => {
+    void setAreasActiveRef.current(active)
   }, [])
 
   useEffect(() => {
     registerGreenAssetsLayer({
       active: greenAssetsLayerActive,
+      areasActive: greenAreasLayerActive,
       loading: greenAssetsLayer.loading,
       available: greenAssetsLayer.available,
-      setActive: stableSetActive,
+      setActive: stableSetAssetsActive,
+      setAreasActive: stableSetAreasActive,
     })
     return () => registerGreenAssetsLayer(null)
   }, [
     greenAssetsLayerActive,
+    greenAreasLayerActive,
     greenAssetsLayer.loading,
     greenAssetsLayer.available,
-    stableSetActive,
+    stableSetAssetsActive,
+    stableSetAreasActive,
     registerGreenAssetsLayer,
   ])
 

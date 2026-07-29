@@ -17,10 +17,14 @@ import {
 import { isGreenTableIdColumn } from '../lib/greenTableColumnVisibility'
 
 export interface GreenAssetsLayerControls {
+  /** Assets Verdi toggle (viewport clusters / raw assets). */
   readonly active: boolean
+  /** Aree Gestite toggle (green-area polygons; zoom-gated in viewport mode). */
+  readonly areasActive: boolean
   readonly loading: boolean
   readonly available: boolean
   readonly setActive: (active: boolean) => void | Promise<void>
+  readonly setAreasActive: (active: boolean) => void | Promise<void>
 }
 
 export interface GreenTablePanelContextValue {
@@ -61,9 +65,11 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
       if (
         prev != null &&
         prev.active === controls.active &&
+        prev.areasActive === controls.areasActive &&
         prev.loading === controls.loading &&
         prev.available === controls.available &&
-        prev.setActive === controls.setActive
+        prev.setActive === controls.setActive &&
+        prev.setAreasActive === controls.setAreasActive
       ) {
         return prev
       }

@@ -1,7 +1,9 @@
 /**
  * Map focus wrapper — cu1.5 FocusContainerMap (layout + z-index; draw overlay when focus enabled).
+ * Chrome uses only dxc-webkit `Box` (Geoinsight `map-widget` remains the map engine).
  */
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
+import { Box } from 'dxc-webkit'
 import { useGeoinsightStore } from '@/app/store/useGeoinsightStore'
 import {
   GEOINSIGHT_MAP_Z_INDEX,
@@ -11,15 +13,6 @@ import {
 
 interface GeoinsightFocusContainerProps {
   readonly children: ReactNode
-}
-
-const mapShellStyle: CSSProperties = {
-  position: 'absolute',
-  inset: 0,
-  width: '100%',
-  height: '100%',
-  minHeight: 0,
-  overflow: 'hidden',
 }
 
 export function GeoinsightFocusContainer({ children }: GeoinsightFocusContainerProps) {
@@ -41,10 +34,25 @@ export function GeoinsightFocusContainer({ children }: GeoinsightFocusContainerP
     mapWidgetRef.current.style.zIndex = mapStackZIndex
   }, [mapStackZIndex])
 
+  // Match cu1.5 FocusContainerMap: fill the map slot without an extra absolute
+  // shell that breaks map-widget's internal toolbar layout.
+  const mapContainerStyle: CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    width: '100%',
+    height: '100%',
+    minHeight: 0,
+    backgroundColor: 'inherit',
+    padding: 0,
+    overflow: 'hidden',
+    zIndex: mapStackZIndex,
+  }
+
   return (
     <>
       {mapFocus && (
-        <div
+        <Box
+          as="div"
           role="presentation"
           aria-hidden
           style={{
@@ -59,23 +67,15 @@ export function GeoinsightFocusContainer({ children }: GeoinsightFocusContainerP
         />
       )}
 
-      <div
+      <Box
+        as="div"
         role="region"
         aria-label="Map view"
         className="col"
-        style={{
-          position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
-          backgroundColor: 'inherit',
-          padding: 0,
-          overflow: 'hidden',
-          zIndex: mapStackZIndex,
-        }}
+        style={mapContainerStyle}
       >
-        <div style={mapShellStyle}>{children}</div>
-      </div>
+        {children}
+      </Box>
     </>
   )
 }

@@ -1,6 +1,6 @@
 /**
  * Shared UI building blocks on dxc-webkit.
- * Aligned with cu1.5-fe-MVP3-local for consistency across the MASE ecosystem.
+ * Aligned with cu1.5-fe SelezionaAOI / ui-components for visual parity.
  */
 import { Box, Loader, icons } from "dxc-webkit";
 import type { FC } from "react";
@@ -29,6 +29,13 @@ export interface ButtonProps {
   style?: React.CSSProperties;
   danger?: boolean;
   disabled?: boolean;
+  /** Selected look (same as hover / filled primary). */
+  selected?: boolean;
+  right?: React.ReactNode;
+  /** Icon size token (dxc: xs=24px, sm=32px). Default xs. */
+  iconSize?: "xs" | "sm" | "md" | "lg" | "xl" | "auto";
+  /** stroke = outline icons; fill = silhouettes (e.g. UnitaAmministrativeIcon). */
+  iconPaint?: "stroke" | "fill";
 }
 
 export const Button: FC<ButtonProps> = ({
@@ -36,31 +43,48 @@ export const Button: FC<ButtonProps> = ({
   iconName,
   onClick,
   disabled,
+  selected,
+  right,
+  iconSize = "xs",
+  iconPaint = "stroke",
 }) => {
   const IconComponent = icons[iconName];
+  const paint = selected ? "white" : "primary";
   return (
     <Box
       as="div"
-      className={`ui-components-button my-2 ${disabled ? "my-disabled" : ""}`}
-      onClick={onClick}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+      }}
+      className={`ui-components-button my-2${disabled ? " my-disabled" : ""}${selected ? " is-selected" : ""}${iconPaint === "fill" ? " ui-components-button--fill-icon" : ""}`}
+      onClick={disabled ? undefined : onClick}
       role="button"
+      aria-pressed={selected}
       tabIndex={disabled ? -1 : 0}
       onKeyDown={(e) => e.key === "Enter" && !disabled && onClick?.()}
     >
-      {IconComponent && (
-        <span
-          className={disabled ? "my-disabled" : ""}
-          style={{ marginRight: "12px", marginTop: "-12px" }}
-        >
-          <IconComponent
-            className={disabled ? "my-disabled" : ""}
-            color="primary"
-            size="xs"
-            title={title}
-          />
-        </span>
-      )}
-      {title}
+      <Box
+        as="div"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "1rem",
+        }}
+      >
+        {IconComponent && (
+          <span className="ui-components-button__icon" style={{ display: "inline-flex", flexShrink: 0 }}>
+            {iconPaint === "fill" ? (
+              <IconComponent fill={paint} stroke="transparent" size={iconSize} title={title} />
+            ) : (
+              <IconComponent stroke={paint} fill="transparent" size={iconSize} title={title} />
+            )}
+          </span>
+        )}
+        {title}
+      </Box>
+      {right}
     </Box>
   );
 };
@@ -71,16 +95,29 @@ export const ButtonInv: FC<ButtonProps> = ({
   onClick,
   style,
   danger,
+  disabled,
 }) => {
   const IconComponent = icons[iconName];
   const className = danger
     ? "ui-components-button-danger"
     : "ui-components-button-inv";
   return (
-    <Box as="div" style={style} className={`${className} my-2`} onClick={onClick}>
+    <Box
+      as="div"
+      style={{
+        ...style,
+        opacity: disabled ? 0.45 : 1,
+        pointerEvents: disabled ? "none" : "auto",
+        cursor: disabled ? "default" : "pointer",
+      }}
+      className={`${className} my-2`}
+      onClick={disabled ? undefined : onClick}
+      aria-disabled={disabled}
+      tabIndex={disabled ? -1 : 0}
+    >
       {IconComponent && (
         <span style={{ marginRight: "12px", marginTop: "-12px" }}>
-          <IconComponent color="white" size="xs" title={title} />
+          <IconComponent stroke="white" size="xs" title={title} />
         </span>
       )}
       {title}

@@ -14,16 +14,10 @@ body {
   flex-direction: column;
 }
 
-/* Geoinsight bundle assumes MASE shell header offset; reset in standalone Vite dev. */
-[aria-label='Map view'] > div > div,
-[aria-label='Map view'] > div > div > div {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-}
-
+/* Geoinsight fills the map slot. Do not force absolute on nested wrappers:
+   that collapses the vendor flex shell and pushes the Geoinsight toolbar
+   (layers/tools sidebar) outside the map canvas (cu1.5 FocusContainerMap
+   only sizes the outer slot; chrome stays inside map-widget). */
 map-widget {
   display: block !important;
   margin-top: 0 !important;
@@ -54,6 +48,164 @@ map-widget {
 .accordion-detail-results .accordion-header .accordion-button svg {
   stroke: var(--primary) !important;
   fill: transparent;
+}
+
+/* InfoPanel host: default horizontal size (no forced rem width) */
+.cadastre-info-panel-host {
+  width: fit-content;
+  min-width: 20rem;
+  max-width: min(28rem, 40vw);
+}
+.cadastre-info-panel-host .Container-all {
+  width: 100%;
+  min-width: 20rem;
+  height: 100%;
+}
+
+/* Footer: Indietro / Avanti always at opposite extremes */
+.Container-button .btn-page-prev-next {
+  width: 100%;
+  justify-content: space-between;
+}
+
+/* cu1.5-fe shared AOI menu buttons (ui-components.css) */
+.ui-components-button {
+  background-color: var(--white);
+  padding: 12px;
+  border-radius: 5px;
+  color: var(--text-primary);
+  font-style: normal;
+  font-weight: 600;
+  line-height: 130%;
+  font-family: "Titillium Web", sans-serif;
+  cursor: pointer;
+}
+.ui-components-button__icon svg {
+  display: block;
+}
+.ui-components-button-danger {
+  border: 2px solid #c91010;
+  background-color: white;
+  padding: 12px;
+  border-radius: 5px;
+  color: #c91010;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 130%;
+  font-family: "Titillium Web", sans-serif;
+  cursor: pointer;
+}
+.ui-components-button-danger svg {
+  stroke: #c91010 !important;
+}
+.ui-components-button:hover,
+.ui-components-button.is-selected {
+  background-color: var(--primary);
+  color: var(--text-white);
+}
+.ui-components-button:hover svg,
+.ui-components-button.is-selected svg {
+  stroke: var(--text-white) !important;
+}
+.ui-components-button--fill-icon:hover svg,
+.ui-components-button--fill-icon.is-selected svg {
+  fill: var(--text-white) !important;
+  stroke: transparent !important;
+}
+.ui-components-button-inv {
+  background-color: var(--primary);
+  padding: 12px;
+  border-radius: 5px;
+  color: var(--text-white);
+  font-style: normal;
+  font-weight: 600;
+  line-height: 130%;
+  font-family: "Titillium Web", sans-serif;
+  cursor: pointer;
+}
+.ui-components-button-inv:hover {
+  background-color: var(--white);
+  color: var(--primary);
+  outline: 2px solid var(--primary);
+}
+.ui-components-button-inv svg {
+  stroke: var(--text-white) !important;
+}
+.ui-components-button-inv:hover svg {
+  stroke: var(--text-primary) !important;
+}
+.ui-components-button.my-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Monitoraggio: dxc ListItem colors/spacing match CU screenshot */
+.monitoraggio-panel__description {
+  margin-top: 1rem;
+  margin-bottom: 1.75rem;
+}
+.monitoraggio-panel__list {
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.monitoraggio-panel .list-item {
+  justify-content: flex-start;
+  border-bottom: none;
+  padding: 0.85rem 0.25rem 0.85rem 1.25rem;
+  gap: 1rem;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.monitoraggio-panel .list-item .label {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.monitoraggio-panel .list-item svg.icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.monitoraggio-panel .list-item:hover {
+  background: transparent;
+  border-bottom: none;
+  color: var(--text-primary);
+}
+.monitoraggio-panel .list-item:hover .label {
+  color: var(--text-primary);
+}
+.monitoraggio-panel .list-item:hover svg {
+  stroke: var(--primary) !important;
+}
+/* Highlight only when selected (isActive) — not on :focus/:active leftover */
+.monitoraggio-panel .list-item:focus,
+.monitoraggio-panel .list-item:focus:not(.focus--mouse),
+.monitoraggio-panel .list-item:active {
+  background: transparent;
+  box-shadow: none !important;
+  outline: none;
+}
+.monitoraggio-panel .list-item.active {
+  background: var(--primary-lighter);
+  border-radius: 5px;
+  box-shadow: none !important;
+}
+.monitoraggio-panel .list-item.active:focus,
+.monitoraggio-panel .list-item.active:focus:not(.focus--mouse),
+.monitoraggio-panel .list-item.active:active {
+  background: var(--primary-lighter);
+}
+.monitoraggio-panel .list-item.active .label {
+  color: var(--text-primary);
+  font-weight: 600 !important;
+}
+
+/* Sidebar: tighten gap between section title (Menù / Dashboard) and items */
+.sidebar-section hr {
+  margin-top: 0.15rem !important;
+  margin-bottom: 0.25rem !important;
 }
 
 /* Sidebar: background fills available height */

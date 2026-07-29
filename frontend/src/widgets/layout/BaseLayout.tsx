@@ -1,11 +1,14 @@
 /**
- * Main shell using dxc-webkit grid: Box, Row, Col (no custom CSS).
- * Sidebar, optional InfoPanel, main (breadcrumb + content); collapsing sidebar narrows sidebar column and widens main.
+ * Main shell using dxc-webkit layout primitives.
+ * Sidebar width follows cu1.5-fe (85px collapsed / 330px expanded); InfoPanel uses
+ * its default horizontal sizing (no forced rem width); main fills the rest.
  */
 import type { ReactNode } from 'react'
-import { Box, Row, Col } from 'dxc-webkit'
+import { Box } from 'dxc-webkit'
 
-const INFO_PANEL_WIDTH = '22rem'
+/** Match cu1.5-fe shared/components/sidebar/Sidebar.tsx */
+const SIDEBAR_WIDTH_EXPANDED = '330px'
+const SIDEBAR_WIDTH_COLLAPSED = '85px'
 
 export interface BaseLayoutProps {
   readonly sidebar: ReactNode
@@ -15,9 +18,14 @@ export interface BaseLayoutProps {
   readonly isSidebarCollapsed?: boolean
 }
 
-export function BaseLayout({ sidebar, breadcrumb, children, infoPanel, isSidebarCollapsed = false }: BaseLayoutProps) {
-  const sidebarCols = isSidebarCollapsed ? '1' : '2'
-  const mainCols = isSidebarCollapsed ? '11' : '10'
+export function BaseLayout({
+  sidebar,
+  breadcrumb,
+  children,
+  infoPanel,
+  isSidebarCollapsed = false,
+}: BaseLayoutProps) {
+  const sidebarWidth = isSidebarCollapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED
 
   return (
     <Box
@@ -25,61 +33,53 @@ export function BaseLayout({ sidebar, breadcrumb, children, infoPanel, isSidebar
       display="flex"
       style={{ height: '100%', minHeight: '100vh', overflow: 'hidden' }}
     >
-      <Row
-        align="stretch"
-        className="g-0"
+      <Box
+        as="div"
+        display="flex"
         style={{
           width: '100%',
           height: '100%',
-          margin: 0,
           flex: 1,
           minWidth: 0,
-          flexWrap: infoPanel ? 'nowrap' : undefined,
+          overflow: 'hidden',
         }}
       >
-        <Col
-          xs={sidebarCols}
-          md={sidebarCols}
-          lg={sidebarCols}
+        <Box
+          as="aside"
           style={{
+            width: sidebarWidth,
+            minWidth: sidebarWidth,
+            maxWidth: sidebarWidth,
             height: '100%',
             position: 'relative',
             zIndex: 2,
             flexShrink: 0,
-            paddingLeft: 0,
-            paddingRight: 0,
+            overflow: 'hidden',
           }}
         >
           {sidebar}
-        </Col>
+        </Box>
         {infoPanel != null && (
-          <Col
+          <Box
+            as="div"
+            className="cadastre-info-panel-host"
             style={{
-              width: INFO_PANEL_WIDTH,
-              minWidth: INFO_PANEL_WIDTH,
-              maxWidth: INFO_PANEL_WIDTH,
               height: '100%',
               flexShrink: 0,
-              paddingLeft: 0,
-              paddingRight: 0,
               overflow: 'hidden',
             }}
           >
             {infoPanel}
-          </Col>
+          </Box>
         )}
-        <Col
-          xs={mainCols}
-          md={mainCols}
-          lg={mainCols}
+        <Box
+          as="div"
           display="flex"
           flexDirection="column"
           style={{
-            flex: infoPanel ? '1 1 0' : undefined,
+            flex: '1 1 0',
             minWidth: 0,
             overflow: 'hidden',
-            paddingLeft: 0,
-            paddingRight: 0,
           }}
         >
           <Box
@@ -88,11 +88,7 @@ export function BaseLayout({ sidebar, breadcrumb, children, infoPanel, isSidebar
             flexDirection="column"
             style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'hidden' }}
           >
-            <Box
-              as="header"
-              aria-label="Breadcrumb"
-              style={{ flexShrink: 0 }}
-            >
+            <Box as="header" aria-label="Breadcrumb" style={{ flexShrink: 0 }}>
               {breadcrumb}
             </Box>
             <Box
@@ -105,8 +101,8 @@ export function BaseLayout({ sidebar, breadcrumb, children, infoPanel, isSidebar
               {children}
             </Box>
           </Box>
-        </Col>
-      </Row>
+        </Box>
+      </Box>
     </Box>
   )
 }

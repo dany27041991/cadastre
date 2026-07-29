@@ -19,6 +19,19 @@
     },
     "panel": {
       "infoPanelSubtitle": "Pannello opzioni",
+      "monitoraggio": {
+        "title": "Monitoraggio",
+        "description": "Da questa schermata potrai selezionare il tipo di visualizzazione da applicare alla mappa",
+        "areaItalia": "Area Italia",
+        "drawOnMap": "Disegna su mappa",
+        "uploadFile": "Carica da file",
+        "searchManagedAreas": "Cerca aree gestite",
+        "searchGreenAssets": "Cerca asset verdi"
+      },
+      "layersTitle": "Aree gestite e Assets verdi",
+      "layersDescription": "Applica i layer per consultare le aree censite e gli assets verdi sulla mappa.",
+      "btnBack": "Indietro",
+      "btnForward": "Avanti",
       "legacyFiltersSection": "Altri filtri",
       "sectionTableManagement": "Gestione tabella",
       "sectionTableManagementSub": "Attiva o disattiva le colonne aggiuntive rispetto alle cinque predefinite.",
@@ -33,7 +46,9 @@
       "noOptionalColumns": "Nessuna colonna aggiuntiva disponibile.",
       "tableContextHint": "Apri la navigazione fino alle aree verdi per gestire colonne e filtri della tabella.",
       "managedAreasToggle": "Aree Gestite",
-      "greenAssetsToggle": "Assets Verdi"
+      "managedAreasToggleHelp": "Mostra le aree sulla mappa (oltre una soglia di zoom).",
+      "greenAssetsToggle": "Assets Verdi",
+      "greenAssetsToggleHelp": "Mostra alberi e altri assets verdi sulla mappa."
     },
     "table": {
       "booleanYes": "Sì",

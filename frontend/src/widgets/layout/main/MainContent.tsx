@@ -4,7 +4,7 @@
 import { useState, useCallback, useEffect, type ReactNode } from 'react'
 import { MAP_UI_OVERLAY_Z_INDEX } from '@/features/territory-map-geoinsight/ui/geoinsightMapStyle'
 import { useTranslation } from 'react-i18next'
-import { Box, Accordion, AccordionItem, AccordionHeader, AccordionBody } from 'dxc-webkit'
+import { Box, Accordion, AccordionItem, AccordionHeader, AccordionBody, Text } from 'dxc-webkit'
 import { MapBreadcrumbs, type MapBreadcrumbsProps } from '@/features/territory'
 import { GreenDataTable } from '@/features/territory/ui/green-data-table/GreenDataTable'
 import { LoadingOverlay } from '@/features/territory/ui/loading-overlay/LoadingOverlay'
@@ -79,9 +79,6 @@ export function MainContent({
       >
         <Box
           as="div"
-          border="border"
-          borderColor="primary"
-          borderThickness={3}
           style={{
             position: 'absolute',
             inset: 0,
@@ -111,7 +108,8 @@ export function MainContent({
             style={{
               position: 'absolute',
               bottom: 0,
-              left: '1rem',
+              // Clear floating Geoinsight toolbar (~48px + 0.75rem inset) + gap
+              left: 'calc(48px + 1.5rem)',
               right: '1rem',
               backgroundColor: 'white',
               zIndex: MAP_UI_OVERLAY_Z_INDEX,
@@ -126,7 +124,9 @@ export function MainContent({
                 labelShowMore={t('territory.accordion.showMore')}
                 labelShowLess={t('territory.accordion.showLess')}
               >
-                <span style={{ color: 'var(--primary)' }}>{accordionTitle}</span>
+                <Text as="span" color="primary">
+                  {accordionTitle}
+                </Text>
               </AccordionHeader>
               <AccordionBody
                 accordionId="green-data"

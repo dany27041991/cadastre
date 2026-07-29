@@ -6,7 +6,7 @@ import { Geoinsight, useRefGeoinsight } from '@mase/commons-geoinsight'
 import { geoinsightConfig } from '@/app/config/geoinsight'
 import { useGeoinsightStore } from '@/app/store/useGeoinsightStore'
 import { useTranslation } from 'react-i18next'
-import { Loader, Text } from 'dxc-webkit'
+import { Box, Loader, Text } from 'dxc-webkit'
 import { parseZoomFromCenterScale } from '../model/parseMapZoom'
 
 import { createGeoinsightMapStyle } from './geoinsightMapStyle'
@@ -61,34 +61,33 @@ function GreenViewportLoadingBadge() {
 
   if (!visible) return null
   return (
-    <div
+    <Box
+      as="div"
       role="status"
       aria-live="polite"
+      display="flex"
+      flexDirection="column"
+      align="center"
+      justify="center"
       style={{
         position: 'absolute',
         inset: 0,
         zIndex: 15,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
         gap: '0.75rem',
         pointerEvents: 'none',
       }}
     >
-      <div
+      <Box
+        as="div"
+        display="flex"
+        flexDirection="column"
+        align="center"
+        justify="center"
         style={{
-          // The injected map-shell CSS ([aria-label="Map view"] > div > div > div)
-          // forces absolute inset-0 full-size on nested divs; opt this pill out so
-          // it stays content-sized and vertically centered.
           position: 'relative',
           inset: 'auto',
           width: 'auto',
           height: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
           gap: '0.75rem',
           padding: '1.25rem 1.75rem',
           background: 'rgba(212, 237, 218, 0.85)',
@@ -106,8 +105,8 @@ function GreenViewportLoadingBadge() {
         <Text font="f1-body-md" style={{ fontWeight: 600, color: 'var(--success)' }}>
           {t('territory.loading')}
         </Text>
-      </div>
-    </div>
+      </Box>
+    </Box>
   )
 }
 

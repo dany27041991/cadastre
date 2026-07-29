@@ -129,6 +129,7 @@ export function useTerritoryNavigation(
   const api = options.api
   const t = options.t
   const isAssetsLayerActive = options.isAssetsLayerActive
+  const isAreasLayerActive = options.isAreasLayerActive
   const labelGreenAreas = t ? t(I18N_KEYS.greenAreas) : LABEL_GREEN_AREAS
   const suffixProvince = t ? t(I18N_KEYS.provinceSuffix) : SUFFIX_PROVINCE
   const [level, setLevel] = useState<TerritoryLevel>('regions')
@@ -139,6 +140,8 @@ export function useTerritoryNavigation(
   const navigateInProgressRef = useRef(false)
   const assetsActiveRef = useRef(isAssetsLayerActive)
   assetsActiveRef.current = isAssetsLayerActive
+  const areasActiveRef = useRef(isAreasLayerActive)
+  areasActiveRef.current = isAreasLayerActive
 
   const levelFetchers = useMemo(
     () => (api ? createLevelFetchers(api) : {}),
@@ -172,6 +175,16 @@ export function useTerritoryNavigation(
       geojson: Parameters<MapBridge['loadGreenLayer']>[0],
       options?: { includeTerritoryBbox?: boolean }
     ) => {
+      const areasOn = areasActiveRef.current?.() ?? true
+      const assetsOn = assetsActiveRef.current?.() ?? false
+      if (!areasOn) {
+        // Aree Gestite off: do not mount drill-down polygons.
+        if (!assetsOn) {
+          bridgeRef.current.clearGreenLayer()
+          bridgeRef.current.setGreenLayerVisible(false)
+        }
+        return
+      }
       bridgeRef.current.setTerritoryFillVisible(false)
       bridgeRef.current.loadGreenLayer(geojson, { skipFit: true })
       bridgeRef.current.setGreenLayerVisibleWhenMoveEnds()
@@ -183,6 +196,15 @@ export function useTerritoryNavigation(
 
   const showLeafAreaFromFeature = useCallback(
     (feat: TerritoryMapFeature, options?: { includeTerritoryBbox?: boolean }) => {
+      const areasOn = areasActiveRef.current?.() ?? true
+      const assetsOn = assetsActiveRef.current?.() ?? false
+      if (!areasOn) {
+        if (!assetsOn) {
+          bridgeRef.current.clearGreenLayer()
+          bridgeRef.current.setGreenLayerVisible(false)
+        }
+        return
+      }
       bridgeRef.current.loadGreenLayerFromFeature(feat)
       bridgeRef.current.setTerritoryFillVisible(false)
       bridgeRef.current.setGreenLayerVisible(true)

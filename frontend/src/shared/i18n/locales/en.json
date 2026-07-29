@@ -19,6 +19,19 @@
     },
     "panel": {
       "infoPanelSubtitle": "Options panel",
+      "monitoraggio": {
+        "title": "Monitoring",
+        "description": "From this screen you can select the visualization type to apply to the map",
+        "areaItalia": "Italy area",
+        "drawOnMap": "Draw on map",
+        "uploadFile": "Upload from file",
+        "searchManagedAreas": "Search managed areas",
+        "searchGreenAssets": "Search green assets"
+      },
+      "layersTitle": "Managed areas and green assets",
+      "layersDescription": "Toggle layers to explore managed areas and green assets on the map.",
+      "btnBack": "Back",
+      "btnForward": "Next",
       "legacyFiltersSection": "Additional filters",
       "sectionTableManagement": "Table management",
       "sectionTableManagementSub": "Show or hide columns in addition to the five default columns.",
@@ -33,7 +46,9 @@
       "noOptionalColumns": "No extra columns available.",
       "tableContextHint": "Navigate to green areas to manage table columns and filters.",
       "managedAreasToggle": "Managed areas",
-      "greenAssetsToggle": "Green assets"
+      "managedAreasToggleHelp": "Shows areas on the map (above a zoom threshold).",
+      "greenAssetsToggle": "Green assets",
+      "greenAssetsToggleHelp": "Shows trees and other green assets on the map."
     },
     "table": {
       "booleanYes": "Yes",
