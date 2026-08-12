@@ -15,8 +15,13 @@ export type MonitoraggioActionId =
 type IconComponent = (typeof icons)[keyof typeof icons]
 
 /** Italy silhouette uses fill paths; ListItem only passes stroke. */
-const AreaItaliaIcon: FC<{ stroke?: string; title?: string }> = ({ stroke, title }) => (
+const AreaItaliaIcon: FC<{ stroke?: string; title?: string; className?: string }> = ({
+  stroke,
+  title,
+  className,
+}) => (
   <icons.UnitaAmministrativeIcon
+    className={['monitoraggio-icon--fill', className].filter(Boolean).join(' ')}
     fill={stroke === 'disabled' ? 'disabled' : 'primary'}
     stroke="transparent"
     size="xs"
@@ -64,15 +69,19 @@ type MonitoraggioPanelProps = {
   onClearSelection: () => void
 }
 
+function blurFocusedListItem() {
+  const focused = document.activeElement
+  if (focused instanceof HTMLElement && focused.classList.contains('list-item')) {
+    focused.blur()
+  }
+}
+
 export function MonitoraggioPanel({ selectedId, onSelect, onClearSelection }: MonitoraggioPanelProps) {
   const { t } = useTranslation()
 
   const clearSelection = () => {
     onClearSelection()
-    const focused = document.activeElement
-    if (focused instanceof HTMLElement && focused.classList.contains('list-item')) {
-      focused.blur()
-    }
+    blurFocusedListItem()
   }
 
   return (
@@ -101,7 +110,11 @@ export function MonitoraggioPanel({ selectedId, onSelect, onClearSelection }: Mo
         {t('territory.panel.monitoraggio.description')}
       </Text>
 
-      <List className="monitoraggio-panel__list" label={t('territory.panel.monitoraggio.title')}>
+      <List
+        className="monitoraggio-panel__list"
+        label={t('territory.panel.monitoraggio.title')}
+        onClick={(e) => e.stopPropagation()}
+      >
         {ACTIONS.map((action) => (
           <ListItem
             key={action.id}
@@ -111,6 +124,8 @@ export function MonitoraggioPanel({ selectedId, onSelect, onClearSelection }: Mo
             onClick={(e) => {
               e.stopPropagation()
               onSelect(action.id)
+              // Keep selection highlight, drop keyboard/mouse focus styling
+              ;(e.currentTarget as HTMLElement).blur()
             }}
           />
         ))}

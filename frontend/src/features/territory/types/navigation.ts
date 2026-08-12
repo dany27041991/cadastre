@@ -6,6 +6,7 @@ import type { GeoJSONFeatureCollection } from '@/shared/types'
 import type { TerritoryNavigationApi } from './api'
 import type { TerritoryLevel, BreadcrumbCrumb } from './territory'
 import type { TerritoryMapFeature } from './mapFeature'
+import type { MapLayerKind } from '../model/constants'
 
 export interface MapBridgeGeo {
   loadGeoJson: (geojson: GeoJSONFeatureCollection) => void
@@ -18,6 +19,44 @@ export interface MapBridgeGeo {
 
 export interface MapBridgeFeature {
   showOnlyFeature: (feature: TerritoryMapFeature) => void
+  /**
+   * Pan map so lon/lat is at the viewport center, keeping current zoom.
+   * Used to frame green detail panel above the selected feature.
+   */
+  panToLonLatKeepZoom: (lon: number, lat: number) => void
+  /**
+   * Pan (keep zoom) so lon/lat lands at a map-viewport fraction (0–1).
+   * Green detail uses (0.5, 0.2) — horizontal center, 20% from top.
+   */
+  panToLonLatAtScreenFraction: (
+    lon: number,
+    lat: number,
+    fractionX?: number,
+    fractionY?: number
+  ) => void
+  /**
+   * Zoom to fit optional bbox and place lon/lat at a viewport fraction.
+   * Used when opening green detail so the selected object is framed under the panel.
+   */
+  zoomToLonLatAtScreenFraction: (
+    lon: number,
+    lat: number,
+    options?: {
+      bbox?: [number, number, number, number] | null
+      fractionX?: number
+      fractionY?: number
+      keepZoom?: boolean
+      forceMaxZoom?: boolean
+    }
+  ) => void
+  /** Red outline on the selected green feature while the detail modal is open. */
+  setGreenDetailHighlight: (
+    feature: TerritoryMapFeature,
+    options?: { preferAsset?: boolean }
+  ) => void
+  clearGreenDetailHighlight: () => void
+  /** Remove red selection without restoring the green clip (layer teardown). */
+  discardGreenDetailHighlight: () => void
 }
 
 export interface MapBridgeGreen {
@@ -84,7 +123,8 @@ export interface TerritoryNavigationState {
 }
 
 export interface TerritoryNavigationLoaders {
-  loadRegions: () => Promise<void>
+  /** @param options.fit when false, keep current zoom (Area Italia). Default true. */
+  loadRegions: (options?: { fit?: boolean }) => Promise<void>
   loadProvinces: (regionId: number, label: string) => Promise<void>
   loadMunicipalities: (provinceId: number, label: string) => Promise<void>
   loadSubMunicipalAreas: (
@@ -113,7 +153,14 @@ export interface TerritoryNavigationLoaders {
 export interface TerritoryNavigationActions {
   navigateTo: (index: number) => Promise<void>
   goBack: () => void
-  handleFeatureSelect: (id: number, label: string, feature?: unknown) => void
+  handleFeatureSelect: (
+    id: number,
+    label: string,
+    feature?: unknown,
+    layerKind?: MapLayerKind
+  ) => void
+  /** Drill into green area sub-areas (from detail modal CTA). */
+  drillGreenArea: (areaId: number, label: string, feature?: unknown) => void
 }
 
 export type UseTerritoryNavigationResult = TerritoryNavigationState &

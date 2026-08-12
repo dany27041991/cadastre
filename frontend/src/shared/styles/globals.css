@@ -167,6 +167,7 @@ map-widget {
   width: 24px;
   height: 24px;
   flex-shrink: 0;
+  stroke: var(--primary) !important;
 }
 .monitoraggio-panel .list-item:hover {
   background: transparent;
@@ -176,8 +177,20 @@ map-widget {
 .monitoraggio-panel .list-item:hover .label {
   color: var(--text-primary);
 }
-.monitoraggio-panel .list-item:hover svg {
+/* Icon color stays primary on hover / active / focus (never navy or white) */
+.monitoraggio-panel .list-item:hover svg,
+.monitoraggio-panel .list-item:active svg,
+.monitoraggio-panel .list-item:focus svg,
+.monitoraggio-panel .list-item.active svg,
+.monitoraggio-panel .list-item:focus:not(.focus--mouse) svg {
   stroke: var(--primary) !important;
+}
+.monitoraggio-panel .list-item svg.monitoraggio-icon--fill,
+.monitoraggio-panel .list-item:hover svg.monitoraggio-icon--fill,
+.monitoraggio-panel .list-item.active svg.monitoraggio-icon--fill,
+.monitoraggio-panel .list-item:focus svg.monitoraggio-icon--fill {
+  fill: var(--primary) !important;
+  stroke: transparent !important;
 }
 /* Highlight only when selected (isActive) — not on :focus/:active leftover */
 .monitoraggio-panel .list-item:focus,
@@ -200,6 +213,39 @@ map-widget {
 .monitoraggio-panel .list-item.active .label {
   color: var(--text-primary);
   font-weight: 600 !important;
+}
+
+/* Sidebar: menu item labels + icons in primary blue (default state) */
+.sidebar-light .sidebar-container .sidebar-item.item-label,
+.sidebar-light .sidebar-container .sidebar-item.f1-label-md,
+.sidebar-light .sidebar-container .sidebar-group-first-item {
+  color: var(--text-primary) !important;
+}
+.sidebar-light .sidebar-container .sidebar-item.item-label .icon,
+.sidebar-light .sidebar-container .sidebar-item.f1-label-md .icon,
+.sidebar-light .sidebar-container .sidebar-group-first-item .icon {
+  stroke: var(--primary) !important;
+}
+
+/* Sidebar focus/hover highlight — same as cu1.5 ui-components-button:hover */
+.sidebar-light .sidebar-container .sidebar-item:hover,
+.sidebar-light .sidebar-container .sidebar-item.sidebar-active,
+.sidebar-light .sidebar-container .sidebar-group-items-open .sidebar-item:hover,
+.sidebar-light .sidebar-container .sidebar-group-items-open .sidebar-item.sidebar-active {
+  background: var(--primary) !important;
+  color: var(--text-white) !important;
+}
+.sidebar-light .sidebar-container .sidebar-item:hover .icon,
+.sidebar-light .sidebar-container .sidebar-item.sidebar-active .icon,
+.sidebar-light .sidebar-container .sidebar-group-items-open .sidebar-item:hover .icon,
+.sidebar-light .sidebar-container .sidebar-group-items-open .sidebar-item.sidebar-active .icon {
+  stroke: var(--text-white) !important;
+  fill: transparent;
+}
+.sidebar-light .sidebar-container .sidebar-item:hover *,
+.sidebar-light .sidebar-container .sidebar-item.sidebar-active * {
+  background: var(--primary) !important;
+  color: var(--text-white) !important;
 }
 
 /* Sidebar: tighten gap between section title (Menù / Dashboard) and items */
@@ -231,41 +277,43 @@ map-widget {
   pointer-events: none;
 }
 
-/* Sidebar: hover on arrow or full row matches item hover background */
+/* Sidebar: hover on arrow or full row matches item hover background (cu1.5 primary).
+ * Color must use !important: default group label uses color !important (see above),
+ * otherwise hover on the expand arrow leaves white-on-light / invisible text. */
 .sidebar-light .sidebar-container .sidebar-group-first-item-container:hover .sidebar-group-first-item {
-  background: var(--background-primary-hover);
-  color: var(--text-white);
+  background: var(--primary) !important;
+  color: var(--text-white) !important;
 }
 .sidebar-light .sidebar-container .sidebar-group-first-item-container:hover .sidebar-group-first-item .icon,
 .sidebar-light .sidebar-container .sidebar-group-first-item-container:hover .sidebar-group-first-item * {
-  background: var(--background-primary-hover);
-  color: var(--text-white);
+  background: transparent !important;
+  color: var(--text-white) !important;
 }
 .sidebar-light .sidebar-container .sidebar-group-first-item-container:hover .sidebar-group-first-item .icon {
   stroke: var(--icon-white) !important;
   fill: transparent;
 }
 .sidebar-light .sidebar-container .sidebar-group-first-item-container:hover .sidebar-arrow-icon {
-  background: var(--background-primary-hover);
+  background: var(--primary) !important;
 }
 .sidebar-light .sidebar-container .sidebar-group-first-item-container:hover .sidebar-arrow-icon .icon {
   stroke: var(--icon-white) !important;
 }
 .sidebar-dark .sidebar-container .sidebar-group-first-item-container:hover .sidebar-group-first-item {
-  background: var(--primary);
-  color: var(--text-white);
+  background: var(--primary) !important;
+  color: var(--text-white) !important;
 }
 .sidebar-dark .sidebar-container .sidebar-group-first-item-container:hover .sidebar-group-first-item .icon,
 .sidebar-dark .sidebar-container .sidebar-group-first-item-container:hover .sidebar-group-first-item * {
-  background: var(--primary);
-  color: var(--text-white);
+  background: transparent !important;
+  color: var(--text-white) !important;
 }
 .sidebar-dark .sidebar-container .sidebar-group-first-item-container:hover .sidebar-group-first-item .icon {
   stroke: var(--icon-white) !important;
   fill: transparent;
 }
 .sidebar-dark .sidebar-container .sidebar-group-first-item-container:hover .sidebar-arrow-icon {
-  background: var(--primary);
+  background: var(--primary) !important;
 }
 .sidebar-dark .sidebar-container .sidebar-group-first-item-container:hover .sidebar-arrow-icon .icon {
   stroke: var(--icon-white) !important;

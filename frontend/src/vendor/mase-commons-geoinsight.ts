@@ -68,6 +68,13 @@ function geoinsightScriptUrl(): string {
 const GEOINSIGHT_TOC_LAYERS = '/core/api/geoinsight/v1/webgis/config/toc_layers'
 const GEOINSIGHT_SERVICES = '/core/api/geoinsight/v1/webgis/config/services'
 const ENV_JSON_PATH = '/portalediaccesso/env.json'
+const ENV_JSON_STORAGE_KEY = 'geoinsight:env.json'
+const ENV_JSON_FETCH_TIMEOUT_MS = 2_500
+
+const DEFAULT_ENV_JSON: EnvJson = {
+  baseContext: '/portalediaccesso',
+  geoinsight: { cesiumPath: '/commons/geoinsight' },
+}
 
 let modulePromise: Promise<GeoinsightModule> | null = null
 let resolvedModule: GeoinsightModule | null = null
@@ -138,16 +145,37 @@ async function geoinsightApiGet(
 
 async function loadEnvJson(): Promise<EnvJson> {
   if (envJson) return envJson
+
   try {
-    const response = await fetch(ENV_JSON_PATH, { credentials: 'include' })
+    const cached =
+      typeof sessionStorage !== 'undefined'
+        ? sessionStorage.getItem(ENV_JSON_STORAGE_KEY)
+        : null
+    if (cached) {
+      envJson = JSON.parse(cached) as EnvJson
+    }
+  } catch {
+    /* ignore corrupt cache */
+  }
+
+  try {
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => controller.abort(), ENV_JSON_FETCH_TIMEOUT_MS)
+    const response = await fetch(ENV_JSON_PATH, {
+      credentials: 'include',
+      signal: controller.signal,
+    })
+    window.clearTimeout(timer)
     if (!response.ok) throw new Error(String(response.status))
     envJson = (await response.json()) as EnvJson
+    try {
+      sessionStorage.setItem(ENV_JSON_STORAGE_KEY, JSON.stringify(envJson))
+    } catch {
+      /* quota / private mode */
+    }
   } catch (error) {
     console.warn('[geoinsight-loader] env.json unavailable, using defaults', error)
-    envJson = {
-      baseContext: '/portalediaccesso',
-      geoinsight: { cesiumPath: '/commons/geoinsight' },
-    }
+    if (!envJson) envJson = { ...DEFAULT_ENV_JSON }
   }
   return envJson
 }

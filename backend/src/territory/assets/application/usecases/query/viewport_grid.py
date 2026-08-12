@@ -31,7 +31,7 @@ RAW_MIN_ZOOM = 19.0
 # to clusters: hysteresis kept clusters on screen after a drill, hiding the
 # assets). The cap bounds what the map client can actually render: the vendor
 # canvas measured 0.5-1.5s frames above ~1000 mounted features and the mount
-# churn triggered multi-second Firefox GC pauses (debug session 4fe799).
+# churn triggered multi-second Firefox GC pauses.
 # 800 points already saturate a screen visually; denser synthetic seeds
 # (13k points in the Lecce test zone) cannot be drawn fluidly feature-by-feature.
 LAST_ZOOM_RAW_HARD_CAP = 800

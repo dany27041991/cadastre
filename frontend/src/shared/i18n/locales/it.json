@@ -12,8 +12,9 @@
     "loadingGreenLayer": "Caricamento layer verde",
     "loadingGreen": "Caricamento verde...",
     "accordion": {
-      "tableTitleAreas": "Tabella Aree Verdi",
-      "tableTitleTrees": "Tabella Alberi",
+      "tableTitleAreas": "Tabella aree gestite",
+      "tableTitleAssets": "Tabella assets verdi",
+      "tableTitleAreasAndAssets": "Tabella aree gestite e assets verdi",
       "showMore": "Mostra dettaglio",
       "showLess": "Nascondi dettaglio"
     },
@@ -48,7 +49,49 @@
       "managedAreasToggle": "Aree Gestite",
       "managedAreasToggleHelp": "Mostra le aree sulla mappa (oltre una soglia di zoom).",
       "greenAssetsToggle": "Assets Verdi",
-      "greenAssetsToggleHelp": "Mostra alberi e altri assets verdi sulla mappa."
+      "greenAssetsToggleHelp": "Mostra alberi e altri assets verdi sulla mappa.",
+      "detail": {
+        "titleAsset": "Dettaglio asset",
+        "titleArea": "Dettaglio area",
+        "close": "Chiudi",
+        "metadata": "METADATI",
+        "notFound": "Dettaglio non disponibile",
+        "error": "Errore nel caricamento del dettaglio",
+        "emptyMetadata": "Nessun metadato disponibile",
+        "summary": {
+          "tree": "Albero",
+          "area": "Area",
+          "region": "Regione",
+          "municipality": "Comune"
+        },
+        "meta": {
+          "asset_type": "Tipo asset",
+          "geometry_type": "Tipo geometria",
+          "family": "Famiglia",
+          "genus": "Genere",
+          "species": "Specie",
+          "variety": "Varietà",
+          "health_status": "Stato di salute",
+          "risk_level": "Livello di rischio",
+          "asset_status": "Stato asset",
+          "managing_entity": "Ente gestore",
+          "survey_date": "Data rilievo",
+          "growth_stage": "Stadio di crescita",
+          "protection_status": "Stato di protezione",
+          "name": "Nome",
+          "level": "Livello",
+          "zril_identifier": "Identificativo ZRIL",
+          "perimeter_type": "Tipo perimetro",
+          "administrative_status": "Stato amministrativo",
+          "operational_status": "Stato operativo",
+          "survey_status": "Stato rilievo",
+          "intensity_of_fruition": "Intensità di fruizione",
+          "start_date_of_management": "Inizio gestione",
+          "end_date_of_management": "Fine gestione"
+        },
+        "drillSubAreas": "Esplodi sottoaree",
+        "selectSubArea": "Seleziona sottoarea"
+      }
     },
     "table": {
       "booleanYes": "Sì",
@@ -58,6 +101,10 @@
       "detail": "Dettaglio",
       "edit": "Modifica",
       "remove": "Rimuovi",
+      "viewAssets": "Assets verdi",
+      "backToAreas": "Torna alle aree gestite",
+      "managedAreaNameLabel": "Nome area gestita",
+      "drillAreaAssetsHint": "Assets verdi dell'area selezionata",
       "emptyRows": "Nessuna riga per il contesto selezionato.",
       "goToPageLabel": "Pagina",
       "goToPageAria": "Numero pagina, da 1 a {{max}}",

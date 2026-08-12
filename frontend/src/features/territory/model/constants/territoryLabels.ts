@@ -21,7 +21,11 @@ export const I18N_KEYS = {
   regionIdRequired: 'errors.regionIdRequired',
 } as const
 
-/** Territory levels used in green context resolution (avoid magic strings). */
+/** Territory levels used in navigation / green context (avoid magic strings). */
+export const LEVEL_REGIONS = 'regions'
+export const LEVEL_PROVINCES = 'provinces'
+export const LEVEL_MUNICIPALITIES = 'municipalities'
+export const LEVEL_SUB_MUNICIPAL_AREAS = 'sub_municipal_areas'
 export const LEVEL_GREEN_AREAS = 'green_areas'
 export const LEVEL_SUB_AREAS = 'sub_areas'
 

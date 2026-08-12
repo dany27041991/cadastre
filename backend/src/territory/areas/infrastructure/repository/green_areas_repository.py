@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from typing import Any, Literal
 
@@ -98,6 +99,86 @@ class GreenAreasRepository:
     def __init__(self, session_factory: Callable[[], Session]) -> None:
         self._session_factory = session_factory
 
+    def get_by_pk(
+        self,
+        area_id: int,
+        region_id: int,
+        province_id: int,
+    ) -> dict[str, Any] | None:
+        """Load one green area by composite PK; excludes soft-deleted rows."""
+        ar = GreenAreaModel
+        stmt = (
+            select(ar)
+            .options(load_only(*_TABLE_LOAD_COLS, raiseload=True))
+            .where(ar.region_id == region_id)
+            .where(ar.province_id == province_id)
+            .where(ar.id == area_id)
+            .where(ar.deleted_at.is_(None))
+            .limit(1)
+        )
+        with self._session_factory() as session:
+            row = session.scalars(stmt).first()
+            if row is None:
+                return None
+            return orm_to_row_dict(ar, row, exclude=_TABLE_EXCLUDE_COLS)
+
+    def get_bbox_by_pk(
+        self,
+        area_id: int,
+        region_id: int,
+        province_id: int,
+    ) -> list[float] | None:
+        """WGS84 envelope [minLon, minLat, maxLon, maxLat] for map framing."""
+        ar = GreenAreaModel
+        env = func.ST_Envelope(ar.geometry)
+        stmt = (
+            select(
+                func.ST_XMin(env),
+                func.ST_YMin(env),
+                func.ST_XMax(env),
+                func.ST_YMax(env),
+            )
+            .where(ar.region_id == region_id)
+            .where(ar.province_id == province_id)
+            .where(ar.id == area_id)
+            .where(ar.deleted_at.is_(None))
+            .where(ar.geometry.isnot(None))
+            .limit(1)
+        )
+        with self._session_factory() as session:
+            row = session.execute(stmt).first()
+            if row is None or any(v is None for v in row):
+                return None
+            return [float(row[0]), float(row[1]), float(row[2]), float(row[3])]
+
+    def get_geometry_by_pk(
+        self,
+        area_id: int,
+        region_id: int,
+        province_id: int,
+    ) -> dict[str, Any] | None:
+        """WGS84 GeoJSON geometry for true-shape map highlight."""
+        ar = GreenAreaModel
+        stmt = (
+            select(func.ST_AsGeoJSON(ar.geometry).cast(JSON))
+            .where(ar.region_id == region_id)
+            .where(ar.province_id == province_id)
+            .where(ar.id == area_id)
+            .where(ar.deleted_at.is_(None))
+            .where(ar.geometry.isnot(None))
+            .limit(1)
+        )
+        with self._session_factory() as session:
+            raw = session.execute(stmt).scalar_one_or_none()
+            if raw is None:
+                return None
+            if isinstance(raw, dict):
+                return raw
+            if isinstance(raw, str):
+                parsed = json.loads(raw)
+                return parsed if isinstance(parsed, dict) else None
+            return None
+
     def _select_geojson(self):
         return select(
             GreenAreaModel.id,
@@ -106,6 +187,8 @@ class GreenAreasRepository:
             GreenAreaModel.level,
             GreenAreaModel.parent_id,
             GreenAreaModel.region_id,
+            GreenAreaModel.province_id,
+            GreenAreaModel.municipality_id,
         ).where(GreenAreaModel.geometry.isnot(None))
 
     def get_roots_in_bbox(
@@ -138,6 +221,8 @@ class GreenAreasRepository:
                 ar.level,
                 ar.parent_id,
                 ar.region_id,
+                ar.province_id,
+                ar.municipality_id,
             )
             .where(ar.geometry.isnot(None))
             .where(ar.parent_id.is_(None))

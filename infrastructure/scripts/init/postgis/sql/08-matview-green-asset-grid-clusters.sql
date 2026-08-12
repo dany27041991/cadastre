@@ -13,7 +13,7 @@
 -- re-aggregated (SUM/weighted avg) at query time.
 --
 -- A live grid aggregation measured 200-414ms per request on dense bboxes at
--- zoom 17-18 (debug session 4fe799); this view makes it an index lookup.
+-- zoom 17-18; this view makes it an index lookup.
 --
 -- Refresh after bulk asset loads:
 --   REFRESH MATERIALIZED VIEW CONCURRENTLY cadastre.green_asset_grid_clusters;

@@ -1,11 +1,12 @@
 /**
  * InfoPanel wizard: Monitoraggio → Aree gestite / Assets Verdi.
  * Monitoraggio: no footer (entry via Area Italia click).
- * Layers: Indietro + Avanti; Indietro returns to Monitoraggio.
+ * Layers: Indietro + Avanti; Indietro restores Italy landing + Monitoraggio.
  */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Box, InfoPanel } from 'dxc-webkit'
+import { useGreenTablePanelOptional } from '@/features/territory/context/GreenTablePanelContext'
 import { LayersPanel } from './LayersPanel'
 import { MonitoraggioPanel, type MonitoraggioActionId } from './MonitoraggioPanel'
 
@@ -15,11 +16,21 @@ const AREA_ITALIA: MonitoraggioActionId = 'area-italia'
 
 export function InfoPanelContent() {
   const { t } = useTranslation()
+  const panel = useGreenTablePanelOptional()
+  const setLayersPanelOpen = panel?.setLayersPanelOpen
   const [step, setStep] = useState<PanelStep>('monitoraggio')
   const [selectedId, setSelectedId] = useState<MonitoraggioActionId | null>(null)
 
+  useEffect(() => {
+    setLayersPanelOpen?.(step === 'layers')
+  }, [step, setLayersPanelOpen])
+
   const goToLayers = () => setStep('layers')
-  const goToMonitoraggio = () => setStep('monitoraggio')
+  const goToMonitoraggio = () => {
+    panel?.resetToLanding?.()
+    setSelectedId(null)
+    setStep('monitoraggio')
+  }
 
   const handleMonitoraggioSelect = (id: MonitoraggioActionId) => {
     setSelectedId(id)
@@ -33,6 +44,13 @@ export function InfoPanelContent() {
     return (
       <Box
         as="div"
+        onClick={() => {
+          setSelectedId(null)
+          const focused = document.activeElement
+          if (focused instanceof HTMLElement && focused.classList.contains('list-item')) {
+            focused.blur()
+          }
+        }}
         style={{
           height: '100%',
           background: 'white',

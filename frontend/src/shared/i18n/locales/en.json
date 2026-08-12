@@ -12,8 +12,9 @@
     "loadingGreenLayer": "Loading green layer",
     "loadingGreen": "Loading green...",
     "accordion": {
-      "tableTitleAreas": "Green areas table",
-      "tableTitleTrees": "Trees table",
+      "tableTitleAreas": "Managed areas table",
+      "tableTitleAssets": "Green assets table",
+      "tableTitleAreasAndAssets": "Managed areas and green assets table",
       "showMore": "Show details",
       "showLess": "Hide details"
     },
@@ -48,7 +49,49 @@
       "managedAreasToggle": "Managed areas",
       "managedAreasToggleHelp": "Shows areas on the map (above a zoom threshold).",
       "greenAssetsToggle": "Green assets",
-      "greenAssetsToggleHelp": "Shows trees and other green assets on the map."
+      "greenAssetsToggleHelp": "Shows trees and other green assets on the map.",
+      "detail": {
+        "titleAsset": "Asset detail",
+        "titleArea": "Area detail",
+        "close": "Close",
+        "metadata": "METADATA",
+        "notFound": "Detail not available",
+        "error": "Failed to load detail",
+        "emptyMetadata": "No metadata available",
+        "summary": {
+          "tree": "Tree",
+          "area": "Area",
+          "region": "Region",
+          "municipality": "Municipality"
+        },
+        "meta": {
+          "asset_type": "Asset type",
+          "geometry_type": "Geometry type",
+          "family": "Family",
+          "genus": "Genus",
+          "species": "Species",
+          "variety": "Variety",
+          "health_status": "Health status",
+          "risk_level": "Risk level",
+          "asset_status": "Asset status",
+          "managing_entity": "Managing entity",
+          "survey_date": "Survey date",
+          "growth_stage": "Growth stage",
+          "protection_status": "Protection status",
+          "name": "Name",
+          "level": "Level",
+          "zril_identifier": "ZRIL identifier",
+          "perimeter_type": "Perimeter type",
+          "administrative_status": "Administrative status",
+          "operational_status": "Operational status",
+          "survey_status": "Survey status",
+          "intensity_of_fruition": "Fruition intensity",
+          "start_date_of_management": "Management start",
+          "end_date_of_management": "Management end"
+        },
+        "drillSubAreas": "Explode sub-areas",
+        "selectSubArea": "Select sub-area"
+      }
     },
     "table": {
       "booleanYes": "Yes",
@@ -58,6 +101,10 @@
       "detail": "Details",
       "edit": "Edit",
       "remove": "Remove",
+      "viewAssets": "Green assets",
+      "backToAreas": "Back to managed areas",
+      "managedAreaNameLabel": "Managed area name",
+      "drillAreaAssetsHint": "Green assets of the selected area",
       "emptyRows": "No rows for the selected context.",
       "goToPageLabel": "Page",
       "goToPageAria": "Page number, from 1 to {{max}}",

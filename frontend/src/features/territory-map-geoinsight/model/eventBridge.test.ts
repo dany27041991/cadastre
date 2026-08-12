@@ -75,4 +75,32 @@ describe('eventBridge', () => {
     )
     expect(pick?.geomId).toBe('GC_10_0')
   })
+
+  it('prefers green asset over green area when both are under the click', () => {
+    const features = {
+      type: 'FeatureCollection',
+      features: [
+        { properties: { geom_id: 'GA_100' } },
+        { properties: { geom_id: 'GS_9' } },
+      ],
+    }
+    const pick = pickBestGeomIdForGreenDrill(
+      features,
+      {
+        resolveGeomId: (geomId) => {
+          if (geomId === 'GA_100') {
+            return { geomId, id: 100, layerKind: 'green_area', bbox: [0, 0, 10, 10] }
+          }
+          if (geomId === 'GS_9') {
+            return { geomId, id: 9, layerKind: 'green_asset', bbox: [5, 5, 5, 5] }
+          }
+          return undefined
+        },
+        excludeAreaIds: [],
+      },
+      []
+    )
+    expect(pick?.geomId).toBe('GS_9')
+    expect(pick?.pickedReason).toBe('green-asset-over-area')
+  })
 })

@@ -131,15 +131,25 @@ export const Line: FC = () => (
 
 const SPINNER_SIZE_MAP = { s: "sm", m: "md", l: "lg" } as const;
 
+export type SpinnerSize = keyof typeof SPINNER_SIZE_MAP;
+
+export type SpinnerProps = {
+  readonly size?: SpinnerSize;
+  readonly ariaLabel?: string;
+};
+
 /** Loading indicator backed by the dxc-webkit Loader (circle, green). */
-export const Spinner: FC<{ size?: "s" | "m" | "l" }> = ({ size = "m" }) => (
+export const Spinner: FC<SpinnerProps> = ({
+  size = "m",
+  ariaLabel = "Caricamento",
+}) => (
   <Loader
     type="circle"
     size={SPINNER_SIZE_MAP[size]}
     value={50}
     showPercentage={false}
     className="green-circle-loader"
-    ariaLabelProgressBar="Caricamento"
+    ariaLabelProgressBar={ariaLabel}
   />
 );
 

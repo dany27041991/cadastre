@@ -3,13 +3,17 @@
  */
 import { useEffect, useMemo, useRef } from 'react'
 import { useGeoinsightStore } from '@/app/store/useGeoinsightStore'
-import type { FeatureSelectHandler } from '@/features/territory/types/map'
+import type {
+  FeatureSelectHandler,
+  GreenDetailSelectHandler,
+} from '@/features/territory/types/map'
 import type { MapBridge } from '@/features/territory/types/navigation'
 import { GeometryRegistry } from '../geometryRegistry'
 import { GeoinsightMapAdapter } from '../adapter/geoinsightMapAdapter'
 
 export interface UseGeoinsightMapBridgeResult extends MapBridge {
   setOnFeatureSelect: (handler: FeatureSelectHandler) => void
+  setOnGreenDetailSelect: (handler: GreenDetailSelectHandler) => void
   getGreenLayerFeatures: () => import('@/features/territory/types/mapFeature').TerritoryMapFeature[]
   handleFeatureInfo: (event: unknown) => void
   handleDrawnGeometryInfo: (
@@ -20,6 +24,8 @@ export interface UseGeoinsightMapBridgeResult extends MapBridge {
   ) => void
   flushAdapterPending: () => void
   syncDrillContext: (excludeAreaIds: number[]) => void
+  /** When false, admin territory map clicks neither zoom nor navigate. */
+  setClickNavigationEnabled: (enabled: boolean) => void
 }
 
 export function useGeoinsightMapBridge(): UseGeoinsightMapBridgeResult {
@@ -27,11 +33,16 @@ export function useGeoinsightMapBridge(): UseGeoinsightMapBridgeResult {
   if (!registryRef.current) registryRef.current = new GeometryRegistry()
 
   const onFeatureSelectRef = useRef<FeatureSelectHandler>(() => {})
+  const onGreenDetailSelectRef = useRef<GreenDetailSelectHandler>(() => {})
+  const clickNavigationEnabledRef = useRef(true)
+  const isClickNavigationEnabledRef = useRef(() => clickNavigationEnabledRef.current)
   const adapterRef = useRef<GeoinsightMapAdapter>()
   if (!adapterRef.current) {
     adapterRef.current = new GeoinsightMapAdapter({
       registry: registryRef.current,
       onFeatureSelectRef,
+      onGreenDetailSelectRef,
+      isClickNavigationEnabledRef,
     })
   }
 
@@ -60,5 +71,8 @@ export function useGeoinsightMapBridge(): UseGeoinsightMapBridgeResult {
     handleDrawnGeometryInfo: bridge.handleDrawnGeometryInfo,
     flushAdapterPending: bridge.flushPending,
     syncDrillContext: bridge.syncDrillContext,
+    setClickNavigationEnabled: (enabled: boolean) => {
+      clickNavigationEnabledRef.current = enabled
+    },
   }
 }

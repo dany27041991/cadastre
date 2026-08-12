@@ -49,7 +49,12 @@ export function useTerritoryMapDrillSync({ map, level, breadcrumb }: UseTerritor
 
 interface UseTerritoryMapFeatureSelectOptions {
   map: Pick<UseGeoinsightMapBridgeResult, 'setOnFeatureSelect'>
-  handleFeatureSelect: (id: number, label: string, feature?: unknown) => void
+  handleFeatureSelect: (
+    id: number,
+    label: string,
+    feature?: unknown,
+    layerKind?: 'territory' | 'green_area' | 'green_asset' | 'cluster'
+  ) => void
 }
 
 export function useTerritoryMapFeatureSelect({

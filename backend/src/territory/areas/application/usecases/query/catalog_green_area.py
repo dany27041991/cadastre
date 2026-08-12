@@ -7,7 +7,9 @@ from typing import Any, Literal
 
 from sqlalchemy.orm import Session
 
+from core.exceptions.base import NotFoundError
 from core.logger import log_invocation
+from territory.common.infrastructure.dto.green_detail_out import GreenDetailOut, build_area_detail
 from territory.common.infrastructure.green_table_fk_labels import enrich_green_area_table_rows
 from territory.common.infrastructure.green_table_page_out import GreenTablePageOut
 from territory.geo.domain.entities import GeoJSONFeatureCollection
@@ -98,6 +100,23 @@ class CatalogGreenArea:
             sub_municipal_area_id=sub_municipal_area_id,
         )
         return result
+
+    @log_invocation(log_args=True, log_result=False)
+    def get_green_area_detail(
+        self,
+        area_id: int,
+        *,
+        region_id: int,
+        province_id: int,
+    ) -> GreenDetailOut:
+        row = self._repository.get_by_pk(area_id, region_id, province_id)
+        if row is None:
+            raise NotFoundError()
+        bbox = self._repository.get_bbox_by_pk(area_id, region_id, province_id)
+        geometry = self._repository.get_geometry_by_pk(area_id, region_id, province_id)
+        with self._session_factory() as session:
+            enriched = enrich_green_area_table_rows(session, [row])[0]
+        return build_area_detail(enriched, bbox=bbox, geometry=geometry)
 
     def list_green_areas_table_paged(
         self,

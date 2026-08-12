@@ -1,12 +1,13 @@
 /**
  * Main content: territory breadcrumb, map, and accordion with live green areas/assets table.
  */
-import { useState, useCallback, useEffect, type ReactNode } from 'react'
+import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import { MAP_UI_OVERLAY_Z_INDEX } from '@/features/territory-map-geoinsight/ui/geoinsightMapStyle'
 import { useTranslation } from 'react-i18next'
 import { Box, Accordion, AccordionItem, AccordionHeader, AccordionBody, Text } from 'dxc-webkit'
 import { MapBreadcrumbs, type MapBreadcrumbsProps } from '@/features/territory'
 import { GreenDataTable } from '@/features/territory/ui/green-data-table/GreenDataTable'
+import type { GreenTableRawRow } from '@/features/territory/ui/green-data-table/GreenTableRowActions'
 import { LoadingOverlay } from '@/features/territory/ui/loading-overlay/LoadingOverlay'
 import { useGreenTablePanelOptional } from '@/features/territory/context/GreenTablePanelContext'
 
@@ -14,12 +15,21 @@ export interface MainContentProps extends MapBreadcrumbsProps {
   /** Geoinsight map slot. */
   readonly mapOverlay: ReactNode
   readonly children?: ReactNode
-  /** Whether the green data table accordion is visible (drill-down flow). */
+  /** Whether the green data table accordion is visible (layers panel + at least one toggle). */
   readonly showGreenTableAccordion: boolean
+  readonly greenAreasLayerActive: boolean
   readonly greenAssetsLayerActive: boolean
   readonly areasTableQuery: string | null
   readonly assetsTableQuery: string | null
   readonly greenAssetsLayerLoading?: boolean
+  /** Open green detail from table row actions (closes accordion while open). */
+  readonly onOpenGreenDetail?: (row: GreenTableRawRow, kind: 'area' | 'asset') => void
+}
+
+function accordionTitleKey(areasActive: boolean, assetsActive: boolean): string {
+  if (areasActive && assetsActive) return 'territory.accordion.tableTitleAreasAndAssets'
+  if (assetsActive) return 'territory.accordion.tableTitleAssets'
+  return 'territory.accordion.tableTitleAreas'
 }
 
 export function MainContent({
@@ -30,35 +40,44 @@ export function MainContent({
   onLoadRegions,
   onNavigateTo,
   showGreenTableAccordion,
+  greenAreasLayerActive,
   greenAssetsLayerActive,
   areasTableQuery,
   assetsTableQuery,
   greenAssetsLayerLoading = false,
+  onOpenGreenDetail,
 }: MainContentProps) {
   const { t } = useTranslation()
   const panel = useGreenTablePanelOptional()
+  const setMapTableAccordionVisible = panel?.setMapTableAccordionVisible
+  const mapTableAccordionVisible = panel?.mapTableAccordionVisible
   const [accordionOpen, setAccordionOpen] = useState('')
-  const accordionTitle = greenAssetsLayerActive
-    ? t('territory.accordion.tableTitleTrees')
-    : t('territory.accordion.tableTitleAreas')
+  const accordionTitle = t(accordionTitleKey(greenAreasLayerActive, greenAssetsLayerActive))
+  const prevExternalVisibleRef = useRef(mapTableAccordionVisible)
 
-  const toggleAccordion = useCallback(
-    (id: string) => {
-      setAccordionOpen((prev) => {
-        const next = prev === id ? '' : id
-        panel?.setMapTableAccordionVisible(next === id)
-        return next
-      })
-    },
-    [panel]
-  )
+  const toggleAccordion = useCallback((id: string) => {
+    setAccordionOpen((prev) => (prev === id ? '' : id))
+  }, [])
+
+  // Keep context in sync with local open state (for detail-modal collapse, etc.).
+  useEffect(() => {
+    setMapTableAccordionVisible?.(accordionOpen === 'green-data')
+  }, [accordionOpen, setMapTableAccordionVisible])
 
   useEffect(() => {
     if (!showGreenTableAccordion) {
       setAccordionOpen('')
-      panel?.setMapTableAccordionVisible(false)
     }
-  }, [showGreenTableAccordion, panel])
+  }, [showGreenTableAccordion])
+
+  // External close only (e.g. detail modal): collapse on true → false, not on initial false.
+  useEffect(() => {
+    const prev = prevExternalVisibleRef.current
+    prevExternalVisibleRef.current = mapTableAccordionVisible
+    if (prev === true && mapTableAccordionVisible === false && accordionOpen === 'green-data') {
+      setAccordionOpen('')
+    }
+  }, [mapTableAccordionVisible, accordionOpen])
 
   return (
     <Box as="div" display="flex" flexDirection="column" style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
@@ -139,9 +158,11 @@ export function MainContent({
                 }}
               >
                 <GreenDataTable
-                  showGreenAssets={greenAssetsLayerActive}
+                  areasActive={greenAreasLayerActive}
+                  assetsActive={greenAssetsLayerActive}
                   areasTableQuery={areasTableQuery}
                   assetsTableQuery={assetsTableQuery}
+                  onOpenDetail={onOpenGreenDetail}
                 />
               </AccordionBody>
             </AccordionItem>

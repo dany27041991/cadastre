@@ -1,5 +1,8 @@
 import type { GeoinsightGeometryClip } from '@/features/territory/lib/geoJsonToGeoinsight'
-import type { FeatureSelectHandler } from '@/features/territory/types/map'
+import type {
+  FeatureSelectHandler,
+  GreenDetailSelectHandler,
+} from '@/features/territory/types/map'
 import type { GeometryRegistry } from '../geometryRegistry'
 import type { GeoinsightMapRuntimeHost } from './geoinsightMapRuntime'
 
@@ -7,6 +10,14 @@ import type { GeoinsightMapRuntimeHost } from './geoinsightMapRuntime'
 export interface GeoinsightAdapterHost extends GeoinsightMapRuntimeHost {
   readonly registry: GeometryRegistry
   readonly onFeatureSelectRef: { current: FeatureSelectHandler }
+  /** Click green area/asset → detail modal (no zoom / navigation). */
+  readonly onGreenDetailSelectRef: { current: GreenDetailSelectHandler }
+  /**
+   * When false, map clicks must not zoom/navigate admin territory features
+   * (green overlay toggles active). Cluster explode still allowed.
+   * Green area/asset clicks always open detail via onGreenDetailSelectRef.
+   */
+  readonly isClickNavigationEnabledRef: { current: () => boolean }
   drillExcludeAreaIds: number[]
   lastTerritoryGeometries: GeoinsightGeometryClip[]
   /**

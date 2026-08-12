@@ -1,6 +1,6 @@
 /**
  * Shared UI components barrel.
- * dxc-webkit-based components (see docs/ui-components-guide.md).
+ * dxc-webkit-based components (see docs/components/shared-ui-components.md).
  */
 export {
   Button,
@@ -9,4 +9,8 @@ export {
   Spinner,
   DummyIcon,
   type ButtonProps,
-} from "../ui-components";
+  type SpinnerProps,
+  type SpinnerSize,
+} from '../ui-components'
+export { LoadingState, type LoadingStateProps } from './LoadingState'
+export { BackNavHeader, type BackNavHeaderProps } from './BackNavHeader'

@@ -35,6 +35,7 @@ describe('serverViewportCollectionToDisplayItems', () => {
     expect(cluster?.bbox).toEqual([12.0, 42.0, 12.1, 42.1])
     const single = items.find((item) => !item.isCluster)
     expect(single?.id).toBe(7)
+    expect(single?.bbox).toEqual([12.2, 42.2, 12.2, 42.2])
   })
 
   it('returns empty for an empty collection', () => {

@@ -4,7 +4,14 @@ from core.builders import build_feature_collection
 
 from territory.geo.domain.entities import GeoJSONFeatureCollection
 
-_GREEN_AREA_PROPERTIES = ["name", "level", "parent_id", "region_id"]
+_GREEN_AREA_PROPERTIES = [
+    "name",
+    "level",
+    "parent_id",
+    "region_id",
+    "province_id",
+    "municipality_id",
+]
 
 
 def build_green_area_feature_collection(

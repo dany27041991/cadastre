@@ -118,9 +118,9 @@ Al click, `extractGeomIdFromFeatureInfo` risolve l’id e `GeometryRegistry` res
    - installa `window.define` AMD con stub `@mase/commons-*`;
    - carica script `/vendor/mase-commons-geoinsight.js` (raw, no transform Vite);
    - risolve export `{ Geoinsight, useRefGeoinsight }`.
-3. Solo dopo, React monta l’app.
+3. React monta l’app anche se l’init Geoinsight fallisce (la mappa mostra l’errore inline; il resto dell’UI resta usabile).
 
-**Regola:** non renderizzare `<Geoinsight>` prima di `await initGeoinsightModule()`.
+**Regola:** non renderizzare `<Geoinsight>` prima di `await initGeoinsightModule()` riuscito; se l’init fallisce, evitare route/widget mappa o gestire l’errore nello store.
 
 ### 3.2 Plugin Vite `geoinsightRawBundlePlugin`
 
@@ -138,9 +138,10 @@ In `vite.config.ts`, queste path sono proxate verso `VITE_MASE_API_ORIGIN` (defa
 
 - `/core/api/geoinsight`
 - `/core/api/integrationlogic`
-- `/portalediaccesso/env.json`
 - `/portalediaccesso/common-labels.json`
 - `/portalediaccesso/commons/geoinsight`
+
+`/portalediaccesso/env.json` is served from `public/portalediaccesso/env.json` (no VPN). Other Geoinsight GETs use an on-disk cache (`node_modules/.geoinsight-cache`) with a 5s proxy timeout when sim-dev is unreachable.
 
 ### 3.4 Stub AMD e endpoint
 

@@ -19,6 +19,8 @@ import {
   greenContextKey,
   isGreenMapLevel,
 } from '../../lib/greenMapContext'
+import { fetchGreenAreasForDrillScope } from '../../lib/greenAreaDrill'
+import { LEVEL_SUB_AREAS } from '../constants'
 
 const EMPTY_FEATURE_COLLECTION: GeoJSONFeatureCollection = {
   type: 'FeatureCollection',
@@ -72,6 +74,23 @@ function scopeFromContext(context: GreenContext) {
 
 function areasFetcherFor(context: GreenContext) {
   const scope = scopeFromContext(context)
+  const greenAreaId = context.greenAreaId
+  // After Esplodi / Seleziona: keep companion areas inside the drilled scope
+  // (viewport roots would re-show every municipality area).
+  if (
+    greenAreaId != null &&
+    scope.regionId != null &&
+    scope.provinceId != null
+  ) {
+    return async () =>
+      fetchGreenAreasForDrillScope(
+        territoryApi.getGreenAreas,
+        greenAreaId,
+        scope.regionId as number,
+        scope.provinceId as number,
+        scope.municipalityId
+      )
+  }
   return (bbox: [number, number, number, number], zoom: number) =>
     territoryApi.getGreenAreasViewport({ bbox, zoom, ...scope })
 }
@@ -105,7 +124,6 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     setGreenLayerVisible,
     clearGreenLayer,
     fitToGreenExtent,
-    setTerritoryFillVisible,
     onBeforeLoadingAssets,
     assetsLayerActive,
     onAssetsLayerActiveChange,
@@ -126,7 +144,6 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     lastContextKeyRef.current = null
     onAssetsLayerActiveChange(false)
     if (areasLayerActiveRef.current) {
-      // Keep areas visible: switch to areas-only viewport (same zoom gate).
       setLoading(true)
       startAreasOnlyViewportMode(context, loadGreenLayerViewport)
       setGreenLayerVisible(true)
@@ -147,9 +164,6 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
 
   const loadAssetsForContext = useCallback(async () => {
     if (greenLevel) {
-      // Hide the gray fill only at green levels; at administrative levels the
-      // territory polygons must stay visible (and clickable) under the clusters.
-      setTerritoryFillVisible(false)
       onBeforeLoadingAssets?.()
     }
     setLoading(true)
@@ -165,7 +179,6 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     greenLevel,
     loadGreenLayerViewport,
     setGreenLayerVisible,
-    setTerritoryFillVisible,
     onAssetsLayerActiveChange,
     onBeforeLoadingAssets,
   ])
@@ -177,22 +190,25 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
 
     lastContextKeyRef.current = contextKey
     if (greenLevel) {
-      setTerritoryFillVisible(false)
       onBeforeLoadingAssets?.()
     }
     setLoading(true)
+    // Includes sub_areas: greenAreaId scopes clusters/trees to the drilled area.
     startViewportMode(context, loadGreenLayerViewport, areasLayerActiveRef.current)
     setGreenLayerVisible(true)
-    if (greenLevel) fitToGreenExtent()
+    // Preserve zoom on sub-area drill — fitting children bbox often zooms out.
+    if (greenLevel && level !== LEVEL_SUB_AREAS) {
+      fitToGreenExtent()
+    }
     setLoading(false)
   }, [
     assetsLayerActive,
     contextKey,
     context,
+    level,
     greenLevel,
     loadGreenLayerViewport,
     setGreenLayerVisible,
-    setTerritoryFillVisible,
     fitToGreenExtent,
     onBeforeLoadingAssets,
   ])
@@ -204,6 +220,7 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
 
     lastContextKeyRef.current = contextKey
     setLoading(true)
+    // Scoped via greenAreaId when at sub_areas (areasFetcherFor).
     startAreasOnlyViewportMode(context, loadGreenLayerViewport)
     setGreenLayerVisible(true)
     setLoading(false)
@@ -235,9 +252,10 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
       if (loading) return
       if (active === areasLayerActive) return
       onAreasLayerActiveChange(active)
+      // Keep ref in sync immediately so turnOffAssetsLayer does not restart areas-only.
+      areasLayerActiveRef.current = active
 
       if (assetsLayerActive) {
-        // Re-arm assets viewport: include/exclude companion areas.
         setLoading(true)
         startViewportMode(context, loadGreenLayerViewport, active)
         setGreenLayerVisible(true)
@@ -246,7 +264,6 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
         return
       }
 
-      // Assets off: areas-only viewport or clear.
       if (active) {
         setLoading(true)
         startAreasOnlyViewportMode(context, loadGreenLayerViewport)

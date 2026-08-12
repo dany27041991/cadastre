@@ -64,9 +64,27 @@ export function selectByGeomId(host: GeoinsightAdapterHost, geomId: string): voi
     return
   }
 
-  if (entry.bbox && (entry.layerKind === 'territory' || entry.layerKind === 'green_area')) {
+  // Green area / asset: open detail modal only (drill for areas is a modal CTA).
+  if (entry.layerKind === 'green_asset' || entry.layerKind === 'green_area') {
+    const feature = host.registry.toMapFeature(entry)
+    host.onGreenDetailSelectRef.current(
+      entry.id,
+      entry.label,
+      feature,
+      entry.layerKind
+    )
+    return
+  }
+
+  // Overlay toggles: freeze admin click zoom + navigation (no map "jump").
+  const navigationEnabled = host.isClickNavigationEnabledRef.current()
+  if (!navigationEnabled && entry.layerKind === 'territory') {
+    return
+  }
+
+  if (entry.bbox && entry.layerKind === 'territory') {
     zoomGeoinsightToBbox(host, entry.bbox)
   }
   const feature = host.registry.toMapFeature(entry)
-  host.onFeatureSelectRef.current(entry.id, entry.label, feature)
+  host.onFeatureSelectRef.current(entry.id, entry.label, feature, entry.layerKind)
 }

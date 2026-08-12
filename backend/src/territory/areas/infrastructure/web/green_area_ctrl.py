@@ -11,6 +11,7 @@ from fastapi.responses import Response
 
 from core.api.dependencies import get_green_areas_uc
 from territory.areas.infrastructure.dto.output import GreenAreasOutput
+from territory.common.infrastructure.dto.green_detail_out import GreenDetailOut
 from territory.common.infrastructure.green_table_page_out import GreenTablePageOut
 
 router = APIRouter(tags=["territory-areas"])
@@ -159,4 +160,19 @@ def get_green_areas_table(
         sort_by=sort_by,
         sort_dir=sort_dir,
         filters=filters,
+    )
+
+
+# After static paths (viewport/table): otherwise {area_id} steals those segments → 422.
+@router.get("/green-areas/{area_id}", response_model=GreenDetailOut)
+def get_green_area_detail(
+    area_id: int,
+    region_id: int = Query(..., description="Partition key region_id"),
+    province_id: int = Query(..., description="Partition key province_id"),
+) -> GreenDetailOut:
+    """Curated detail for map popover (summary + metadata subset)."""
+    return get_green_areas_uc().get_green_area_detail(
+        area_id,
+        region_id=region_id,
+        province_id=province_id,
     )

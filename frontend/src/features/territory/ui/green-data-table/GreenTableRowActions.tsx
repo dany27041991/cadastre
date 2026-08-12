@@ -1,6 +1,6 @@
 /**
- * Actions column: EllipsysIcon (⋯) and row menu via portal (avoids dxc-webkit Tooltip /
- * reactstrap PopperContent where transition is not forwarded → transition.timeout warning).
+ * Actions column: EllipsysIcon (⋯) → Dettaglio (+ optional "Assets verdi" in dual areas view).
+ * Portal menu avoids dxc-webkit Tooltip / reactstrap PopperContent transition.timeout warnings.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -13,16 +13,16 @@ export type GreenTableRawRow = Record<string, unknown>
 
 export interface GreenTableRowActionsProps {
   readonly rawRow: GreenTableRawRow
-  readonly onDetail?: (row: GreenTableRawRow) => void
-  readonly onEdit?: (row: GreenTableRawRow) => void
-  readonly onRemove?: (row: GreenTableRawRow) => void
+  /** Open map detail modal for this row (area or asset). */
+  readonly onDetail: (row: GreenTableRawRow) => void
+  /** Open assets table scoped to this managed area (dual-mode areas table only). */
+  readonly onViewAssets?: (row: GreenTableRawRow) => void
 }
 
 export function GreenTableRowActions({
   rawRow,
   onDetail,
-  onEdit,
-  onRemove,
+  onViewAssets,
 }: GreenTableRowActionsProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -64,9 +64,14 @@ export function GreenTableRowActions({
     return () => document.removeEventListener('mousedown', onMouseDown, true)
   }, [open])
 
-  const run = (fn?: (row: GreenTableRawRow) => void) => {
+  const runDetail = () => {
     setOpen(false)
-    fn?.(rawRow)
+    onDetail(rawRow)
+  }
+
+  const runViewAssets = () => {
+    setOpen(false)
+    onViewAssets?.(rawRow)
   }
 
   const menu =
@@ -92,24 +97,19 @@ export function GreenTableRowActions({
           <button
             type="button"
             className="green-table-row-actions-tooltip__action green-table-row-actions-tooltip__action--default"
-            onClick={() => run(onDetail)}
+            onClick={runDetail}
           >
             {t('territory.table.detail')}
           </button>
-          <button
-            type="button"
-            className="green-table-row-actions-tooltip__action green-table-row-actions-tooltip__action--default"
-            onClick={() => run(onEdit)}
-          >
-            {t('territory.table.edit')}
-          </button>
-          <button
-            type="button"
-            className="green-table-row-actions-tooltip__action green-table-row-actions-tooltip__action--danger"
-            onClick={() => run(onRemove)}
-          >
-            {t('territory.table.remove')}
-          </button>
+          {onViewAssets != null && (
+            <button
+              type="button"
+              className="green-table-row-actions-tooltip__action green-table-row-actions-tooltip__action--default"
+              onClick={runViewAssets}
+            >
+              {t('territory.table.viewAssets')}
+            </button>
+          )}
         </span>
       </div>,
       document.body

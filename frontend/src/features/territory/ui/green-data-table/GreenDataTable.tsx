@@ -9,7 +9,8 @@
 import './green-data-table.css'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Box, CustomTable, Loader, Text } from 'dxc-webkit'
+import { Box, CustomTable, Text } from 'dxc-webkit'
+import { BackNavHeader, LoadingState } from '@/shared/ui'
 import { useGreenTablePanel } from '../../context/GreenTablePanelContext'
 import { labelizeGreenColumn } from '../../lib/greenTableColumnLabel'
 import { filterGreenTableNonIdKeys } from '../../lib/greenTableColumnVisibility'
@@ -153,19 +154,42 @@ function cellValue(v: unknown, formatBoolean: (b: boolean) => string): string | 
   return formatComplexValue(v, formatBoolean, 0)
 }
 
+function greenAreaIdFromRow(row: GreenTableRawRow): number | null {
+  const raw = row.id
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    const n = Number(raw)
+    return Number.isFinite(n) ? n : null
+  }
+  return null
+}
+
+function withGreenAreaId(territoryQuery: string, greenAreaId: number): string {
+  const p = new URLSearchParams(territoryQuery)
+  p.set('green_area_id', String(greenAreaId))
+  return p.toString()
+}
+
+function areaLabelFromRow(row: GreenTableRawRow): string | null {
+  const name = row.name
+  if (typeof name === 'string' && name.trim() !== '') return name.trim()
+  const label = row.green_area_label
+  if (typeof label === 'string' && label.trim() !== '') return label.trim()
+  return null
+}
+
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 
 export interface GreenDataTableProps {
-  /** false = green areas, true = green assets (trees toggle) */
-  readonly showGreenAssets: boolean
+  readonly areasActive: boolean
+  readonly assetsActive: boolean
   /** Base territory query string (region_id, province_id, municipality_id, …) */
   readonly areasTableQuery: string | null
   readonly assetsTableQuery: string | null
-  readonly onRowDetail?: (row: GreenTableRawRow) => void
-  readonly onRowEdit?: (row: GreenTableRawRow) => void
-  readonly onRowRemove?: (row: GreenTableRawRow) => void
+  /** Open map detail for a table row (closes accordion via detail open effect). */
+  readonly onOpenDetail?: (row: GreenTableRawRow, kind: 'area' | 'asset') => void
 }
 
 // ---------------------------------------------------------------------------
@@ -173,12 +197,11 @@ export interface GreenDataTableProps {
 // ---------------------------------------------------------------------------
 
 export function GreenDataTable({
-  showGreenAssets,
+  areasActive,
+  assetsActive,
   areasTableQuery,
   assetsTableQuery,
-  onRowDetail,
-  onRowEdit,
-  onRowRemove,
+  onOpenDetail,
 }: GreenDataTableProps) {
   const { t } = useTranslation()
   const formatBoolean = useCallback(
@@ -194,7 +217,48 @@ export function GreenDataTable({
     setTablePanelActive,
   } = useGreenTablePanel()
 
-  const baseQuery = showGreenAssets ? assetsTableQuery : areasTableQuery
+  const dualMode = areasActive && assetsActive
+  const [drillAreaId, setDrillAreaId] = useState<number | null>(null)
+  const [drillAreaLabel, setDrillAreaLabel] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!dualMode) {
+      setDrillAreaId(null)
+      setDrillAreaLabel(null)
+    }
+  }, [dualMode])
+
+  // Assets-only, or dual mode after drilling into an area.
+  const showGreenAssets =
+    (assetsActive && !areasActive) || (dualMode && drillAreaId != null)
+
+  const baseQuery = useMemo(() => {
+    if (showGreenAssets) {
+      if (assetsTableQuery == null) return null
+      if (drillAreaId != null) return withGreenAreaId(assetsTableQuery, drillAreaId)
+      return assetsTableQuery
+    }
+    return areasTableQuery
+  }, [showGreenAssets, assetsTableQuery, areasTableQuery, drillAreaId])
+
+  const handleViewAssets = useCallback((row: GreenTableRawRow) => {
+    const id = greenAreaIdFromRow(row)
+    if (id == null) return
+    setDrillAreaId(id)
+    setDrillAreaLabel(areaLabelFromRow(row))
+  }, [])
+
+  const handleDetail = useCallback(
+    (row: GreenTableRawRow) => {
+      onOpenDetail?.(row, showGreenAssets ? 'asset' : 'area')
+    },
+    [onOpenDetail, showGreenAssets],
+  )
+
+  const handleBackToAreas = useCallback(() => {
+    setDrillAreaId(null)
+    setDrillAreaLabel(null)
+  }, [])
 
   // Server-side pagination / sort state.
   const [pageData, setPageData] = useState<GreenTablePage | null>(null)
@@ -354,32 +418,43 @@ export function GreenDataTable({
   )
 
   const columns = useMemo(() => {
-    const menuColumn = {
-      id: '__actions',
-      label: '',
-      isSortable: false as const,
-      component: (_row: GreenTableRow, rowIndex: number) => {
-        const pair = rowPairs[rowIndex]
-        if (!pair) return null
-        return (
-          <GreenTableRowActions
-            rawRow={pair.raw}
-            onDetail={onRowDetail}
-            onEdit={onRowEdit}
-            onRemove={onRowRemove}
-          />
-        )
-      },
-    }
+    // ⋯ always: Dettaglio; + "Assets verdi" on dual-mode areas rows.
+    const showViewAssets = dualMode && !showGreenAssets
+    const dataColumns = visibleKeys.map((colId) => ({
+      id: colId as keyof GreenTableRow & string,
+      label: labelizeGreenColumn(colId),
+      isSortable: true,
+    }))
+    if (onOpenDetail == null) return dataColumns
+
     return [
-      ...visibleKeys.map((colId) => ({
-        id: colId as keyof GreenTableRow & string,
-        label: labelizeGreenColumn(colId),
-        isSortable: true,
-      })),
-      menuColumn,
+      ...dataColumns,
+      {
+        id: '__actions',
+        label: '',
+        isSortable: false as const,
+        component: (_row: GreenTableRow, rowIndex: number) => {
+          const pair = rowPairs[rowIndex]
+          if (!pair) return null
+          return (
+            <GreenTableRowActions
+              rawRow={pair.raw}
+              onDetail={handleDetail}
+              onViewAssets={showViewAssets ? handleViewAssets : undefined}
+            />
+          )
+        },
+      },
     ]
-  }, [visibleKeys, rowPairs, onRowDetail, onRowEdit, onRowRemove])
+  }, [
+    visibleKeys,
+    rowPairs,
+    dualMode,
+    showGreenAssets,
+    onOpenDetail,
+    handleDetail,
+    handleViewAssets,
+  ])
 
   const handleSort = useCallback((args: [string | number, 'asc' | 'desc'] | null) => {
     setSort(args ? [String(args[0]), args[1]] : null)
@@ -410,6 +485,24 @@ export function GreenDataTable({
   const total = pageData?.total ?? 0
   const totalPages = pageData?.total_pages ?? 1
 
+  const showDrillHeader = dualMode && drillAreaId != null
+
+  const drillHeader = showDrillHeader ? (
+    <BackNavHeader
+      backLabel={t('territory.table.backToAreas')}
+      onBack={handleBackToAreas}
+      titleLabel={t('territory.table.managedAreaNameLabel')}
+      title={drillAreaLabel}
+      hint={t('territory.table.drillAreaAssetsHint')}
+    />
+  ) : null
+
+  const tableLoader = (
+    <Box as="div" className="green-data-table-body__loader">
+      <LoadingState size="l" label={t('territory.loading')} />
+    </Box>
+  )
+
   // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
@@ -419,29 +512,11 @@ export function GreenDataTable({
 
   if (loading && !pageData) {
     return (
-      <Box
-        as="div"
-        className="green-data-table"
-        padding="m"
-        style={{
-          width: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '0.75rem',
-        }}
-      >
-        <Loader
-          type="circle"
-          size="lg"
-          value={50}
-          showPercentage={false}
-          className="green-circle-loader"
-        />
-        <Text font="f1-body-sm" style={{ fontWeight: 600, color: 'var(--success)' }}>
-          {t('territory.loading')}
-        </Text>
+      <Box as="div" className="green-data-table" padding="m" style={{ width: '100%' }}>
+        {drillHeader}
+        <Box as="div" className="green-data-table-body" style={{ minHeight: '10rem' }}>
+          {tableLoader}
+        </Box>
       </Box>
     )
   }
@@ -449,6 +524,7 @@ export function GreenDataTable({
   if (!loading && total === 0) {
     return (
       <Box as="div" className="green-data-table" padding="m" style={{ width: '100%' }}>
+        {drillHeader}
         <Text font="f1-body-sm" style={{ color: 'var(--gray-600, #6c757d)' }}>
           {t('territory.table.emptyRows')}
         </Text>
@@ -464,66 +540,75 @@ export function GreenDataTable({
         width: '100%',
         minWidth: 0,
         maxWidth: '100%',
-        // Dim the table while refetching pages/sort/filter without hiding stale data.
-        opacity: loading ? 0.55 : 1,
-        pointerEvents: loading ? 'none' : undefined,
-        transition: 'opacity 0.15s ease',
       }}
     >
-      {totalPages > 1 ? (
+      {drillHeader}
+      <Box as="div" className="green-data-table-body">
+        {loading ? tableLoader : null}
         <Box
           as="div"
-          className="green-data-table-page-jump green-data-table-page-jump--top compact-table"
-          style={{ width: '100%' }}
+          className={
+            loading
+              ? 'green-data-table-body__content green-data-table-body__content--dimmed'
+              : 'green-data-table-body__content'
+          }
         >
-          <label className="green-data-table-page-jump-label" htmlFor="green-table-page-jump">
-            <Text as="span" font="f1-body-sm">
-              {t('territory.table.goToPageLabel')}
-            </Text>
-          </label>
-          <input
-            id="green-table-page-jump"
-            type="number"
-            className="green-data-table-page-jump-input"
-            min={1}
-            max={totalPages}
-            value={pageInput}
-            disabled={loading}
-            aria-label={t('territory.table.goToPageAria', { max: totalPages })}
-            onChange={(e) => setPageInput(e.target.value)}
-            onBlur={commitPageJump}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                commitPageJump()
-              }
-            }}
+          {totalPages > 1 ? (
+            <Box
+              as="div"
+              className="green-data-table-page-jump green-data-table-page-jump--top compact-table"
+              style={{ width: '100%' }}
+            >
+              <label className="green-data-table-page-jump-label" htmlFor="green-table-page-jump">
+                <Text as="span" font="f1-body-sm">
+                  {t('territory.table.goToPageLabel')}
+                </Text>
+              </label>
+              <input
+                id="green-table-page-jump"
+                type="number"
+                className="green-data-table-page-jump-input"
+                min={1}
+                max={totalPages}
+                value={pageInput}
+                disabled={loading}
+                aria-label={t('territory.table.goToPageAria', { max: totalPages })}
+                onChange={(e) => setPageInput(e.target.value)}
+                onBlur={commitPageJump}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    commitPageJump()
+                  }
+                }}
+              />
+              <Text as="span" font="f1-body-sm" className="green-data-table-page-jump-suffix">
+                {t('territory.table.goToPageOf', { total: totalPages })}
+              </Text>
+            </Box>
+          ) : null}
+          <CustomTable
+            color="primary-alternate"
+            style={{ margin: 0 }}
+            className="table-sm"
+            wrapperClassName="compact-table green-data-table-fixed-columns"
+            tableWrapperClassname="scrollable-container compact-table green-data-table-fixed-columns"
+            headerCellClassName="f1-label-sm"
+            cellClassName="f1-body-sm"
+            columns={columns}
+            rows={tableRows}
+            handleSort={handleSort}
+            pagination
+            paginationOptions={[Math.min(page, totalPages), pageSize, total]}
+            handlePaginationChange={handlePaginationChange}
+            pageSizeOptions={[5, 10, 15, 25, 50]}
+            actions={[]}
+            renderDistance={1}
+            openTop
+            hideGoToDropdown
           />
-          <Text as="span" font="f1-body-sm" className="green-data-table-page-jump-suffix">
-            {t('territory.table.goToPageOf', { total: totalPages })}
-          </Text>
         </Box>
-      ) : null}
-      <CustomTable
-        color="primary-alternate"
-        style={{ margin: 0 }}
-        className="table-sm"
-        wrapperClassName="compact-table green-data-table-fixed-columns"
-        tableWrapperClassname="scrollable-container compact-table green-data-table-fixed-columns"
-        headerCellClassName="f1-label-sm"
-        cellClassName="f1-body-sm"
-        columns={columns}
-        rows={tableRows}
-        handleSort={handleSort}
-        pagination
-        paginationOptions={[Math.min(page, totalPages), pageSize, total]}
-        handlePaginationChange={handlePaginationChange}
-        pageSizeOptions={[5, 10, 15, 25, 50]}
-        actions={[]}
-        renderDistance={1}
-        openTop
-        hideGoToDropdown
-      />
+      </Box>
     </Box>
   )
 }

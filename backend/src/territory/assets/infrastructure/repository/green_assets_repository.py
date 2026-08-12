@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -158,11 +159,93 @@ class GreenAssetsRepository:
             GreenAssetModel.asset_type,
             GreenAssetModel.geometry_type,
             GreenAssetModel.species,
+            GreenAssetModel.region_id,
+            GreenAssetModel.province_id,
         ).where(GreenAssetModel.geometry.isnot(None))
 
     def _rows_from_session(self, session: Session, stmt) -> list[tuple]:
         result = session.execute(stmt)
         return [tuple(row) for row in result.all()]
+
+    def get_by_pk(
+        self,
+        asset_id: int,
+        region_id: int,
+        province_id: int,
+    ) -> dict[str, Any] | None:
+        """Load one asset by composite PK; excludes soft-deleted rows."""
+        av = GreenAssetModel
+        stmt = (
+            select(av)
+            .options(load_only(*_TABLE_LOAD_COLS, raiseload=True))
+            .where(av.region_id == region_id)
+            .where(av.province_id == province_id)
+            .where(av.id == asset_id)
+            .where(av.deleted_at.is_(None))
+            .limit(1)
+        )
+        with self._session_factory() as session:
+            row = session.scalars(stmt).first()
+            if row is None:
+                return None
+            return orm_to_row_dict(av, row, exclude=_TABLE_EXCLUDE_COLS)
+
+    def get_bbox_by_pk(
+        self,
+        asset_id: int,
+        region_id: int,
+        province_id: int,
+    ) -> list[float] | None:
+        """WGS84 envelope [minLon, minLat, maxLon, maxLat] for map framing."""
+        av = GreenAssetModel
+        env = func.ST_Envelope(av.geometry)
+        stmt = (
+            select(
+                func.ST_XMin(env),
+                func.ST_YMin(env),
+                func.ST_XMax(env),
+                func.ST_YMax(env),
+            )
+            .where(av.region_id == region_id)
+            .where(av.province_id == province_id)
+            .where(av.id == asset_id)
+            .where(av.deleted_at.is_(None))
+            .where(av.geometry.isnot(None))
+            .limit(1)
+        )
+        with self._session_factory() as session:
+            row = session.execute(stmt).first()
+            if row is None or any(v is None for v in row):
+                return None
+            return [float(row[0]), float(row[1]), float(row[2]), float(row[3])]
+
+    def get_geometry_by_pk(
+        self,
+        asset_id: int,
+        region_id: int,
+        province_id: int,
+    ) -> dict[str, Any] | None:
+        """WGS84 GeoJSON geometry for true-shape map highlight."""
+        av = GreenAssetModel
+        stmt = (
+            select(func.ST_AsGeoJSON(av.geometry).cast(JSON))
+            .where(av.region_id == region_id)
+            .where(av.province_id == province_id)
+            .where(av.id == asset_id)
+            .where(av.deleted_at.is_(None))
+            .where(av.geometry.isnot(None))
+            .limit(1)
+        )
+        with self._session_factory() as session:
+            raw = session.execute(stmt).scalar_one_or_none()
+            if raw is None:
+                return None
+            if isinstance(raw, dict):
+                return raw
+            if isinstance(raw, str):
+                parsed = json.loads(raw)
+                return parsed if isinstance(parsed, dict) else None
+            return None
 
     def get_within_area(
         self,

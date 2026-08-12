@@ -11,6 +11,7 @@ export type {
   UseTerritoryNavigationResult,
   UseTerritoryNavigationOptions,
   FeatureSelectHandler,
+  GreenDetailSelectHandler,
 } from './types'
 export type { UseGeoinsightMapBridgeResult } from '@/features/territory-map-geoinsight'
 export { MapBreadcrumbs } from './ui/map-breadcrumbs/MapBreadcrumbs'

@@ -154,6 +154,10 @@ function createMaseProxy(target: string, cookie?: string, fgp?: string): ProxyOp
     target,
     changeOrigin: true,
     secure: false,
+    // Fail fast when VPN/sim-dev is unreachable so the disk cache can kick in
+    // instead of hanging the browser fetch until TCP timeout (white screen).
+    timeout: 5_000,
+    proxyTimeout: 5_000,
     // Responses are buffered so failures can be swapped with the cached copy.
     selfHandleResponse: true,
     configure: (proxy) => {
@@ -200,6 +204,9 @@ function createMaseProxy(target: string, cookie?: string, fgp?: string): ProxyOp
           sendMaseResponse(serverRes, cached.status, cached.headers, cached.body, 'stale')
           return
         }
+        console.warn(
+          `[geoinsight-cache] upstream unreachable (${err.message}), no cache for: ${key ?? req.url}`
+        )
         if (typeof serverRes.end === 'function' && !serverRes.headersSent) {
           serverRes.statusCode = 502
           serverRes.end('Geoinsight proxy error and no cached copy available')
@@ -257,7 +264,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/core/api/geoinsight': createMaseProxy(maseTarget, proxyCookie, proxyFgp),
         '/core/api/integrationlogic': createMaseProxy(maseTarget, proxyCookie, proxyFgp),
-        '/portalediaccesso/env.json': createMaseProxy(maseTarget, proxyCookie, proxyFgp),
+        // env.json is served from public/portalediaccesso/env.json (no VPN required).
         '/portalediaccesso/common-labels.json': createMaseProxy(maseTarget, proxyCookie, proxyFgp),
         '/portalediaccesso/commons/geoinsight': createMaseProxy(maseTarget, proxyCookie, proxyFgp),
       },

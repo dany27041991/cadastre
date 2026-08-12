@@ -70,6 +70,34 @@
   box-sizing: border-box;
 }
 
+/* Loader overlay while fetching / refetching table pages */
+.green-data-table-body {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 7.5rem;
+}
+.green-data-table-body__content {
+  width: 100%;
+  min-width: 0;
+  transition: opacity 0.15s ease;
+}
+.green-data-table-body__content--dimmed {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.green-data-table-body__loader {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.72);
+  box-sizing: border-box;
+}
+
 /* Custom "go to page" number field (replaces dxc-webkit go-to dropdown) */
 .green-data-table-page-jump {
   display: flex;

@@ -3,7 +3,10 @@
  */
 import type { GeoJSONFeatureCollection } from '@/shared/types'
 import type { MapBridge } from '@/features/territory/types/navigation'
-import type { FeatureSelectHandler } from '@/features/territory/types/map'
+import type {
+  FeatureSelectHandler,
+  GreenDetailSelectHandler,
+} from '@/features/territory/types/map'
 import type { TerritoryMapFeature } from '@/features/territory/types/mapFeature'
 import type { GeoinsightGeometryClip } from '@/features/territory/lib/geoJsonToGeoinsight'
 import { GeometryRegistry } from '../geometryRegistry'
@@ -28,7 +31,17 @@ import {
   removeGeoinsightGeomIds,
   type GeoinsightMapRuntimeHost,
 } from './geoinsightMapRuntime'
-import { syncGeoinsightZoomFromMap } from './geoinsightMapViewport'
+import {
+  syncGeoinsightZoomFromMap,
+  panGeoinsightToLonLatKeepZoom,
+  panGeoinsightToLonLatAtScreenFraction,
+  zoomGeoinsightToLonLatAtScreenFraction,
+} from './geoinsightMapViewport'
+import {
+  clearGreenDetailHighlight as clearDetailHighlightGeom,
+  discardGreenDetailHighlight as discardDetailHighlightGeom,
+  setGreenDetailHighlight as setDetailHighlightGeom,
+} from './geoinsightDetailHighlight'
 import {
   clearAllVectorLayers,
   clearTerritoryLayer,
@@ -50,11 +63,15 @@ type PendingOp = () => void
 export interface GeoinsightMapAdapterOptions {
   registry: GeometryRegistry
   onFeatureSelectRef: { current: FeatureSelectHandler }
+  onGreenDetailSelectRef: { current: GreenDetailSelectHandler }
+  isClickNavigationEnabledRef: { current: () => boolean }
 }
 
 export class GeoinsightMapAdapter implements GeoinsightMapRuntimeHost, GeoinsightGreenLayerHost {
   readonly registry: GeometryRegistry
   readonly onFeatureSelectRef: { current: FeatureSelectHandler }
+  readonly onGreenDetailSelectRef: { current: GreenDetailSelectHandler }
+  readonly isClickNavigationEnabledRef: { current: () => boolean }
   readonly pending: PendingOp[] = []
   lastTerritoryGeometries: GeoinsightGeometryClip[] = []
   lastTerritoryFitBbox: [number, number, number, number] | null = null
@@ -70,10 +87,17 @@ export class GeoinsightMapAdapter implements GeoinsightMapRuntimeHost, Geoinsigh
   greenLayerVisible = true
   greenRevealGen = 0
   drillExcludeAreaIds: number[] = []
+  detailHighlightGeomIds: string[] = []
+  detailHighlightFeature: TerritoryMapFeature | null = null
+  detailHighlightRestoreClip: import('@/features/territory/lib/geoJsonToGeoinsight').GeoinsightGeometryClip | null =
+    null
+  detailHighlightUsedMounted = false
 
   constructor(options: GeoinsightMapAdapterOptions) {
     this.registry = options.registry
     this.onFeatureSelectRef = options.onFeatureSelectRef
+    this.onGreenDetailSelectRef = options.onGreenDetailSelectRef
+    this.isClickNavigationEnabledRef = options.isClickNavigationEnabledRef
   }
 
   flushPending(): void {
@@ -127,6 +151,7 @@ export class GeoinsightMapAdapter implements GeoinsightMapRuntimeHost, Geoinsigh
 
   asMapBridge(): MapBridge & {
     setOnFeatureSelect: (handler: FeatureSelectHandler) => void
+    setOnGreenDetailSelect: (handler: GreenDetailSelectHandler) => void
     getGreenLayerFeatures: () => TerritoryMapFeature[]
     handleFeatureInfo: (event: unknown) => void
     handleDrawnGeometryInfo: (
@@ -144,6 +169,11 @@ export class GeoinsightMapAdapter implements GeoinsightMapRuntimeHost, Geoinsigh
         loadTerritoryGeoJsonAndShowOnlyFeatureById(this, geojson, featureId),
       fitToCurrentExtent: () => fitTerritoryExtent(this),
       showOnlyFeature: (feature) => showOnlyTerritoryFeature(this, feature),
+      panToLonLatKeepZoom: (lon, lat) => panGeoinsightToLonLatKeepZoom(this, lon, lat),
+      panToLonLatAtScreenFraction: (lon, lat, fractionX, fractionY) =>
+        panGeoinsightToLonLatAtScreenFraction(this, lon, lat, fractionX, fractionY),
+      zoomToLonLatAtScreenFraction: (lon, lat, options) =>
+        zoomGeoinsightToLonLatAtScreenFraction(this, lon, lat, options),
       loadGreenLayer: (geojson, options) => loadGreenLayer(this, geojson, options),
       loadGreenLayerViewport: (fetcher, areasFetcher) =>
         loadGreenLayerViewport(this, fetcher, areasFetcher),
@@ -161,6 +191,9 @@ export class GeoinsightMapAdapter implements GeoinsightMapRuntimeHost, Geoinsigh
       setOnFeatureSelect: (handler) => {
         this.onFeatureSelectRef.current = handler
       },
+      setOnGreenDetailSelect: (handler) => {
+        this.onGreenDetailSelectRef.current = handler
+      },
       getGreenLayerFeatures: () => getGreenLayerFeatures(this),
       handleFeatureInfo: (event) => this.handleFeatureInfo(event),
       handleDrawnGeometryInfo: (mapId, coordinates, epsg, features) =>
@@ -168,6 +201,10 @@ export class GeoinsightMapAdapter implements GeoinsightMapRuntimeHost, Geoinsigh
       activateDrawnGeometryInfo: () => this.activateDrawnGeometryInfo(),
       flushPending: () => this.flushPending(),
       syncDrillContext: (excludeAreaIds) => this.syncDrillContext(excludeAreaIds),
+      setGreenDetailHighlight: (feature, options) =>
+        setDetailHighlightGeom(this, feature, options),
+      clearGreenDetailHighlight: () => clearDetailHighlightGeom(this),
+      discardGreenDetailHighlight: () => discardDetailHighlightGeom(this),
     }
   }
 
@@ -188,6 +225,48 @@ export class GeoinsightMapAdapter implements GeoinsightMapRuntimeHost, Geoinsigh
 
   showOnlyFeature(feature: TerritoryMapFeature): void {
     showOnlyTerritoryFeature(this, feature)
+  }
+
+  panToLonLatKeepZoom(lon: number, lat: number): void {
+    panGeoinsightToLonLatKeepZoom(this, lon, lat)
+  }
+
+  panToLonLatAtScreenFraction(
+    lon: number,
+    lat: number,
+    fractionX?: number,
+    fractionY?: number
+  ): void {
+    panGeoinsightToLonLatAtScreenFraction(this, lon, lat, fractionX, fractionY)
+  }
+
+  zoomToLonLatAtScreenFraction(
+    lon: number,
+    lat: number,
+    options?: {
+      bbox?: [number, number, number, number] | null
+      fractionX?: number
+      fractionY?: number
+      keepZoom?: boolean
+      forceMaxZoom?: boolean
+    }
+  ): void {
+    zoomGeoinsightToLonLatAtScreenFraction(this, lon, lat, options)
+  }
+
+  setGreenDetailHighlight(
+    feature: TerritoryMapFeature,
+    options?: { preferAsset?: boolean }
+  ): void {
+    setDetailHighlightGeom(this, feature, options)
+  }
+
+  clearGreenDetailHighlight(): void {
+    clearDetailHighlightGeom(this)
+  }
+
+  discardGreenDetailHighlight(): void {
+    discardDetailHighlightGeom(this)
   }
 
   loadGreenLayer(

@@ -1,7 +1,7 @@
 const GEOM_ID_PREFIX_PRIORITY: Record<string, number> = {
   GC_: 0,
-  GA_: 1,
-  GS_: 2,
+  GS_: 1, // green assets above areas when both are under the click
+  GA_: 2,
   T_: 3,
 }
 
@@ -40,7 +40,8 @@ export function listGeomIdsFromDrawnFeatures(features: unknown): string[] {
   const ids: string[] = []
   for (const feature of list) {
     const geomId = extractGeomIdFromFeatureInfo(feature)
-    if (geomId) ids.push(geomId)
+    // Ignore temporary detail-selection outline (GH_*), including ZWSP-prefixed ids.
+    if (geomId && !geomId.includes('GH_')) ids.push(geomId)
   }
   return ids
 }
@@ -108,6 +109,27 @@ export function pickBestGeomIdForGreenDrill(
       geomId: rawClusterIds[0],
       candidates: geomIds,
       pickedReason: 'raw-gc-prefix',
+    }
+  }
+
+  // Assets over areas: when both toggles are on and the click hits an asset
+  // inside an area, open the asset detail — not the area.
+  const assetCandidates = candidates.filter((c) => c.layerKind === 'green_asset')
+  if (assetCandidates.length > 0) {
+    assetCandidates.sort((a, b) => a.area - b.area)
+    return {
+      geomId: assetCandidates[0].geomId,
+      candidates: geomIds,
+      pickedReason: 'green-asset-over-area',
+    }
+  }
+
+  const rawAssetIds = geomIds.filter((geomId) => geomId.startsWith('GS_'))
+  if (rawAssetIds.length > 0) {
+    return {
+      geomId: rawAssetIds[0],
+      candidates: geomIds,
+      pickedReason: 'raw-gs-prefix',
     }
   }
 

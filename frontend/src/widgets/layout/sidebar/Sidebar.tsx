@@ -94,7 +94,7 @@ export interface SidebarProps {
 }
 
 export function Sidebar({ collapsed = false, toggleCollapse = () => {} }: SidebarProps) {
-  const [activeId, setActiveId] = useState('aree-gestite')
+  const [activeId, setActiveId] = useState('mappa')
   const groupReactId = useId()
   const groupTargetId = useMemo(
     () => `sidebar-group-${groupReactId.replace(/:/g, '')}`,
@@ -123,17 +123,10 @@ export function Sidebar({ collapsed = false, toggleCollapse = () => {} }: Sideba
         <SidebarSection label="Menù" collapsed={collapsed} />
         <MenuSidebarItem
           Icon={icons.MapIcon}
-          label="Aree gestite"
+          label="Mappa"
           collapsed={collapsed}
-          isActive={activeId === 'aree-gestite'}
-          onClick={() => setActiveId('aree-gestite')}
-        />
-        <MenuSidebarItem
-          Icon={icons.StickynoteIcon}
-          label="Catasto arboreo"
-          collapsed={collapsed}
-          isActive={activeId === 'catasto-arboreo'}
-          onClick={() => setActiveId('catasto-arboreo')}
+          isActive={activeId === 'mappa'}
+          onClick={() => setActiveId('mappa')}
         />
         <MenuSidebarItem
           Icon={icons.DocumentTextIcon}

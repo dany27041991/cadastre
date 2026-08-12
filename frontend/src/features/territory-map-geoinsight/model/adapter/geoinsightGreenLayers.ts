@@ -13,6 +13,8 @@ import type { GeoinsightAdapterHost } from './geoinsightAdapterHost'
 import { loadLayerFromGeoJson } from './geoinsightLayerLoader'
 import { MUNICIPALITY_FRAME_ZOOM_OFFSET } from '../mapZoomUtils'
 import { fitGeoinsightToBboxViaPoint } from './geoinsightMapViewport'
+import { reassertGreenDetailHighlight } from './geoinsightDetailHighlight'
+import type { GreenDetailHighlightHost } from './geoinsightDetailHighlight'
 
 const GREEN_REVEAL_DELAY_MS = 480
 
@@ -33,6 +35,7 @@ function syncGreenGeometriesToMap(host: GeoinsightGreenLayerHost): void {
   host.addGeometries(host.lastGreenGeometries, {
     showLabels: host.lastGreenShowClusterCountLabels,
   })
+  reassertGreenDetailHighlight(host as unknown as GreenDetailHighlightHost)
 }
 
 export function fitGreenExtent(
@@ -84,6 +87,8 @@ export function loadGreenLayer(
   )
   host.lastGreenGeometries = geometries
   if (!options?.skipFit) fitGreenExtent(host)
+  // Static area mounts also cover GH_ — keep detail selector on top.
+  reassertGreenDetailHighlight(host as unknown as GreenDetailHighlightHost)
 }
 
 /**

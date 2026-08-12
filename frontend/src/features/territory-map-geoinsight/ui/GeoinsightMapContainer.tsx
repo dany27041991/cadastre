@@ -6,7 +6,8 @@ import { Geoinsight, useRefGeoinsight } from '@mase/commons-geoinsight'
 import { geoinsightConfig } from '@/app/config/geoinsight'
 import { useGeoinsightStore } from '@/app/store/useGeoinsightStore'
 import { useTranslation } from 'react-i18next'
-import { Box, Loader, Text } from 'dxc-webkit'
+import { Box } from 'dxc-webkit'
+import { LoadingState } from '@/shared/ui'
 import { parseZoomFromCenterScale } from '../model/parseMapZoom'
 
 import { createGeoinsightMapStyle } from './geoinsightMapStyle'
@@ -88,26 +89,21 @@ function GreenViewportLoadingBadge() {
           inset: 'auto',
           width: 'auto',
           height: 'auto',
-          gap: '0.75rem',
           padding: '1.25rem 1.75rem',
           background: 'rgba(212, 237, 218, 0.85)',
           borderRadius: '1rem',
           boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
         }}
       >
-        <Loader
-          type="circle"
-          size="lg"
-          value={50}
-          showPercentage={false}
-          className="green-circle-loader"
-        />
-        <Text font="f1-body-md" style={{ fontWeight: 600, color: 'var(--success)' }}>
-          {t('territory.loading')}
-        </Text>
+        <LoadingState size="l" label={t('territory.loading')} />
       </Box>
     </Box>
   )
+}
+
+export type MapPointerPosition = {
+  clientX: number
+  clientY: number
 }
 
 export interface GeoinsightMapContainerProps {
@@ -119,22 +115,43 @@ export interface GeoinsightMapContainerProps {
     features: unknown[]
   ) => void
   readonly onReady?: () => void
+  /** Captures client coords for anchoring the green detail FloatingPanel. */
+  readonly onMapPointerDown?: (pointer: MapPointerPosition) => void
 }
 
 export function GeoinsightMapContainer({
   onFeatureInfo,
   onDrawnGeometryInfo,
   onReady,
+  onMapPointerDown,
 }: GeoinsightMapContainerProps) {
   const { ref } = useRefGeoinsight()
   const initError = useGeoinsightStore((state) => state.initError)
   const isMapReady = useGeoinsightStore((state) => state.isMapReady)
   const panViewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const onMapPointerDownRef = useRef(onMapPointerDown)
+  onMapPointerDownRef.current = onMapPointerDown
   const lastPolledViewRef = useRef<{ zoom: number | null; cx: number | null; cy: number | null }>({
     zoom: null,
     cx: null,
     cy: null,
   })
+
+  // Capture before Geoinsight/canvas handlers; composedPath covers shadow DOM.
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      const root = containerRef.current
+      if (!root) return
+      if (!event.composedPath().includes(root)) return
+      onMapPointerDownRef.current?.({
+        clientX: event.clientX,
+        clientY: event.clientY,
+      })
+    }
+    window.addEventListener('pointerdown', onPointerDown, true)
+    return () => window.removeEventListener('pointerdown', onPointerDown, true)
+  }, [])
 
   const enforceSingleMapView = useCallback(() => {
     dedupeGeoinsightMapPanels()
@@ -210,7 +227,7 @@ export function GeoinsightMapContainer({
   }, [isMapReady, ref, publishMapZoom, scheduleMapViewRefresh])
 
   const handleGenericEvent = useCallback(
-    (eventName: string, _event: CustomEvent) => {
+    (eventName: string, event: CustomEvent) => {
       if (eventName === 'ready') {
         useGeoinsightStore.getState().setGeoinsightRef(ref)
         const result = ref.current?.getCenterAndScale?.(geoinsightConfig.mapId)
@@ -223,20 +240,29 @@ export function GeoinsightMapContainer({
         onReady?.()
         return
       }
+
+      if (eventName === 'onPointerCoordsChange') {
+        const detail = (event as CustomEvent & { detail?: unknown[] }).detail?.[0] as
+          | { epsg?: string }
+          | undefined
+        if (!detail?.epsg) return
+        const crs = useGeoinsightStore.getState().crs
+        if (crs !== detail.epsg) useGeoinsightStore.getState().setCrs(detail.epsg)
+      }
     },
     [ref, onReady, syncMapZoom, enforceSingleMapView]
   )
 
-  const onPointerCoordsChange = useCallback(
-    (_mapId: number, epsg: string, _coords: string) => {
-      const crs = useGeoinsightStore.getState().crs
-      if (crs !== epsg) useGeoinsightStore.getState().setCrs(epsg)
-    },
-    []
-  )
+  const onPointerCoordsChange = useCallback((_mapId: number, epsg: string, _coords: unknown) => {
+    const crs = useGeoinsightStore.getState().crs
+    if (crs !== epsg) useGeoinsightStore.getState().setCrs(epsg)
+  }, [])
 
   return (
-    <>
+    <div
+      ref={containerRef}
+      style={{ position: 'relative', width: '100%', height: '100%' }}
+    >
       <GreenViewportLoadingBadge />
       {initError ? (
         <div
@@ -268,10 +294,10 @@ export function GeoinsightMapContainer({
         onDrawnGeometryInfo={onDrawnGeometryInfo}
         onPointerCoordsChange={onPointerCoordsChange}
         onGenericEvent={{
-          events: ['ready'],
+          events: ['ready', 'onPointerCoordsChange'],
           callbackFunction: handleGenericEvent,
         }}
       />
-    </>
+    </div>
   )
 }

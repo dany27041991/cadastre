@@ -11,13 +11,25 @@ import {
   LEVEL_SUB_AREAS,
 } from '@/features/territory'
 import { useGreenAssetsLayer } from '@/features/territory/model/hooks/useGreenAssetsLayer'
+import { useGreenFeatureDetail } from '@/features/territory/model/hooks/useGreenFeatureDetail'
+import { GreenDetailModal } from '@/features/territory/ui/green-detail/GreenDetailModal'
+import { resolveGreenDetailAnchorLonLat, bboxFromMapFeature } from '@/features/territory/lib/greenDetailMapAnchor'
+import { resolveGreenFeatureFromTableRow } from '@/features/territory/lib/greenTableRowToMapFeature'
 import {
   buildGreenAreasTableQuery,
   buildGreenAssetsTableQuery,
 } from '@/features/territory/lib/greenTableParams'
 import { filterGreenAreaChildren } from '@/features/territory/lib/greenAreaDrill'
+import {
+  LAYER_KIND_GREEN_AREA,
+  LAYER_KIND_GREEN_ASSET,
+  GREEN_DETAIL_STATUS_READY,
+} from '@/features/territory/model/constants'
+import type { TerritoryMapFeature } from '@/features/territory/types/mapFeature'
+import type { GreenTableRawRow } from '@/features/territory/ui/green-data-table/GreenTableRowActions'
 import { useGreenTablePanel } from '@/features/territory/context/GreenTablePanelContext'
 import { MainContent } from '@/widgets/layout/main/MainContent'
+import { useGreenTablePanelOptional } from '@/features/territory/context/GreenTablePanelContext'
 import {
   GeoinsightFocusContainer,
   GeoinsightMapContainer,
@@ -56,7 +68,193 @@ export function TerritoryMapWidget() {
     clearStoredLeafArea: mapBridge.clearStoredLeafArea,
   })
 
-  const handleMapReady = useTerritoryMapResync({ map, resyncMapLayers: nav.resyncMapLayers })
+  useEffect(() => {
+    // Freeze admin territory click when green overlays are on (no jump).
+    // Green area/asset clicks always open the detail modal via adapter.
+    map.setClickNavigationEnabled(!(greenAssetsLayerActive || greenAreasLayerActive))
+  }, [map, greenAssetsLayerActive, greenAreasLayerActive])
+
+  const layersPanelOpenRef = useRef(false)
+
+  const resyncMapForReady = useCallback(async () => {
+    if (!layersPanelOpenRef.current) {
+      map.clearTerritoryLayer()
+      return
+    }
+    await nav.resyncMapLayers()
+  }, [map, nav.resyncMapLayers])
+
+  const handleMapReady = useTerritoryMapResync({ map, resyncMapLayers: resyncMapForReady })
+
+  const greenDetail = useGreenFeatureDetail({ breadcrumb: nav.breadcrumb })
+  const greenTablePanel = useGreenTablePanelOptional()
+  const lastMapPointerRef = useRef<{ clientX: number; clientY: number } | null>(null)
+  /** Table row had no map geometry — frame once detail bbox arrives. */
+  const pendingTableFrameRef = useRef(false)
+
+  // Collapse green data accordion while the detail panel is open.
+  useEffect(() => {
+    if (!greenDetail.isOpen) return
+    greenTablePanel?.setMapTableAccordionVisible(false)
+  }, [greenDetail.isOpen, greenTablePanel])
+
+  // Red selection: recolor mounted GA_/GS_ while detail is open (no GH_ overlay labels).
+  useEffect(() => {
+    if (!greenDetail.isOpen || !greenDetail.selection) {
+      map.clearGreenDetailHighlight()
+      return
+    }
+    const preferAsset = greenDetail.selection.kind === 'asset'
+    const feature = {
+      ...greenDetail.selection.feature,
+      properties: {
+        ...greenDetail.selection.feature.properties,
+        __greenKind: greenDetail.selection.kind,
+      },
+    }
+    map.setGreenDetailHighlight(feature, { preferAsset })
+  }, [
+    map,
+    greenDetail.isOpen,
+    greenDetail.selection?.id,
+    greenDetail.selection?.kind,
+    greenDetail.selection?.anchorLon,
+    greenDetail.selection?.anchorLat,
+    // Re-apply when true geometry arrives from detail API (replaces empty/bbox placeholder).
+    (greenDetail.selection?.feature.geometry as { type?: string } | undefined)?.type,
+  ])
+
+  // Unmount-only cleanup (avoid StrictMode clear/set thrash removing the red flash).
+  useEffect(() => {
+    return () => {
+      map.clearGreenDetailHighlight()
+    }
+  }, [map])
+
+  const placeDetailPanelAtMapFraction = useCallback((): {
+    clientX: number
+    clientY: number
+  } | null => {
+    const mapEl =
+      typeof document !== 'undefined'
+        ? document.querySelector('.ol-viewport') ??
+          document.querySelector('[aria-label="Map view"]')
+        : null
+    if (!mapEl) return null
+    const rect = mapEl.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return null
+    const clientX = Math.round(rect.left + rect.width * 0.5)
+    const clientY = Math.round(rect.top + rect.height * 0.2)
+    greenDetail.updateAnchorScreen(clientX, clientY)
+    return { clientX, clientY }
+  }, [greenDetail.updateAnchorScreen])
+
+  const frameGreenDetailOnMap = useCallback(
+    (
+      feature: TerritoryMapFeature,
+      lon: number,
+      lat: number,
+      options?: { forceMaxZoom?: boolean },
+    ) => {
+      const bbox = bboxFromMapFeature(feature)
+      map.zoomToLonLatAtScreenFraction(lon, lat, {
+        bbox,
+        forceMaxZoom: options?.forceMaxZoom,
+      })
+      placeDetailPanelAtMapFraction()
+    },
+    [map, placeDetailPanelAtMapFraction],
+  )
+
+  useEffect(() => {
+    map.setOnGreenDetailSelect((id, label, feature, layerKind) => {
+      const pointer = lastMapPointerRef.current
+      const anchor = resolveGreenDetailAnchorLonLat(feature, pointer)
+      if (anchor) {
+        frameGreenDetailOnMap(feature, anchor.lon, anchor.lat, {
+          forceMaxZoom: layerKind === LAYER_KIND_GREEN_ASSET,
+        })
+      }
+      greenDetail.openFromSelection(id, label, feature, layerKind, pointer)
+      if (anchor) placeDetailPanelAtMapFraction()
+    })
+  }, [
+    map,
+    greenDetail.openFromSelection,
+    frameGreenDetailOnMap,
+    placeDetailPanelAtMapFraction,
+  ])
+
+  const handleMapPointerDown = useCallback(
+    (pointer: { clientX: number; clientY: number }) => {
+      lastMapPointerRef.current = pointer
+    },
+    []
+  )
+
+  const handleDrillFromModal = useCallback(() => {
+    const sel = greenDetail.selection
+    if (!sel || sel.kind !== 'area') return
+    greenDetail.close()
+    nav.drillGreenArea(sel.id, sel.primaryLabel, sel.feature)
+  }, [greenDetail, nav, greenAssetsLayerActive, greenAreasLayerActive])
+
+  const handleOpenGreenDetailFromTable = useCallback(
+    (row: GreenTableRawRow, kind: 'area' | 'asset') => {
+      const mounted = map.getGreenLayerFeatures()
+      const resolved = resolveGreenFeatureFromTableRow(row, kind, mounted)
+      if (!resolved) return
+      const layerKind =
+        kind === 'asset' ? LAYER_KIND_GREEN_ASSET : LAYER_KIND_GREEN_AREA
+      const anchor = resolveGreenDetailAnchorLonLat(resolved.feature, null)
+      if (anchor) {
+        frameGreenDetailOnMap(resolved.feature, anchor.lon, anchor.lat, {
+          forceMaxZoom: kind === 'asset',
+        })
+      } else {
+        pendingTableFrameRef.current = true
+      }
+      // Screen-anchor first (map 50%/20%) so the panel never opens at window-center / (0,0).
+      const screenPointer = placeDetailPanelAtMapFraction()
+      greenDetail.openFromSelection(
+        resolved.id,
+        resolved.label,
+        resolved.feature,
+        layerKind,
+        screenPointer,
+      )
+    },
+    [
+      map,
+      greenDetail.openFromSelection,
+      frameGreenDetailOnMap,
+      placeDetailPanelAtMapFraction,
+    ],
+  )
+
+  // Table→detail: zoom when API bbox arrives (no mounted map geometry).
+  useEffect(() => {
+    if (!pendingTableFrameRef.current) return
+    if (greenDetail.status !== GREEN_DETAIL_STATUS_READY) return
+    const bbox = greenDetail.detail?.bbox
+    if (!bbox || bbox.length !== 4) {
+      pendingTableFrameRef.current = false
+      return
+    }
+    pendingTableFrameRef.current = false
+    const lon = (bbox[0] + bbox[2]) / 2
+    const lat = (bbox[1] + bbox[3]) / 2
+    const forceMaxZoom =
+      greenDetail.selection?.kind === 'asset' || greenDetail.detail?.kind === 'asset'
+    map.zoomToLonLatAtScreenFraction(lon, lat, { bbox, forceMaxZoom })
+    placeDetailPanelAtMapFraction()
+  }, [
+    greenDetail.status,
+    greenDetail.detail,
+    greenDetail.selection?.kind,
+    map,
+    placeDetailPanelAtMapFraction,
+  ])
 
   const areasTableQuery = useMemo(
     () => buildGreenAreasTableQuery(nav.level, nav.breadcrumb),
@@ -67,7 +265,30 @@ export function TerritoryMapWidget() {
     [nav.breadcrumb]
   )
 
-  const { registerGreenAssetsLayer } = useGreenTablePanel()
+  const { registerGreenAssetsLayer, registerResetToLanding, resetPanelState, layersPanelOpen } =
+    useGreenTablePanel()
+
+  layersPanelOpenRef.current = layersPanelOpen
+
+  const loadRegionsRef = useRef(nav.loadRegions)
+  loadRegionsRef.current = nav.loadRegions
+  const mapRef = useRef(map)
+  mapRef.current = map
+  const prevLayersPanelOpenRef = useRef(layersPanelOpen)
+
+  // Monitoraggio → hide admin territories. Area Italia (layers) → load Italy once on enter.
+  useEffect(() => {
+    const open = layersPanelOpen
+    const wasOpen = prevLayersPanelOpenRef.current
+    prevLayersPanelOpenRef.current = open
+    if (!open) {
+      mapRef.current.clearTerritoryLayer()
+      return
+    }
+    if (!wasOpen) {
+      void loadRegionsRef.current({ fit: false })
+    }
+  }, [layersPanelOpen])
 
   const restoreGreenAreas = useCallback(async (options?: { skipFit?: boolean }) => {
     const skipFit = options?.skipFit
@@ -103,7 +324,6 @@ export function TerritoryMapWidget() {
       if (isValidGeoJson) {
         const childrenGeojson = filterGreenAreaChildren(geojson, last.id)
         if (childrenGeojson.features?.length) {
-          map.setTerritoryFillVisible(false)
           map.loadGreenLayer(childrenGeojson, { skipFit })
         } else if (storedLeaf) {
           map.loadGreenLayerFromFeature(storedLeaf, { skipFit })
@@ -116,7 +336,6 @@ export function TerritoryMapWidget() {
         map.clearGreenLayer()
       }
     } else if (isValidGeoJson && hasFeatures) {
-      map.setTerritoryFillVisible(false)
       map.loadGreenLayer(geojson, { skipFit })
     } else {
       map.clearGreenLayer()
@@ -185,12 +404,49 @@ export function TerritoryMapWidget() {
     registerGreenAssetsLayer,
   ])
 
+  const closeGreenDetailRef = useRef(greenDetail.close)
+  closeGreenDetailRef.current = greenDetail.close
+
+  const resetToLanding = useCallback(() => {
+    // Sync refs before React re-render so layer effects cannot restart areas-only.
+    greenAreasLayerActiveRef.current = false
+    greenAssetsLayerActiveRef.current = false
+    setGreenAreasLayerActive(false)
+    setGreenAssetsLayerActive(false)
+    closeGreenDetailRef.current()
+    // Discard (do not restore/re-add) so red selection vanishes with the green layer.
+    map.discardGreenDetailHighlight()
+    map.clearGreenLayer()
+    map.setGreenLayerVisible(false)
+    resetPanelState()
+    layersPanelOpenRef.current = false
+    // Reset breadcrumb/level to Italy, then hide admin polygons (Monitoraggio).
+    void loadRegionsRef.current().then(() => {
+      map.clearTerritoryLayer()
+    })
+  }, [map, resetPanelState])
+
+  useEffect(() => {
+    registerResetToLanding(resetToLanding)
+    return () => registerResetToLanding(null)
+  }, [registerResetToLanding, resetToLanding])
+
   const mapOverlay = (
     <GeoinsightFocusContainer>
       <GeoinsightMapContainer
         onFeatureInfo={map.handleFeatureInfo}
         onDrawnGeometryInfo={map.handleDrawnGeometryInfo}
         onReady={handleMapReady}
+        onMapPointerDown={handleMapPointerDown}
+      />
+      <GreenDetailModal
+        isOpen={greenDetail.isOpen}
+        status={greenDetail.status}
+        selection={greenDetail.selection}
+        detail={greenDetail.detail}
+        errorNotFound={greenDetail.errorNotFound}
+        onClose={greenDetail.close}
+        onDrill={handleDrillFromModal}
       />
     </GeoinsightFocusContainer>
   )
@@ -203,11 +459,15 @@ export function TerritoryMapWidget() {
         breadcrumb={nav.breadcrumb}
         onLoadRegions={nav.loadRegions}
         onNavigateTo={nav.navigateTo}
-        showGreenTableAccordion
+        showGreenTableAccordion={
+          layersPanelOpen && (greenAreasLayerActive || greenAssetsLayerActive)
+        }
+        greenAreasLayerActive={greenAreasLayerActive}
         greenAssetsLayerActive={greenAssetsLayerActive}
         areasTableQuery={areasTableQuery}
         assetsTableQuery={assetsTableQuery}
         greenAssetsLayerLoading={greenAssetsLayer.loading}
+        onOpenGreenDetail={handleOpenGreenDetailFromTable}
       />
     </Box>
   )

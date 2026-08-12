@@ -47,8 +47,8 @@ export function runGeoinsightOrQueue(host: GeoinsightMapRuntimeHost, op: Pending
  *
  * Adds also use a large chunk: every addGeometries call makes the vendor
  * reprocess its layer, so a dense pan cycle split into 4x250 calls multiplied
- * that churn and fed the Firefox GC pauses behind the pan freezes (session
- * 4fe799). One 1000-geometry call blocks ~80ms once instead.
+ * that churn and fed the Firefox GC pauses behind the pan freezes. One
+ * 1000-geometry call blocks ~80ms once instead.
  */
 const VENDOR_OP_CHUNK = 1000
 const VENDOR_REMOVE_OP_CHUNK = 2000

@@ -11,6 +11,7 @@ from fastapi.responses import Response
 
 from core.api.dependencies import get_green_assets_uc
 from territory.assets.infrastructure.dto.output import GreenAssetsOutput
+from territory.common.infrastructure.dto.green_detail_out import GreenDetailOut
 from territory.common.infrastructure.green_table_page_out import GreenTablePageOut
 
 router = APIRouter(tags=["territory-assets"])
@@ -167,4 +168,19 @@ def get_green_assets_table(
         sort_by=sort_by,
         sort_dir=sort_dir,
         filters=filters,
+    )
+
+
+# After static paths (viewport/table): otherwise {asset_id} steals those segments → 422.
+@router.get("/green-assets/{asset_id}", response_model=GreenDetailOut)
+def get_green_asset_detail(
+    asset_id: int,
+    region_id: int = Query(..., description="Partition key region_id"),
+    province_id: int = Query(..., description="Partition key province_id"),
+) -> GreenDetailOut:
+    """Curated detail for map popover (summary + metadata subset)."""
+    return get_green_assets_uc().get_green_asset_detail(
+        asset_id,
+        region_id=region_id,
+        province_id=province_id,
     )

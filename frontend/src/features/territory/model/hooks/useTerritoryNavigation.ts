@@ -1,11 +1,11 @@
 /**
  * Territory navigation hook: state (level, breadcrumb), API fetch, map bridge.
+ * Orchestrates smaller modules — no business logic duplication here.
  */
 import { useState, useCallback, useRef, useMemo } from 'react'
 import { createLevelFetchers } from '../fetchers/mapNavigationFetchers'
-import { filterSubMunicipalByDrill } from '../../lib/subMunicipalDrill'
-import { filterGreenAreaChildren } from '../../lib/greenAreaDrill'
-import type { TerritoryMapFeature } from '../../types/mapFeature'
+import { loadGreenSubAreas } from '../../lib/loadGreenSubAreas'
+import { restoreMapForBreadcrumb } from '../../lib/restoreMapForBreadcrumb'
 import { getRegionIdFromMapFeature } from '../../lib/featureIdentity'
 import type {
   TerritoryLevel,
@@ -14,113 +14,24 @@ import type {
   UseTerritoryNavigationResult,
   UseTerritoryNavigationOptions,
 } from '../../types'
-import { I18N_KEYS, LABEL_GREEN_AREAS, SUFFIX_PROVINCE } from '../constants'
-
-type TerritoryNavigationApi = NonNullable<UseTerritoryNavigationOptions['api']>
+import {
+  I18N_KEYS,
+  LABEL_GREEN_AREAS,
+  LEVEL_GREEN_AREAS,
+  LEVEL_MUNICIPALITIES,
+  LEVEL_PROVINCES,
+  LEVEL_REGIONS,
+  LEVEL_SUB_AREAS,
+  LEVEL_SUB_MUNICIPAL_AREAS,
+  LAYER_KIND_GREEN_AREA,
+  LAYER_KIND_GREEN_ASSET,
+  SUFFIX_PROVINCE,
+  type MapLayerKind,
+} from '../constants'
+import { useGreenLayerDisplay } from './useGreenLayerDisplay'
+import { useAdminTerritoryLoaders } from './useAdminTerritoryLoaders'
 
 export type { MapBridge, UseTerritoryNavigationResult, UseTerritoryNavigationOptions } from '../../types'
-
-function hasGeoJsonFeatures(geojson: { features?: unknown[] }): boolean {
-  return Boolean(geojson.features?.length)
-}
-
-type GreenLayerGeoJson = Parameters<MapBridge['loadGreenLayer']>[0]
-
-async function handleGreenLevelNavigation(
-  last: BreadcrumbCrumb,
-  newCrumb: BreadcrumbCrumb[],
-  geojson: GreenLayerGeoJson,
-  api: TerritoryNavigationApi | undefined,
-  bridge: MapBridge,
-  showGreenLayer: (g: GreenLayerGeoJson) => void,
-  showLeafArea: (f: TerritoryMapFeature) => void,
-  assetsLayerActive: boolean
-): Promise<void> {
-  // Assets toggle owns the green layer (viewport clusters). Clearing/replacing
-  // it with area polygons races the scope refetch and leaves the map without clusters.
-  if (!assetsLayerActive) {
-    bridge.clearGreenLayer()
-  }
-  bridge.clearTerritoryLayer()
-  if (api) await loadTerritoryForGreenLevel(api, bridge, newCrumb, last)
-  if (assetsLayerActive) return
-  if (hasGeoJsonFeatures(geojson)) {
-    const toShow =
-      last.level === 'sub_areas'
-        ? filterGreenAreaChildren(geojson, last.id)
-        : geojson
-    showGreenLayer(toShow)
-  } else {
-    const leafFeature = last.level === 'sub_areas' ? bridge.getStoredLeafArea?.(last.id) : undefined
-    if (leafFeature) showLeafArea(leafFeature)
-    else bridge.clearGreenLayer()
-  }
-}
-
-function geoJsonHasFeatureId(
-  geojson: { features?: Array<{ id?: number; properties?: { id?: number } }> },
-  featureId: number
-): boolean {
-  return Boolean(
-    geojson.features?.some(
-      (f) => f.id === featureId || f.properties?.id === featureId
-    )
-  )
-}
-
-async function loadTerritoryForGreenLevel(
-  api: TerritoryNavigationApi,
-  bridge: MapBridge,
-  newCrumb: BreadcrumbCrumb[],
-  last: BreadcrumbCrumb
-): Promise<void> {
-  if (last.level === 'sub_areas' && last.regionId != null && last.provinceId != null && newCrumb.length >= 2) {
-    const parentCrumb = newCrumb[newCrumb.length - 2]
-    if (parentCrumb.level === 'green_areas') {
-      /**
-       * green_areas crumb id is municipality_id, not a green area id.
-       * parent_id on API = children of that *green area* → wrong query if we pass municipality id.
-       * Load roots for the municipality and highlight `last` only if it is a root; otherwise
-       * skip vector outline (green layer will show sub-areas + fit).
-       */
-      const munGeo = await api.getGreenAreas({
-        regionId: last.regionId,
-        provinceId: last.provinceId,
-        municipalityId: parentCrumb.id,
-        subMunicipalAreaId: parentCrumb.subMunicipalAreaId,
-      })
-      if (hasGeoJsonFeatures(munGeo) && geoJsonHasFeatureId(munGeo, last.id)) {
-        bridge.loadGeoJsonAndShowOnlyFeatureById(munGeo, last.id)
-      }
-      return
-    }
-    /** Parent crumb is sub_areas: parentCrumb.id is a green area → API parent_id is correct. */
-    const parentGeo = await api.getGreenAreas({
-      regionId: last.regionId,
-      provinceId: last.provinceId,
-      parentId: parentCrumb.id,
-    })
-    if (hasGeoJsonFeatures(parentGeo)) {
-      bridge.loadGeoJsonAndShowOnlyFeatureById(parentGeo, last.id)
-    }
-    return
-  }
-  if (last.level !== 'green_areas' || last.regionId == null) return
-  if (last.subMunicipalAreaId != null) {
-    const subGeo = await api.getSubMunicipalAreasByMunicipality(last.id)
-    if (hasGeoJsonFeatures(subGeo)) {
-      bridge.loadGeoJsonAndShowOnlyFeatureById(subGeo, last.subMunicipalAreaId)
-    }
-    return
-  }
-  const municipalitiesCrumb = newCrumb.find((c) => c.level === 'municipalities')
-  if (municipalitiesCrumb) {
-    const munGeo = await api.getMunicipalitiesByProvince(municipalitiesCrumb.id)
-    if (hasGeoJsonFeatures(munGeo)) {
-      bridge.loadGeoJsonAndShowOnlyFeatureById(munGeo, last.id)
-    }
-  }
-}
 
 export function useTerritoryNavigation(
   mapBridge: MapBridge,
@@ -132,7 +43,7 @@ export function useTerritoryNavigation(
   const isAreasLayerActive = options.isAreasLayerActive
   const labelGreenAreas = t ? t(I18N_KEYS.greenAreas) : LABEL_GREEN_AREAS
   const suffixProvince = t ? t(I18N_KEYS.provinceSuffix) : SUFFIX_PROVINCE
-  const [level, setLevel] = useState<TerritoryLevel>('regions')
+  const [level, setLevel] = useState<TerritoryLevel>(LEVEL_REGIONS)
   const [breadcrumb, setBreadcrumb] = useState<BreadcrumbCrumb[]>([])
   const [loading, setLoading] = useState(false)
   const bridgeRef = useRef(mapBridge)
@@ -170,220 +81,32 @@ export function useTerritoryNavigation(
     bridgeRef.current.clearStoredLeafArea?.()
   }, [])
 
-  const showGreenLayer = useCallback(
-    (
-      geojson: Parameters<MapBridge['loadGreenLayer']>[0],
-      options?: { includeTerritoryBbox?: boolean }
-    ) => {
-      const areasOn = areasActiveRef.current?.() ?? true
-      const assetsOn = assetsActiveRef.current?.() ?? false
-      if (!areasOn) {
-        // Aree Gestite off: do not mount drill-down polygons.
-        if (!assetsOn) {
-          bridgeRef.current.clearGreenLayer()
-          bridgeRef.current.setGreenLayerVisible(false)
-        }
-        return
-      }
-      bridgeRef.current.setTerritoryFillVisible(false)
-      bridgeRef.current.loadGreenLayer(geojson, { skipFit: true })
-      bridgeRef.current.setGreenLayerVisibleWhenMoveEnds()
-      bridgeRef.current.fitToGreenExtent(options?.includeTerritoryBbox ?? true)
-      bridgeRef.current.ensureGreenLayerVisibleAfterFit()
-    },
-    []
+  const { showGreenLayer, showLeafAreaFromFeature } = useGreenLayerDisplay(
+    bridgeRef,
+    areasActiveRef,
+    assetsActiveRef
   )
 
-  const showLeafAreaFromFeature = useCallback(
-    (feat: TerritoryMapFeature, options?: { includeTerritoryBbox?: boolean }) => {
-      const areasOn = areasActiveRef.current?.() ?? true
-      const assetsOn = assetsActiveRef.current?.() ?? false
-      if (!areasOn) {
-        if (!assetsOn) {
-          bridgeRef.current.clearGreenLayer()
-          bridgeRef.current.setGreenLayerVisible(false)
-        }
-        return
-      }
-      bridgeRef.current.loadGreenLayerFromFeature(feat)
-      bridgeRef.current.setTerritoryFillVisible(false)
-      bridgeRef.current.setGreenLayerVisible(true)
-      bridgeRef.current.fitToGreenExtent(options?.includeTerritoryBbox ?? true)
-    },
-    []
-  )
-
-  const loadRegions = useCallback(async () => {
-    if (!api) return
-    clearTerritoryState()
-    setLevel('regions')
-    setBreadcrumb([])
-    await withLoading(async () => {
-      const geojson = await api.getRegions()
-      bridgeRef.current.loadGeoJson(geojson)
-      bridgeRef.current.fitToCurrentExtent()
-    })
-  }, [api, withLoading, clearTerritoryState])
-
-  const loadProvinces = useCallback(
-    async (regionId: number, label: string) => {
-      if (!api) return
-      clearTerritoryState()
-      setLevel('provinces')
-      setBreadcrumb([{ level: 'provinces', id: regionId, label }])
-      await withLoading(async () => {
-        const geojson = await api.getProvincesByRegion(regionId)
-        applyGeoJsonToBridge(geojson)
-      })
-    },
-    [api, withLoading, applyGeoJsonToBridge, clearTerritoryState]
-  )
-
-  const loadMunicipalities = useCallback(
-    async (provinceId: number, label: string) => {
-      if (!api) return
-      clearTerritoryState()
-      setLevel('municipalities')
-      setBreadcrumb((prev) => [
-        ...prev,
-        { level: 'municipalities', id: provinceId, label: `${label}${suffixProvince}` },
-      ])
-      await withLoading(async () => {
-        const geojson = await api.getMunicipalitiesByProvince(provinceId)
-        applyGeoJsonToBridge(geojson)
-      })
-    },
-    [api, withLoading, applyGeoJsonToBridge, clearTerritoryState, suffixProvince]
-  )
-
-  const jumpToGreenAreasWhenMunicipalityHasNoSubAreas = useCallback(
-    async (regionId: number, municipalityId: number, provinceId?: number) => {
-      if (!api || provinceId == null) return
-      const areasGeojson = await api.getGreenAreas({
-        regionId,
-        provinceId,
-        municipalityId,
-      })
-      if (!hasGeoJsonFeatures(areasGeojson)) return
-      setLevel('green_areas')
-      setBreadcrumb((prev) => {
-        const last = prev[prev.length - 1]
-        const resolvedProvinceId = provinceId ?? prev.find((c) => c.level === 'municipalities')?.id
-        return [
-          ...prev.slice(0, -1),
-          ...(last ? [{ ...last, navigable: false }] : []),
-          {
-            level: 'green_areas',
-            id: municipalityId,
-            label: labelGreenAreas,
-            regionId,
-            provinceId: resolvedProvinceId,
-          },
-        ]
-      })
-      showGreenLayer(areasGeojson)
-    },
-    [api, labelGreenAreas, showGreenLayer]
-  )
-
-  const loadSubMunicipalAreas = useCallback(
-    async (
-      regionId: number,
-      municipalityId: number,
-      label: string,
-      clickedFeature?: unknown,
-      provinceId?: number
-    ) => {
-      if (!api) return
-      clearTerritoryState()
-      const ensureFeatureVisible = () => {
-        if (clickedFeature) bridgeRef.current.showOnlyFeature(clickedFeature as TerritoryMapFeature)
-      }
-      setLevel('sub_municipal_areas')
-      setBreadcrumb((prev) => {
-        const last = prev[prev.length - 1]
-        const newCrumb: BreadcrumbCrumb = { level: 'sub_municipal_areas', id: municipalityId, label }
-        return last?.level === 'sub_municipal_areas'
-          ? [...prev.slice(0, -1), newCrumb]
-          : [...prev, newCrumb]
-      })
-      ensureFeatureVisible()
-      await withLoading(async () => {
-        try {
-          const geojson = await api.getSubMunicipalAreasByMunicipality(municipalityId)
-          const filtered = filterSubMunicipalByDrill(geojson, 1, [])
-          if (hasGeoJsonFeatures(filtered)) {
-            applyGeoJsonToBridge(filtered)
-            return
-          }
-          ensureFeatureVisible()
-          await jumpToGreenAreasWhenMunicipalityHasNoSubAreas(
-            regionId,
-            municipalityId,
-            provinceId
-          )
-        } catch {
-          ensureFeatureVisible()
-        }
-      })
-    },
-    [api, withLoading, jumpToGreenAreasWhenMunicipalityHasNoSubAreas, applyGeoJsonToBridge, clearTerritoryState]
-  )
-
-  const loadGreenAreas = useCallback(
-    async (
-      regionId: number,
-      municipalityId: number,
-      subMunicipalAreaLabel: string,
-      subMunicipalAreaId?: number,
-      _clickedFeature?: unknown
-    ) => {
-      if (!api) return
-      const assetsActive = assetsActiveRef.current?.() ?? false
-      // Keep viewport clusters when the assets toggle is on: showGreenLayer would
-      // reset greenAssetClusteringActive after the scope effect had already re-armed it.
-      if (!assetsActive) {
-        bridgeRef.current.clearGreenLayer()
-      }
-      bridgeRef.current.setTerritoryFillVisible(false)
-      setLevel('green_areas')
-      setBreadcrumb((prev) => {
-        const last = prev[prev.length - 1]
-        const provinceId = prev.find((c) => c.level === 'municipalities')?.id
-        if (
-          last?.level === 'green_areas' &&
-          last?.id === municipalityId &&
-          last?.subMunicipalAreaId === subMunicipalAreaId
-        ) {
-          return prev
-        }
-        return [
-          ...prev,
-          {
-            level: 'green_areas',
-            id: municipalityId,
-            label: subMunicipalAreaId != null && subMunicipalAreaLabel ? subMunicipalAreaLabel : labelGreenAreas,
-            subMunicipalAreaId,
-            regionId,
-            provinceId,
-          },
-        ]
-      })
-      if (assetsActive) return
-      await withLoading(async () => {
-        const provinceId = breadcrumb.find((c) => c.level === 'municipalities')?.id
-        if (provinceId == null) return
-        const geojson = await api.getGreenAreas({
-          regionId,
-          provinceId,
-          municipalityId,
-          subMunicipalAreaId,
-        })
-        if (hasGeoJsonFeatures(geojson)) showGreenLayer(geojson)
-      })
-    },
-    [api, withLoading, labelGreenAreas, showGreenLayer, breadcrumb]
-  )
+  const {
+    loadRegions,
+    loadProvinces,
+    loadMunicipalities,
+    loadSubMunicipalAreas,
+    loadGreenAreas,
+  } = useAdminTerritoryLoaders({
+    api,
+    bridgeRef,
+    assetsActiveRef,
+    breadcrumb,
+    labelGreenAreas,
+    suffixProvince,
+    withLoading,
+    clearTerritoryState,
+    applyGeoJsonToBridge,
+    showGreenLayer,
+    setLevel,
+    setBreadcrumb,
+  })
 
   const loadSubAreas = useCallback(
     async (
@@ -393,46 +116,35 @@ export function useTerritoryNavigation(
       clickedFeature?: unknown
     ) => {
       if (!api) return
-      const municipalityId = breadcrumb.find((c) => c.level === 'green_areas')?.id
-      const provinceId = breadcrumb.find((c) => c.level === 'green_areas')?.provinceId ?? breadcrumb.find((c) => c.level === 'municipalities')?.id
-      if (provinceId == null || municipalityId == null) return
-      const assetsActive = assetsActiveRef.current?.() ?? false
-      if (!assetsActive) {
-        bridgeRef.current.clearGreenLayer()
-      }
-      bridgeRef.current.setTerritoryFillVisible(false)
-      setLevel('sub_areas')
-      setBreadcrumb((prev) => {
-        const last = prev[prev.length - 1]
-        if (last?.level === 'sub_areas' && last?.id === areaId) return prev
-        return [...prev, { level: 'sub_areas', id: areaId, label, regionId, provinceId, municipalityId }]
-      })
-      if (assetsActive) {
-        if (clickedFeature) {
-          bridgeRef.current.storeLeafAreaForRestore?.(areaId, clickedFeature as TerritoryMapFeature)
-        }
-        return
-      }
-      await withLoading(async () => {
-        const geojson = await api.getGreenAreas({
+      await withLoading(() =>
+        loadGreenSubAreas({
+          api,
+          bridge: bridgeRef.current,
+          breadcrumb,
+          areaId,
           regionId,
-          provinceId,
-          municipalityId,
-          containedInAreaId: areaId,
+          label,
+          clickedFeature,
+          labelGreenAreas,
+          suffixProvince,
+          assetsActive: assetsActiveRef.current?.() ?? false,
+          areasActive: areasActiveRef.current?.() ?? true,
+          showGreenLayer,
+          showLeafAreaFromFeature,
+          setLevel,
+          setBreadcrumb,
         })
-        const childrenGeojson = filterGreenAreaChildren(geojson, areaId)
-        if (hasGeoJsonFeatures(childrenGeojson)) {
-          // Drill-in: frame the clicked area's children, not the stored
-          // territory (municipality) bbox used by breadcrumb navigation.
-          showGreenLayer(childrenGeojson, { includeTerritoryBbox: false })
-        } else if (clickedFeature) {
-          const feat = clickedFeature as TerritoryMapFeature
-          bridgeRef.current.storeLeafAreaForRestore?.(areaId, feat)
-          showLeafAreaFromFeature(feat, { includeTerritoryBbox: false })
-        }
-      })
+      )
     },
-    [api, breadcrumb, withLoading, showGreenLayer, showLeafAreaFromFeature]
+    [
+      api,
+      breadcrumb,
+      withLoading,
+      showGreenLayer,
+      showLeafAreaFromFeature,
+      labelGreenAreas,
+      suffixProvince,
+    ]
   )
 
   const navigateTo = useCallback(
@@ -447,57 +159,48 @@ export function useTerritoryNavigation(
       if (!last) return
       if (newCrumb.length === breadcrumb.length) return
       setBreadcrumb((prev) => prev.slice(0, index + 1))
-      if (last.level !== 'green_areas' && last.level !== 'sub_areas') {
+      if (last.level !== LEVEL_GREEN_AREAS && last.level !== LEVEL_SUB_AREAS) {
         clearTerritoryState()
       }
       const fetcher = levelFetchers[last.level]
-      if (!fetcher) {
-        return
-      }
+      if (!fetcher) return
 
       navigateInProgressRef.current = true
       setLevel(last.level)
       try {
-        await withLoading(async () => {
-          const geojson = await fetcher(last)
-          if (
-            last.level === 'sub_municipal_areas' &&
-            !hasGeoJsonFeatures(geojson) &&
-            newCrumb.length >= 2 &&
-            api
-          ) {
-            const provinceCrumb = newCrumb[newCrumb.length - 2]
-            const municipalitiesGeojson = await api.getMunicipalitiesByProvince(provinceCrumb.id)
-            bridgeRef.current.loadGeoJsonAndShowOnlyFeatureById(municipalitiesGeojson, last.id)
-          } else if (last.level === 'green_areas' || last.level === 'sub_areas') {
-            await handleGreenLevelNavigation(
-              last,
-              newCrumb,
-              geojson,
-              api,
-              bridgeRef.current,
-              showGreenLayer,
-              showLeafAreaFromFeature,
-              assetsActiveRef.current?.() ?? false
-            )
-          } else {
-            applyGeoJsonToBridge(geojson, true)
-          }
-        })
+        await withLoading(() =>
+          restoreMapForBreadcrumb({
+            api,
+            bridge: bridgeRef.current,
+            crumb: newCrumb,
+            last,
+            fetcher,
+            assetsLayerActive: assetsActiveRef.current?.() ?? false,
+            showGreenLayer,
+            showLeafAreaFromFeature,
+            applyGeoJsonToBridge,
+          })
+        )
       } finally {
         navigateInProgressRef.current = false
       }
     },
-    [api, breadcrumb, loadRegions, levelFetchers, withLoading, applyGeoJsonToBridge, clearTerritoryState, showGreenLayer, showLeafAreaFromFeature]
+    [
+      api,
+      breadcrumb,
+      loadRegions,
+      levelFetchers,
+      withLoading,
+      applyGeoJsonToBridge,
+      clearTerritoryState,
+      showGreenLayer,
+      showLeafAreaFromFeature,
+    ]
   )
 
   const resyncMapLayers = useCallback(async () => {
     if (!api) return
-    if (level === 'regions' && breadcrumb.length === 0) {
-      await loadRegions()
-      return
-    }
-    if (breadcrumb.length === 0) {
+    if ((level === LEVEL_REGIONS && breadcrumb.length === 0) || breadcrumb.length === 0) {
       await loadRegions()
       return
     }
@@ -509,34 +212,20 @@ export function useTerritoryNavigation(
     const fetcher = levelFetchers[last.level]
     if (!fetcher) return
 
-    await withLoading(async () => {
-      const geojson = await fetcher(last)
-      if (last.level === 'green_areas' || last.level === 'sub_areas') {
-        await handleGreenLevelNavigation(
-          last,
-          breadcrumb,
-          geojson,
-          api,
-          bridgeRef.current,
-          showGreenLayer,
-          showLeafAreaFromFeature,
-          assetsActiveRef.current?.() ?? false
-        )
-        return
-      }
-      if (
-        last.level === 'sub_municipal_areas' &&
-        !hasGeoJsonFeatures(geojson) &&
-        breadcrumb.length >= 2
-      ) {
-        const provinceCrumb = breadcrumb[breadcrumb.length - 2]
-        const municipalitiesGeojson = await api.getMunicipalitiesByProvince(provinceCrumb.id)
-        bridgeRef.current.loadGeoJsonAndShowOnlyFeatureById(municipalitiesGeojson, last.id)
-        return
-      }
-      clearTerritoryState()
-      applyGeoJsonToBridge(geojson, true)
-    })
+    await withLoading(() =>
+      restoreMapForBreadcrumb({
+        api,
+        bridge: bridgeRef.current,
+        crumb: breadcrumb,
+        last,
+        fetcher,
+        assetsLayerActive: assetsActiveRef.current?.() ?? false,
+        showGreenLayer,
+        showLeafAreaFromFeature,
+        applyGeoJsonToBridge,
+        clearTerritoryState,
+      })
+    )
   }, [
     api,
     level,
@@ -554,36 +243,74 @@ export function useTerritoryNavigation(
     navigateTo(breadcrumb.length - 2)
   }, [breadcrumb.length, navigateTo])
 
+  const resolveRegionId = useCallback(
+    (feature?: unknown) => {
+      const regionIdFromFeature = feature ? getRegionIdFromMapFeature(feature) : undefined
+      const regionIdFromBreadcrumb = [...breadcrumb]
+        .reverse()
+        .find((crumb) => crumb.regionId != null)?.regionId
+      return regionIdFromFeature ?? regionIdFromBreadcrumb ?? breadcrumb[0]?.id
+    },
+    [breadcrumb]
+  )
+
   const handleFeatureSelect = useCallback(
-    (id: number, label: string, feature?: unknown) => {
+    (
+      id: number,
+      label: string,
+      feature?: unknown,
+      layerKind?: MapLayerKind
+    ) => {
+      if (layerKind === LAYER_KIND_GREEN_ASSET || layerKind === LAYER_KIND_GREEN_AREA) return
+      const overlaysActive =
+        (assetsActiveRef.current?.() ?? false) || (areasActiveRef.current?.() ?? false)
+      if (overlaysActive) return
+
       const regionIdFromCrumb = breadcrumb[0]?.id
       const municipalityId = breadcrumb[breadcrumb.length - 1]?.id
       const loadSubAreasFromFeature = () => {
-        const regionIdFromFeature = feature ? getRegionIdFromMapFeature(feature) : undefined
-        const regionIdFromBreadcrumb = [...breadcrumb]
-          .reverse()
-          .find((crumb) => crumb.regionId != null)?.regionId
-        const regionId = regionIdFromFeature ?? regionIdFromBreadcrumb ?? regionIdFromCrumb
+        const regionId = resolveRegionId(feature)
         if (regionId != null) loadSubAreas(id, regionId, label, feature)
       }
       const actions: Partial<Record<TerritoryLevel, () => void>> = {
-        regions: () => { loadProvinces(id, label) },
-        provinces: () => { loadMunicipalities(id, label) },
-        municipalities: () => {
+        [LEVEL_REGIONS]: () => {
+          loadProvinces(id, label)
+        },
+        [LEVEL_PROVINCES]: () => {
+          loadMunicipalities(id, label)
+        },
+        [LEVEL_MUNICIPALITIES]: () => {
           const provinceId = breadcrumb[1]?.id
           loadSubMunicipalAreas(regionIdFromCrumb ?? 0, id, label, feature, provinceId)
         },
-        sub_municipal_areas: () => {
+        [LEVEL_SUB_MUNICIPAL_AREAS]: () => {
           if (regionIdFromCrumb != null && municipalityId != null && feature)
             loadGreenAreas(regionIdFromCrumb, municipalityId, label, id, feature)
         },
-        green_areas: loadSubAreasFromFeature,
-        sub_areas: loadSubAreasFromFeature,
+        [LEVEL_GREEN_AREAS]: loadSubAreasFromFeature,
+        [LEVEL_SUB_AREAS]: loadSubAreasFromFeature,
       }
-      const run = actions[level]
-      if (run) run()
+      actions[level]?.()
     },
-    [level, breadcrumb, loadProvinces, loadMunicipalities, loadSubMunicipalAreas, loadGreenAreas, loadSubAreas]
+    [
+      level,
+      breadcrumb,
+      loadProvinces,
+      loadMunicipalities,
+      loadSubMunicipalAreas,
+      loadGreenAreas,
+      loadSubAreas,
+      resolveRegionId,
+    ]
+  )
+
+  const drillGreenArea = useCallback(
+    (areaId: number, label: string, feature?: unknown) => {
+      const regionId = resolveRegionId(feature)
+      if (regionId == null) return
+      void loadSubAreas(areaId, regionId, label, feature)
+    },
+    [resolveRegionId, loadSubAreas]
   )
 
   return {
@@ -596,6 +323,7 @@ export function useTerritoryNavigation(
     loadSubMunicipalAreas,
     loadGreenAreas,
     loadSubAreas,
+    drillGreenArea,
     resyncMapLayers,
     navigateTo,
     goBack,

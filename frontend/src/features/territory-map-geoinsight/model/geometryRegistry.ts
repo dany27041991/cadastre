@@ -3,6 +3,11 @@
  */
 import type { TerritoryMapFeature } from '@/features/territory/types/mapFeature'
 import { toTerritoryMapFeature } from '@/features/territory/lib/featureIdentity'
+import {
+  geometryHitKind,
+  hitPadForKind,
+  lonLatHitsGeometry,
+} from '../lib/geometryHitTest'
 
 export type GeometryLayerKind = 'territory' | 'green_area' | 'green_asset' | 'cluster'
 
@@ -125,5 +130,55 @@ export class GeometryRegistry {
 
   toMapFeature(entry: GeometryRegistryEntry): TerritoryMapFeature {
     return toTerritoryMapFeature(entry.id, entry.properties, entry.geometry)
+  }
+
+  /**
+   * Hit-test green area/asset under lon/lat (EPSG:4326).
+   * Coarse bbox filter, then geometry (Point / Line / Polygon + Multi*).
+   * Prefers green_asset over green_area; skips multi-member clusters.
+   */
+  findGreenHoverTarget(lon: number, lat: number): GeometryRegistryEntry | null {
+    let bestAsset: GeometryRegistryEntry | null = null
+    let bestArea: GeometryRegistryEntry | null = null
+    let bestAssetArea = Number.POSITIVE_INFINITY
+    let bestAreaArea = Number.POSITIVE_INFINITY
+
+    const seen = new Set<GeometryRegistryEntry>()
+    for (const entry of this.entries.values()) {
+      if (seen.has(entry)) continue
+      seen.add(entry)
+      if (entry.layerKind !== 'green_area' && entry.layerKind !== 'green_asset') continue
+      if (entry.isCluster && (entry.memberCount ?? 0) > 1) continue
+      const bbox = entry.bbox
+      if (!bbox) continue
+
+      const kind = geometryHitKind(entry.geometry)
+      const pad = hitPadForKind(kind === 'unknown' ? 'surface' : kind)
+      const [minLon, minLat, maxLon, maxLat] = bbox
+      const inBbox =
+        lon >= minLon - pad &&
+        lon <= maxLon + pad &&
+        lat >= minLat - pad &&
+        lat <= maxLat + pad
+      if (!inBbox) continue
+
+      const hasGeometry =
+        entry.geometry != null &&
+        typeof entry.geometry === 'object' &&
+        'type' in entry.geometry
+      if (hasGeometry && !lonLatHitsGeometry(entry.geometry, lon, lat, pad)) continue
+
+      const area = Math.max(maxLon - minLon, pad) * Math.max(maxLat - minLat, pad)
+      if (entry.layerKind === 'green_asset') {
+        if (area < bestAssetArea) {
+          bestAsset = entry
+          bestAssetArea = area
+        }
+      } else if (area < bestAreaArea) {
+        bestArea = entry
+        bestAreaArea = area
+      }
+    }
+    return bestAsset ?? bestArea
   }
 }

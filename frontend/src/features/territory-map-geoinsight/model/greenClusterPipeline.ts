@@ -75,7 +75,7 @@ export function buildGreenClusterLayerPayload(
     if (!wkt) return
     const geomId = displayItemToGeomId(item, zoomLevel, index)
     geometries.push(buildGreenAssetGeometryClip(geomId, wkt, item))
-    if (showClusterCountLabels && item.isCluster && (item.memberCount ?? 0) > 1) {
+    if (showClusterCountLabels && item.isCluster && (item.memberCount ?? 0) >= 1) {
       const labelWkt = geometryToWkt(item.geometry)
       if (labelWkt) {
         geometries.push(
@@ -153,7 +153,9 @@ export function clusterInputsToDisplayItems(
     isCluster: false,
     memberCount: 1,
     members: [f],
-    bbox: null,
+    // Propagate cached centroid bbox from geoJsonToClusterInputs — needed for
+    // registry hit helpers / extent; null previously dropped single assets.
+    bbox: f.bbox ?? null,
   }))
 }
 

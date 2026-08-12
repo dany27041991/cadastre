@@ -19,6 +19,8 @@ import {
   getGeoinsightRef,
   runAfterGeoinsightVendorOps,
 } from './geoinsightMapRuntime'
+import { reassertGreenDetailHighlight } from './geoinsightDetailHighlight'
+import type { GreenDetailHighlightHost } from './geoinsightDetailHighlight'
 
 /** Fetches viewport-sized data from the server (bbox+zoom → raw assets or clusters). */
 export type GreenViewportFetcher = (
@@ -72,8 +74,8 @@ const rawApplyReasons = new WeakMap<GeoinsightGreenClusterHost, string>()
  * into a single cycle on pointer release. Each refresh allocates heavily
  * (geobuf decode, payload rebuild, vendor re-index of hundreds of geometries):
  * running several cycles mid-gesture piled up garbage until Firefox paused the
- * main thread 1-2s with a major GC, freezing the drag (proven by GC
- * finalization bursts coinciding with the frame stalls, debug session 4fe799).
+ * main thread 1-2s with a major GC, freezing the drag (GC finalization
+ * bursts coincide with the frame stalls).
  */
 let mapPointerDragActive = false
 let dragDeferredApply: (() => void) | null = null
@@ -197,15 +199,14 @@ export function clearGreenLayerPrefixes(host: GeoinsightGreenClusterHost): strin
  * Additive pan mounting. Removing hundreds of geometries on every pan cycle
  * made the vendor discard its parsed geometry graphs each time; the resulting
  * allocation churn triggered 1-2s Firefox major-GC pauses that froze the drag
- * (debug session 4fe799: GC finalization bursts coincide with every stall,
- * removes of 100-800 per cycle). During pan we only add entering features and
- * keep the exiting ones mounted; they are pruned in one rare batch when the
- * map has been still for a moment (or immediately past a hard budget).
+ * (GC finalization bursts coincide with every stall, removes of 100-800 per
+ * cycle). During pan we only add entering features and keep the exiting ones
+ * mounted; they are pruned in one rare batch when the map has been still for a
+ * moment (or immediately past a hard budget).
  */
 // 1.5s idle pruning fired inside the user's natural pause between two drags,
-// so the remove churn (and its GC pause) landed right as they resumed panning
-// (run post-fix-gc-v2: gaps of 2.4-3.4s right after prunes of 200-640). Prune
-// only after the map has been still for a while, in small batches spaced out
+// so the remove churn (and its GC pause) landed right as they resumed panning.
+// Prune only after the map has been still for a while, in small batches spaced out
 // so each one produces little garbage (absorbed by minor GC instead of a
 // multi-second major pause), and only once enough stale features accumulated.
 const PAN_STALE_PRUNE_IDLE_MS = 6000
@@ -340,6 +341,8 @@ function mountGreenPayload(
     host.addGeometries(toAdd, { showLabels: payload.showClusterCountLabels })
   }
   if (toRemove.length > 0) host.removeGeomIds(toRemove)
+  // Green mounts paint over GH_ — re-stack the detail selector on top.
+  reassertGreenDetailHighlight(host as unknown as GreenDetailHighlightHost)
 }
 
 /**

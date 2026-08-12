@@ -1,7 +1,7 @@
 # Dettaglio area/asset verde — Popover al hover
 
 **Data:** 2026-07-30  
-**Stato:** design approvato (brainstorming)  
+**Stato:** **superseded** da [2026-07-30-green-detail-click-modal-design.md](./2026-07-30-green-detail-click-modal-design.md) (click + Modal + drill da CTA)  
 **Vincolo UI:** solo componenti **dxc-webkit** (regola `frontend-ui-components-only`).
 
 ## Obiettivo
