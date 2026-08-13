@@ -1,0 +1,65 @@
+.root {
+  width: 100%;
+  min-width: 0;
+}
+
+.back {
+  margin-bottom: 0.5rem;
+}
+
+.hint {
+  display: block;
+  margin-bottom: 0.65rem;
+  color: var(--gray-600, #6c757d);
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+.list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 0.75rem;
+  row-gap: 0.45rem;
+  align-items: start;
+  overflow: visible;
+  max-height: none;
+  padding-right: 0;
+}
+
+.checkbox {
+  font-size: 0.75rem;
+  line-height: 1.25;
+  min-height: 0;
+}
+
+.checkbox :global(.form-check) {
+  min-height: 0;
+  margin-bottom: 0;
+  padding-left: 1.35rem;
+}
+
+.checkbox :global(.form-check-input) {
+  width: 0.8125rem;
+  height: 0.8125rem;
+  margin-top: 0.12rem;
+  margin-left: -1.35rem;
+}
+
+.checkbox :global(.form-check-label),
+.checkbox :global(label) {
+  font-size: 0.75rem;
+  line-height: 1.25;
+  padding-top: 0;
+}
+
+@media (max-width: 720px) {
+  .list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

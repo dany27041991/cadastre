@@ -165,6 +165,24 @@ erDiagram
         BIGINT susceptibility_classification_area_id
         "Area susceptibility to tree fall or structural instability."
 
+        ENUM area_classification
+        "Operational / municipal green-area typology.
+         Type: cadastre.istat_green_area_classification (nullable).
+         Allowed: HISTORICAL_GREEN, URBAN_PARKS, EQUIPPED_GREEN,
+         URBAN_FURNISHING, SCHOOL_GARDENS, OUTDOOR_SPORTS,
+         URBAN_FORESTRY, WOODLAND, UNCULTIVATED_GREEN,
+         URBAN_ALLOTMENTS, BOTANICAL_GARDENS, ZOOLOGICAL_GARDENS,
+         CEMETERIES, OTHER.
+         Source: ISTAT Ambiente urbano / Verde urbano typology.
+         Implemented as column green_areas.area_classification.
+         Must NOT be duplicated inside attributes JSONB (e.g. no tipologia2)."
+
+        ENUM istat_classification
+        "ISTAT Ambiente urbano green-area classification (nullable).
+         Same enum type as area_classification
+         (cadastre.istat_green_area_classification).
+         Implemented as column green_areas.istat_classification."
+
         ENUM intensity_of_fruition
         "Allowed: NONE, LOW, MEDIUM, HIGH."
 
@@ -208,6 +226,11 @@ erDiagram
         TIMESTAMP end_date_of_management
         "End date of management."
 
+        TIMESTAMP survey_date
+        "Date of the area survey / rilievo (nullable).
+         Implemented as column green_areas.survey_date.
+         Must NOT be duplicated inside attributes JSONB (e.g. no data_rilie)."
+
         TIMESTAMP last_update_at
         "Last modification timestamp."
 
@@ -221,7 +244,8 @@ erDiagram
         %% ---------- Flexible attributes ----------
         JSONB attributes
         "Non-structured thematic attributes.
-         Must NOT duplicate structured columns.
+         Must NOT duplicate structured columns
+         (area_classification, istat_classification, survey_date, name, …).
          Reserved for optional TP-specific data."
 
         %% ---------- Media ----------
@@ -305,7 +329,9 @@ erDiagram
         ENUM maintenance_priority "Allowed: NONE, LOW, MEDIUM, HIGH, URGENT"
         ENUM intervention_type "Allowed: NONE, PRUNING, CONSOLIDATION, TREATMENT, REMOVAL, REPLACEMENT"
         ENUM growth_stage "Allowed: YOUNG, SEMI_MATURE, MATURE, OVERMATURE, DEAD"
-        ENUM origin "Allowed: NATIVE, EXOTIC, INVASIVE, CULTIVAR"
+        ENUM origin "Allowed: NATIVE, EXOTIC, INVASIVE, CULTIVAR.
+         NATIVE = autoctono; EXOTIC = alloctono/esotico.
+         Optional; no separate autoctono/alloctono column."
         ENUM protection_status "Allowed: NONE, PROTECTED, MONUMENTAL, HISTORICAL"
         ENUM asset_status "Allowed: PLANNED, INSTALLED, ACTIVE, TEMPORARILY_OUT_OF_SERVICE, REMOVED"
 

@@ -6,11 +6,21 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from territory.common.infrastructure.green_metadata_projection import (
+    AREA_METADATA_KEYS,
+    ASSET_METADATA_KEYS,
+    fmt_or_nan,
+    prepare_area_raw_values,
+    prepare_asset_raw_values,
+)
+
 
 class GreenDetailSummaryOut(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     primaryLabel: str
+    # Asset summary field label from public.attribute_types (e.g. Albero / Siepe).
+    attributeTypeLabel: str | None = None
     regionLabel: str | None = None
     municipalityLabel: str | None = None
     provinceLabel: str | None = None
@@ -35,35 +45,19 @@ class GreenDetailOut(BaseModel):
     geometry: dict[str, Any] | None = None
 
 
-_ASSET_METADATA_KEYS: tuple[str, ...] = (
-    "asset_type",
-    "geometry_type",
-    "family",
-    "genus",
-    "species",
-    "variety",
-    "health_status",
-    "risk_level",
-    "asset_status",
-    "managing_entity",
-    "survey_date",
-    "growth_stage",
-    "protection_status",
-)
+_AREA_FORMATS = {
+    "survey_date": "survey_date",
+    "surface_area_m2": "surface",
+}
 
-_AREA_METADATA_KEYS: tuple[str, ...] = (
-    "name",
-    "level",
-    "zril_identifier",
-    "geometry_type",
-    "perimeter_type",
-    "administrative_status",
-    "operational_status",
-    "survey_status",
-    "intensity_of_fruition",
-    "start_date_of_management",
-    "end_date_of_management",
-)
+_ASSET_FORMATS = {
+    "survey_date": "survey_date",
+    "latitude": "coord",
+    "longitude": "coord",
+    "trunk_diameter_cm": "diameter",
+    "plant_height_m": "height",
+    "crown_diameter_m": "diameter",
+}
 
 
 def _fmt(value: Any) -> str | None:
@@ -82,13 +76,20 @@ def _to_int(value: Any) -> int | None:
     return n if n > 0 else None
 
 
-def _metadata_from_row(row: dict[str, Any], keys: tuple[str, ...]) -> list[GreenDetailMetadataItemOut]:
-    items: list[GreenDetailMetadataItemOut] = []
-    for key in keys:
-        formatted = _fmt(row.get(key))
-        if formatted is not None:
-            items.append(GreenDetailMetadataItemOut(key=key, value=formatted))
-    return items
+def _metadata_fixed(
+    values: dict[str, Any],
+    keys: tuple[str, ...],
+    *,
+    formats: dict[str, str] | None = None,
+) -> list[GreenDetailMetadataItemOut]:
+    fmt_map = formats or {}
+    return [
+        GreenDetailMetadataItemOut(
+            key=key,
+            value=fmt_or_nan(values.get(key), kind=fmt_map.get(key, "plain")),
+        )
+        for key in keys
+    ]
 
 
 def build_asset_detail(
@@ -108,6 +109,7 @@ def build_asset_detail(
         id=int(row["id"]),
         summary=GreenDetailSummaryOut(
             primaryLabel=primary,
+            attributeTypeLabel=_fmt(row.get("attribute_type_label")),
             regionLabel=_fmt(row.get("region_label")),
             municipalityLabel=_fmt(row.get("municipality_label")),
             provinceLabel=_fmt(row.get("province_label")),
@@ -115,7 +117,11 @@ def build_asset_detail(
             provinceId=_to_int(row.get("province_id")),
             municipalityId=_to_int(row.get("municipality_id")),
         ),
-        metadata=_metadata_from_row(row, _ASSET_METADATA_KEYS),
+        metadata=_metadata_fixed(
+            prepare_asset_raw_values(row),
+            ASSET_METADATA_KEYS,
+            formats=_ASSET_FORMATS,
+        ),
         bbox=bbox,
         geometry=geometry,
     )
@@ -140,7 +146,11 @@ def build_area_detail(
             provinceId=_to_int(row.get("province_id")),
             municipalityId=_to_int(row.get("municipality_id")),
         ),
-        metadata=_metadata_from_row(row, _AREA_METADATA_KEYS),
+        metadata=_metadata_fixed(
+            prepare_area_raw_values(row),
+            AREA_METADATA_KEYS,
+            formats=_AREA_FORMATS,
+        ),
         bbox=bbox,
         geometry=geometry,
     )

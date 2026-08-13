@@ -135,13 +135,17 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
   const lastContextKeyRef = useRef<string | null>(null)
   const areasLayerActiveRef = useRef(areasLayerActive)
   areasLayerActiveRef.current = areasLayerActive
+  const assetsLayerActiveRef = useRef(assetsLayerActive)
+  assetsLayerActiveRef.current = assetsLayerActive
 
   const context = useMemo(() => getGreenContext(breadcrumb), [breadcrumb])
   const contextKey = useMemo(() => greenContextKey(context), [context])
   const greenLevel = isGreenMapLevel(level)
 
   const turnOffAssetsLayer = useCallback(async () => {
-    lastContextKeyRef.current = null
+    // Sync ref before React re-render so the assets follow-effect cannot
+    // restart viewport while assetsLayerActive prop is still true.
+    assetsLayerActiveRef.current = false
     onAssetsLayerActiveChange(false)
     if (areasLayerActiveRef.current) {
       setLoading(true)
@@ -153,6 +157,9 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     }
     setGreenLayerVisible(false)
     clearGreenLayer()
+    // Do not null lastContextKey before clear: that window let the follow-effect
+    // treat the next pass as a context change and remount asset clusters.
+    lastContextKeyRef.current = contextKey
   }, [
     context,
     contextKey,
@@ -167,6 +174,7 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
       onBeforeLoadingAssets?.()
     }
     setLoading(true)
+    assetsLayerActiveRef.current = true
     lastContextKeyRef.current = contextKey
     startViewportMode(context, loadGreenLayerViewport, areasLayerActiveRef.current)
     setGreenLayerVisible(true)
@@ -185,7 +193,7 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
 
   // Follow breadcrumb while assets viewport is active.
   useEffect(() => {
-    if (!assetsLayerActive) return
+    if (!assetsLayerActive || !assetsLayerActiveRef.current) return
     if (contextKey === lastContextKeyRef.current) return
 
     lastContextKeyRef.current = contextKey

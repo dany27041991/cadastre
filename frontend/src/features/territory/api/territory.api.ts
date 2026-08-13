@@ -4,6 +4,7 @@
  */
 import { API_URL } from '@/shared/config/map'
 import { authFetch } from '@/shared/lib/auth'
+import { normalizeApiError } from '@/shared/lib/errors'
 import {
   createFetcher,
   type FetcherOptions,
@@ -11,6 +12,7 @@ import {
 } from './fetcher'
 import { createGreenAreasApi, type GreenAreasApi } from './greenAreaMap.api'
 import { createGreenAssetsApi, type GreenAssetsApi } from './greenAssetMap.api'
+import type { TerritorySearchHit, TerritorySearchResponse } from '../types/territorySearch'
 
 export type { GeoJSONFeatureCollection, FetcherOptions } from './fetcher'
 export { EMPTY_GEOJSON, createFetcher, type Fetcher } from './fetcher'
@@ -18,6 +20,11 @@ export type { GreenAreasParams, GreenAreaViewportParams } from './greenAreaMap.a
 export type { GreenAssetViewportParams } from './greenAssetMap.api'
 export { buildGreenAreasQuery, buildGreenAreasViewportQuery } from './greenAreaMap.api'
 export { buildGreenAssetViewportQuery } from './greenAssetMap.api'
+export type {
+  TerritorySearchHit,
+  TerritorySearchLevel,
+  TerritorySearchResponse,
+} from '../types/territorySearch'
 
 const GEOBUF = 'format=geobuf'
 
@@ -30,6 +37,7 @@ export interface TerritoryGeoApi {
   getSubMunicipalAreasByMunicipality: (
     municipalityId: number
   ) => Promise<GeoJSONFeatureCollection>
+  searchTerritory: (q: string, limit?: number) => Promise<TerritorySearchHit[]>
 }
 
 export type TerritoryGreenAreasApi = GreenAreasApi
@@ -49,6 +57,17 @@ export function createTerritoryApi(
   const greenAreaMap = createGreenAreasApi(options)
   const greenAssetMap = createGreenAssetsApi(options)
 
+  const searchTerritory = async (q: string, limit = 20): Promise<TerritorySearchHit[]> => {
+    const params = new URLSearchParams()
+    params.set('q', q)
+    params.set('limit', String(limit))
+    const url = `${baseUrl.replace(/\/$/, '')}/api/territory/search?${params}`
+    const res = await fetchFn(url)
+    if (!res.ok) throw new Error(normalizeApiError(res).message)
+    const body = (await res.json()) as TerritorySearchResponse
+    return [...(body.items ?? [])]
+  }
+
   return {
     getRegions: () =>
       fetchGeobufOrEmpty(`/api/territory/regions?${GEOBUF}`),
@@ -64,6 +83,7 @@ export function createTerritoryApi(
       fetchGeobufOrEmpty(
         `/api/territory/municipalities/${municipalityId}/sub-municipal-areas?${GEOBUF}`
       ),
+    searchTerritory,
     getGreenAreas: greenAreaMap.getGreenAreas,
     getGreenAreasViewport: greenAreaMap.getGreenAreasViewport,
     getGreenAssetsViewport: greenAssetMap.getGreenAssetsViewport,

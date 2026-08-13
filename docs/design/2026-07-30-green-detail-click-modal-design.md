@@ -74,3 +74,9 @@ flowchart TD
 ## i18n
 
 Chiavi `territory.panel.detail.*` (incl. `drillSubAreas`).
+
+## Subset metadati (modale)
+
+Contratto e chiavi fisse (sempre presenti; mancanti → `"NaN"`):  
+[2026-08-12-green-detail-metadata-subset-design.md](./2026-08-12-green-detail-metadata-subset-design.md)  
+Piano: [2026-08-13-green-detail-metadata-subset-plan.md](./2026-08-13-green-detail-metadata-subset-plan.md).

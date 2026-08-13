@@ -124,7 +124,7 @@ type GreenDetailDto = {
 
 **Asset:** `asset_type`, `geometry_type`, `family`, `genus`, `species`, `variety`, `health_status`, `risk_level`, `asset_status`, `managing_entity`, `survey_date`, `growth_stage`, `protection_status`.
 
-**Area:** `name`, `level`, `zril_identifier`, `geometry_type`, `perimeter_type`, `administrative_status`, `operational_status`, `survey_status`, `intensity_of_fruition`, `start_date_of_management`, `end_date_of_management`.
+**Area:** `name`, `level`, `zril_identifier`, `geometry_type`, `area_classification`, `istat_classification`, `perimeter_type`, `administrative_status`, `operational_status`, `survey_status`, `intensity_of_fruition`, `survey_date`, `start_date_of_management`, `end_date_of_management`.
 
 Label chiave: `key` stabile nel DTO + mappa i18n lato FE.
 

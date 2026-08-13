@@ -12,6 +12,7 @@ from typing import Any
 from sqlalchemy import select, tuple_
 from sqlalchemy.orm import Session
 
+from shared.domain.entities.translation_model import TranslationModel
 from territory.areas.domain.entities.green_area_model import GreenAreaModel
 from territory.geo.domain.entities.attribute_type_model import AttributeTypeModel
 from territory.geo.domain.entities.area_level_model import AreaLevelModel
@@ -25,6 +26,9 @@ from territory.geo.domain.entities.region_model import RegionModel
 _region_cache: dict[int, str | None] = {}
 _province_cache: dict[int, str | None] = {}
 _municipality_cache: dict[int, str | None] = {}
+
+_ATTR_TYPE_ENTITY = "public.attribute_types"
+_DEFAULT_LABEL_LANG = "it"
 
 
 def _resolve_regions(session: Session, ids: set[int]) -> dict[int, str | None]:
@@ -56,8 +60,39 @@ def _resolve_municipalities(session: Session, ids: set[int]) -> dict[int, str | 
     return {i: _municipality_cache.get(i) for i in ids}
 
 
-def _attribute_type_label(row: AttributeTypeModel) -> str | None:
-    return row.description_code or row.ts_code
+def _resolve_attribute_type_labels(
+    session: Session,
+    attr_ids: set[int],
+    *,
+    lang: str = _DEFAULT_LABEL_LANG,
+) -> dict[int, str | None]:
+    """Map attribute_type id → localized description (translations), else code."""
+    if not attr_ids:
+        return {}
+    stmt = select(AttributeTypeModel).where(AttributeTypeModel.id.in_(attr_ids))
+    types = list(session.scalars(stmt))
+    codes = {at.description_code for at in types if at.description_code}
+    translated: dict[str, str] = {}
+    if codes:
+        t_stmt = select(TranslationModel.key, TranslationModel.translation).where(
+            TranslationModel.entity_type == "TABLE",
+            TranslationModel.entity_name == _ATTR_TYPE_ENTITY,
+            TranslationModel.column_name == "description_code",
+            TranslationModel.lang == lang,
+            TranslationModel.key.in_(codes),
+        )
+        for key, text in session.execute(t_stmt).all():
+            if text:
+                translated[str(key)] = str(text)
+    labels: dict[int, str | None] = {}
+    for at in types:
+        code = at.description_code
+        labels[at.id] = (
+            (translated.get(code) if code else None)
+            or code
+            or (str(at.ts_code).strip() if at.ts_code is not None else None)
+        )
+    return labels
 
 
 def enrich_green_area_table_rows(session: Session, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -92,11 +127,7 @@ def enrich_green_area_table_rows(session: Session, rows: list[dict[str, Any]]) -
         )
         levels = {i: n for i, n in session.execute(stmt).all()}
 
-    attr_labels: dict[int, str | None] = {}
-    if attr_ids:
-        stmt = select(AttributeTypeModel).where(AttributeTypeModel.id.in_(attr_ids))
-        for at in session.scalars(stmt):
-            attr_labels[at.id] = _attribute_type_label(at)
+    attr_labels = _resolve_attribute_type_labels(session, attr_ids)
 
     parent_labels: dict[tuple[int, int, int], str | None] = {}
     if parent_keys:
@@ -164,11 +195,7 @@ def enrich_green_asset_table_rows(session: Session, rows: list[dict[str, Any]]) 
     provinces = _resolve_provinces(session, province_ids)
     municipalities = _resolve_municipalities(session, municipality_ids)
 
-    attr_labels: dict[int, str | None] = {}
-    if attr_ids:
-        stmt = select(AttributeTypeModel).where(AttributeTypeModel.id.in_(attr_ids))
-        for at in session.scalars(stmt):
-            attr_labels[at.id] = _attribute_type_label(at)
+    attr_labels = _resolve_attribute_type_labels(session, attr_ids)
 
     green_area_labels: dict[tuple[int, int, int], str | None] = {}
     if green_area_keys:

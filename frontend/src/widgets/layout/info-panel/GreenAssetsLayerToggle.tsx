@@ -9,12 +9,14 @@ export function GreenLayerToggles() {
   const { t } = useTranslation()
   const panel = useGreenTablePanelOptional()
   const layer = panel?.greenAssetsLayer
+  const areasLocked = panel?.areasToggleLockedByGreenSearch === true
 
   if (layer == null) {
     return null
   }
 
   const disabled = !layer.available || layer.loading
+  const areasDisabled = disabled || areasLocked
 
   return (
     <Box as="div" className="d-flex flex-column gap-4" style={{ marginBottom: '1.25rem' }}>
@@ -22,10 +24,13 @@ export function GreenLayerToggles() {
         name="green-areas-layer"
         label={t('territory.panel.managedAreasToggle')}
         helperText={t('territory.panel.managedAreasToggleHelp')}
-        checked={layer.areasActive}
-        disabled={disabled}
+        checked={layer.areasActive || areasLocked}
+        disabled={areasDisabled}
         right
         onChange={(value) => {
+          if (areasLocked && !value) {
+            return
+          }
           void layer.setAreasActive(value)
         }}
       />

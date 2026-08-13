@@ -11,6 +11,7 @@ from core.exceptions.base import NotFoundError
 from core.logger import log_invocation
 from territory.common.infrastructure.dto.green_detail_out import GreenDetailOut, build_asset_detail
 from territory.common.infrastructure.green_table_fk_labels import enrich_green_asset_table_rows
+from territory.common.infrastructure.green_metadata_projection import merge_asset_table_row
 from territory.common.infrastructure.green_table_page_out import GreenTablePageOut
 from territory.geo.domain.entities import GeoJSONFeatureCollection
 from territory.assets.infrastructure.repository.green_assets_repository import GreenAssetsRepository
@@ -261,7 +262,7 @@ class CatalogGreenAsset:
         region_id: int,
         province_id: int,
     ) -> GreenDetailOut:
-        row = self._repository.get_by_pk(asset_id, region_id, province_id)
+        row = self._repository.get_detail_by_pk(asset_id, region_id, province_id)
         if row is None:
             raise NotFoundError()
         bbox = self._repository.get_bbox_by_pk(asset_id, region_id, province_id)
@@ -300,4 +301,5 @@ class CatalogGreenAsset:
         if raw:
             with self._session_factory() as session:
                 enriched = enrich_green_asset_table_rows(session, raw)
+            enriched = [merge_asset_table_row(r) for r in enriched]
         return GreenTablePageOut.build(data=enriched, total=total, page=page, page_size=page_size)

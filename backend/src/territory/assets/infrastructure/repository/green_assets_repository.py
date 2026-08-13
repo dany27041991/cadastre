@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from sqlalchemy import ColumnElement, or_, select, func, exists, text as sql_text
+from sqlalchemy import ColumnElement, String, cast, or_, select, func, exists, text as sql_text
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Session, load_only
 
@@ -64,20 +64,19 @@ _TABLE_LOAD_COLS = (
 
 # Map column-name → ORM attribute for ORDER BY whitelisting.
 _ASSET_SORT_MAP: dict[str, Any] = {col.key: col for col in _TABLE_LOAD_COLS}
+_ASSET_SORT_MAP["plant_code"] = GreenAssetModel.id
+_ASSET_SORT_MAP["area_code"] = GreenAssetModel.green_area_id
 
-# String enum columns filtered with exact equality.
+# String enum columns filtered with exact equality (non-catalog API filters).
 _ASSET_EXACT_FILTER_COLS: tuple[str, ...] = (
     "asset_type",
     "geometry_type",
-    "health_status",
     "stability_status",
     "structural_defect",
     "risk_level",
     "maintenance_priority",
     "intervention_type",
-    "growth_stage",
     "origin",
-    "protection_status",
     "asset_status",
     "monitoring_required",
     "priority_level_evaluation",
@@ -91,6 +90,19 @@ _ASSET_ILIKE_FILTER_COLS: tuple[str, ...] = (
     "genus",
     "variety",
     "managing_entity",
+)
+
+# Catalog status fields: free-text partial match.
+_ASSET_ILIKE_CAST_COLS: tuple[str, ...] = (
+    "growth_stage",
+    "protection_status",
+    "health_status",
+)
+
+_ASSET_ATTR_ILIKE_KEYS: tuple[str, ...] = (
+    "trunk_diameter_cm",
+    "plant_height_m",
+    "crown_diameter_m",
 )
 
 
@@ -113,6 +125,48 @@ def _build_asset_filter_conditions(
         val = filters.get(col_name)
         if val:  # empty string is not a useful ILIKE pattern
             conditions.append(getattr(av, col_name).ilike(f"%{val}%"))
+
+    for col_name in _ASSET_ILIKE_CAST_COLS:
+        val = filters.get(col_name)
+        if val:
+            conditions.append(cast(getattr(av, col_name), String).ilike(f"%{val}%"))
+
+    plant_code = filters.get("plant_code")
+    if plant_code not in (None, ""):
+        try:
+            conditions.append(av.id == int(plant_code))
+        except (TypeError, ValueError):
+            conditions.append(av.id == -1)
+
+    area_code = filters.get("area_code")
+    if area_code not in (None, ""):
+        try:
+            conditions.append(av.green_area_id == int(area_code))
+        except (TypeError, ValueError):
+            conditions.append(av.green_area_id == -1)
+
+    species_code = filters.get("species_code")
+    if species_code:
+        conditions.append(
+            av.attributes.op("->>")("species_code").ilike(f"%{species_code}%")
+        )
+
+    survey_date = filters.get("survey_date")
+    if survey_date:
+        conditions.append(cast(av.survey_date, String).ilike(f"%{survey_date}%"))
+
+    centroid = func.ST_Centroid(av.geometry)
+    latitude = filters.get("latitude")
+    if latitude:
+        conditions.append(cast(func.ST_Y(centroid), String).ilike(f"%{latitude}%"))
+    longitude = filters.get("longitude")
+    if longitude:
+        conditions.append(cast(func.ST_X(centroid), String).ilike(f"%{longitude}%"))
+
+    for attr_key in _ASSET_ATTR_ILIKE_KEYS:
+        val = filters.get(attr_key)
+        if val:
+            conditions.append(av.attributes.op("->>")(attr_key).ilike(f"%{val}%"))
 
     q: str | None = filters.get("q")
     if q:
@@ -189,6 +243,47 @@ class GreenAssetsRepository:
             if row is None:
                 return None
             return orm_to_row_dict(av, row, exclude=_TABLE_EXCLUDE_COLS)
+
+    def get_detail_by_pk(
+        self,
+        asset_id: int,
+        region_id: int,
+        province_id: int,
+    ) -> dict[str, Any] | None:
+        """Load detail fields + attributes + WGS84 centroid for the map panel."""
+        av = GreenAssetModel
+        centroid = func.ST_Centroid(av.geometry)
+        stmt = (
+            select(
+                av.id,
+                av.region_id,
+                av.province_id,
+                av.municipality_id,
+                av.green_area_id,
+                av.attribute_type_id,
+                av.asset_type,
+                av.genus,
+                av.species,
+                av.variety,
+                av.health_status,
+                av.growth_stage,
+                av.protection_status,
+                av.survey_date,
+                av.attributes,
+                func.ST_Y(centroid).label("latitude"),
+                func.ST_X(centroid).label("longitude"),
+            )
+            .where(av.region_id == region_id)
+            .where(av.province_id == province_id)
+            .where(av.id == asset_id)
+            .where(av.deleted_at.is_(None))
+            .limit(1)
+        )
+        with self._session_factory() as session:
+            row = session.execute(stmt).mappings().first()
+            if row is None:
+                return None
+            return dict(row)
 
     def get_bbox_by_pk(
         self,
@@ -648,9 +743,29 @@ class GreenAssetsRepository:
         order = sort_col.desc() if sort_dir == "desc" else sort_col.asc() if sort_col is not None else av.id.asc()
 
         count_stmt = select(func.count(av.id)).where(*conditions)
+        centroid = func.ST_Centroid(av.geometry)
         data_stmt = (
-            select(av)
-            .options(load_only(*_TABLE_LOAD_COLS, raiseload=True))
+            select(
+                av.id,
+                av.region_id,
+                av.province_id,
+                av.municipality_id,
+                av.green_area_id,
+                av.attribute_type_id,
+                av.asset_type,
+                av.geometry_type,
+                av.family,
+                av.genus,
+                av.species,
+                av.variety,
+                av.health_status,
+                av.growth_stage,
+                av.protection_status,
+                av.survey_date,
+                av.attributes,
+                func.ST_Y(centroid).label("latitude"),
+                func.ST_X(centroid).label("longitude"),
+            )
             .where(*conditions)
             .order_by(order)
             .limit(page_size)
@@ -659,5 +774,5 @@ class GreenAssetsRepository:
 
         with self._session_factory() as session:
             total: int = session.execute(count_stmt).scalar_one()
-            rows = [orm_to_row_dict(av, m, exclude=_TABLE_EXCLUDE_COLS) for m in session.scalars(data_stmt)]
+            rows = [dict(m) for m in session.execute(data_stmt).mappings()]
         return rows, total

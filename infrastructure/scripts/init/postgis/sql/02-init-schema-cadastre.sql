@@ -48,6 +48,29 @@ BEGIN
     );
   END IF;
 END $$;
+-- ISTAT urban green typology (Ambiente urbano / Verde urbano). Used by both
+-- area_classification and istat_classification on green_areas.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON t.typnamespace = n.oid WHERE n.nspname = 'cadastre' AND t.typname = 'istat_green_area_classification') THEN
+    CREATE TYPE cadastre.istat_green_area_classification AS ENUM (
+      'HISTORICAL_GREEN',
+      'URBAN_PARKS',
+      'EQUIPPED_GREEN',
+      'URBAN_FURNISHING',
+      'SCHOOL_GARDENS',
+      'OUTDOOR_SPORTS',
+      'URBAN_FORESTRY',
+      'WOODLAND',
+      'UNCULTIVATED_GREEN',
+      'URBAN_ALLOTMENTS',
+      'BOTANICAL_GARDENS',
+      'ZOOLOGICAL_GARDENS',
+      'CEMETERIES',
+      'OTHER'
+    );
+  END IF;
+END $$;
 
 -- -----------------------------------------------------------------------------
 -- ENUMs for ASSET_GREEN (diagram 272-345) + legacy asset_type, geometry_type
@@ -154,6 +177,8 @@ CREATE TABLE IF NOT EXISTS cadastre.green_areas (
   attribute_type_id BIGINT REFERENCES public.attribute_types(id),
   zril_identifier VARCHAR(80),
   susceptibility_classification_area_id BIGINT,
+  area_classification cadastre.istat_green_area_classification,
+  istat_classification cadastre.istat_green_area_classification,
   intensity_of_fruition cadastre.intensity_of_fruition,
   geometry_type cadastre.geometry_type,
   geometry GEOMETRY(Geometry, 4326),
@@ -165,6 +190,7 @@ CREATE TABLE IF NOT EXISTS cadastre.green_areas (
   valid_to TIMESTAMPTZ,
   start_date_of_management TIMESTAMPTZ,
   end_date_of_management TIMESTAMPTZ,
+  survey_date TIMESTAMPTZ,
   last_update_at TIMESTAMPTZ DEFAULT NOW(),
   deleted_at TIMESTAMPTZ,
   last_modified_by VARCHAR(80),
@@ -277,6 +303,9 @@ COMMENT ON COLUMN cadastre.green_areas.name IS 'area_name: human-readable name (
 COMMENT ON COLUMN cadastre.green_areas.parent_id IS 'parent_area_id: self-reference for containment hierarchy';
 COMMENT ON COLUMN cadastre.green_areas.level_id IS 'Reference to AREA_LEVEL.level_id (semantic hierarchy)';
 COMMENT ON COLUMN cadastre.green_areas.attribute_type_id IS 'Reference to ATTRIBUTE_TYPES.id (DBT classification: geom_type + primary + secondary + attribute).';
+COMMENT ON COLUMN cadastre.green_areas.area_classification IS 'Operational / municipal green-area typology (ISTAT urban green categories).';
+COMMENT ON COLUMN cadastre.green_areas.istat_classification IS 'ISTAT Ambiente urbano green-area classification (same enum as area_classification).';
+COMMENT ON COLUMN cadastre.green_areas.survey_date IS 'Date of the area survey / rilievo (nullable).';
 COMMENT ON TABLE cadastre.asset_area_history IS 'Temporal snapshots of ASSET_AREA (diagram 246-266).';
 COMMENT ON TABLE cadastre.green_assets IS 'ASSET_GREEN: green assets (trees, etc.). Partitioned by region_id.';
 COMMENT ON COLUMN cadastre.green_assets.green_area_id IS 'area_id in diagram: reference to ASSET_AREA.id (green_areas.id).';

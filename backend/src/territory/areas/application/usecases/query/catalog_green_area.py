@@ -11,6 +11,7 @@ from core.exceptions.base import NotFoundError
 from core.logger import log_invocation
 from territory.common.infrastructure.dto.green_detail_out import GreenDetailOut, build_area_detail
 from territory.common.infrastructure.green_table_fk_labels import enrich_green_area_table_rows
+from territory.common.infrastructure.green_metadata_projection import merge_area_table_row
 from territory.common.infrastructure.green_table_page_out import GreenTablePageOut
 from territory.geo.domain.entities import GeoJSONFeatureCollection
 from territory.areas.infrastructure.repository.green_areas_repository import GreenAreasRepository
@@ -109,7 +110,7 @@ class CatalogGreenArea:
         region_id: int,
         province_id: int,
     ) -> GreenDetailOut:
-        row = self._repository.get_by_pk(area_id, region_id, province_id)
+        row = self._repository.get_detail_by_pk(area_id, region_id, province_id)
         if row is None:
             raise NotFoundError()
         bbox = self._repository.get_bbox_by_pk(area_id, region_id, province_id)
@@ -127,6 +128,7 @@ class CatalogGreenArea:
         sub_municipal_area_id: int | None = None,
         contained_in_area_id: int | None = None,
         parent_id: int | None = None,
+        area_id: int | None = None,
         page: int = 1,
         page_size: int = 50,
         sort_by: str | None = None,
@@ -140,6 +142,7 @@ class CatalogGreenArea:
             sub_municipal_area_id=sub_municipal_area_id,
             contained_in_area_id=contained_in_area_id,
             parent_id=parent_id,
+            area_id=area_id,
             page=page,
             page_size=page_size,
             sort_by=sort_by,
@@ -149,6 +152,7 @@ class CatalogGreenArea:
         if rows:
             with self._session_factory() as session:
                 rows = enrich_green_area_table_rows(session, rows)
+            rows = [merge_area_table_row(r) for r in rows]
         return GreenTablePageOut.build(
             data=rows,
             total=total,

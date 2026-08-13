@@ -26,6 +26,7 @@ import {
   GREEN_DETAIL_STATUS_READY,
 } from '@/features/territory/model/constants'
 import type { TerritoryMapFeature } from '@/features/territory/types/mapFeature'
+import type { TerritorySearchHit } from '@/features/territory/types/territorySearch'
 import type { GreenTableRawRow } from '@/features/territory/ui/green-data-table/GreenTableRowActions'
 import { useGreenTablePanel } from '@/features/territory/context/GreenTablePanelContext'
 import { MainContent } from '@/widgets/layout/main/MainContent'
@@ -232,6 +233,54 @@ export function TerritoryMapWidget() {
     ],
   )
 
+  const openGreenAreaDetailFromSearch = useCallback(
+    (hit: TerritorySearchHit) => {
+      if (hit.level !== 'green_areas' && hit.level !== 'sub_areas') return
+      if (hit.id == null || hit.region_id == null || hit.province_id == null) {
+        return
+      }
+      const leaf =
+        hit.label.includes(' - ')
+          ? (hit.label.split(' - ').at(-1) ?? hit.label).trim()
+          : hit.label
+      const mounted = map.getGreenLayerFeatures()
+      const mountedFeature = mounted.find((f) => f.id === hit.id)
+      const feature: TerritoryMapFeature = mountedFeature ?? {
+        id: hit.id,
+        label: leaf,
+        properties: {
+          name: leaf,
+          region_id: hit.region_id,
+          province_id: hit.province_id,
+          ...(hit.municipality_id != null
+            ? { municipality_id: hit.municipality_id }
+            : {}),
+        },
+        geometry: {},
+      }
+      const anchor = resolveGreenDetailAnchorLonLat(feature, null)
+      if (anchor) {
+        frameGreenDetailOnMap(feature, anchor.lon, anchor.lat)
+      } else {
+        pendingTableFrameRef.current = true
+      }
+      const screenPointer = placeDetailPanelAtMapFraction()
+      greenDetail.openFromSelection(
+        hit.id,
+        leaf,
+        feature,
+        LAYER_KIND_GREEN_AREA,
+        screenPointer,
+      )
+    },
+    [
+      map,
+      greenDetail.openFromSelection,
+      frameGreenDetailOnMap,
+      placeDetailPanelAtMapFraction,
+    ],
+  )
+
   // Table→detail: zoom when API bbox arrives (no mounted map geometry).
   useEffect(() => {
     if (!pendingTableFrameRef.current) return
@@ -265,7 +314,7 @@ export function TerritoryMapWidget() {
     [nav.breadcrumb]
   )
 
-  const { registerGreenAssetsLayer, registerResetToLanding, resetPanelState, layersPanelOpen } =
+  const { registerGreenAssetsLayer, registerResetToLanding, registerTerritorySearchNav, resetPanelState, layersPanelOpen } =
     useGreenTablePanel()
 
   layersPanelOpenRef.current = layersPanelOpen
@@ -415,21 +464,41 @@ export function TerritoryMapWidget() {
     setGreenAssetsLayerActive(false)
     closeGreenDetailRef.current()
     // Discard (do not restore/re-add) so red selection vanishes with the green layer.
-    map.discardGreenDetailHighlight()
-    map.clearGreenLayer()
-    map.setGreenLayerVisible(false)
+    mapRef.current.discardGreenDetailHighlight()
+    mapRef.current.clearGreenLayer()
+    mapRef.current.setGreenLayerVisible(false)
     resetPanelState()
     layersPanelOpenRef.current = false
     // Reset breadcrumb/level to Italy, then hide admin polygons (Monitoraggio).
     void loadRegionsRef.current().then(() => {
-      map.clearTerritoryLayer()
+      mapRef.current.clearTerritoryLayer()
     })
-  }, [map, resetPanelState])
+  }, [resetPanelState])
 
   useEffect(() => {
     registerResetToLanding(resetToLanding)
     return () => registerResetToLanding(null)
   }, [registerResetToLanding, resetToLanding])
+
+  useEffect(() => {
+    registerTerritorySearchNav({
+      breadcrumb: nav.breadcrumb,
+      jumpToSearchHit: nav.jumpToSearchHit,
+      loadRegions: nav.loadRegions,
+      loading: nav.loading,
+      openGreenAreaDetail: openGreenAreaDetailFromSearch,
+      closeGreenDetail: greenDetail.close,
+    })
+    return () => registerTerritorySearchNav(null)
+  }, [
+    registerTerritorySearchNav,
+    nav.breadcrumb,
+    nav.jumpToSearchHit,
+    nav.loadRegions,
+    nav.loading,
+    openGreenAreaDetailFromSearch,
+    greenDetail.close,
+  ])
 
   const mapOverlay = (
     <GeoinsightFocusContainer>

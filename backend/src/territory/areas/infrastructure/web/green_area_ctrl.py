@@ -107,60 +107,72 @@ def get_green_areas_table(
     region_id: int | None = None,
     province_id: int | None = None,
     municipality_id: int | None = None,
-    sub_municipal_area_id: int | None = None,
-    contained_in_area_id: int | None = None,
-    parent_id: int | None = None,
-    # Pagination
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=500),
-    # Sorting
-    sort_by: str | None = None,
-    sort_dir: Literal["asc", "desc"] = "asc",
-    # Generic free-text (name)
-    q: str | None = None,
-    # Exact-match column filters
-    geometry_type: str | None = None,
-    perimeter_type: str | None = None,
-    administrative_status: str | None = None,
-    operational_status: str | None = None,
-    survey_status: str | None = None,
-    intensity_of_fruition: str | None = None,
-    level: int | None = None,
-    # ILIKE column filters
-    name: str | None = None,
-    zril_identifier: str | None = None,
-) -> GreenTablePageOut:
-    """Paginated, filtered and sorted green-areas table (no geometry)."""
-    # Only pass non-None values so the repository iterates a compact dict.
-    filters = {
-        k: v
-        for k, v in {
-            "q": q,
-            "geometry_type": geometry_type,
-            "perimeter_type": perimeter_type,
-            "administrative_status": administrative_status,
-            "operational_status": operational_status,
-            "survey_status": survey_status,
-            "intensity_of_fruition": intensity_of_fruition,
-            "level": level,
-            "name": name,
-            "zril_identifier": zril_identifier,
-        }.items()
-        if v is not None
-    }
-    return get_green_areas_uc().list_green_areas_table_paged(
-        region_id,
-        province_id,
-        municipality_id,
-        sub_municipal_area_id=sub_municipal_area_id,
-        contained_in_area_id=contained_in_area_id,
-        parent_id=parent_id,
-        page=page,
-        page_size=page_size,
-        sort_by=sort_by,
-        sort_dir=sort_dir,
-        filters=filters,
-    )
+        sub_municipal_area_id: int | None = None,
+        contained_in_area_id: int | None = None,
+        parent_id: int | None = None,
+        area_id: int | None = None,
+        # Pagination
+        page: int = Query(1, ge=1),
+        page_size: int = Query(50, ge=1, le=500),
+        # Sorting
+        sort_by: str | None = None,
+        sort_dir: Literal["asc", "desc"] = "asc",
+        # Generic free-text (name)
+        q: str | None = None,
+        # Exact-match column filters (non-catalog)
+        geometry_type: str | None = None,
+        administrative_status: str | None = None,
+        operational_status: str | None = None,
+        survey_status: str | None = None,
+        level: int | None = None,
+        # Catalog / ILIKE column filters
+        name: str | None = None,
+        zril_identifier: str | None = None,
+        area_code: str | None = None,
+        perimeter_type: str | None = None,
+        intensity_of_fruition: str | None = None,
+        area_classification: str | None = None,
+        istat_classification: str | None = None,
+        survey_date: str | None = None,
+        surface_area_m2: str | None = None,
+    ) -> GreenTablePageOut:
+        """Paginated, filtered and sorted green-areas table (no geometry)."""
+        # Only pass non-None values so the repository iterates a compact dict.
+        filters = {
+            k: v
+            for k, v in {
+                "q": q,
+                "geometry_type": geometry_type,
+                "perimeter_type": perimeter_type,
+                "administrative_status": administrative_status,
+                "operational_status": operational_status,
+                "survey_status": survey_status,
+                "intensity_of_fruition": intensity_of_fruition,
+                "area_classification": area_classification,
+                "istat_classification": istat_classification,
+                "level": level,
+                "name": name,
+                "zril_identifier": zril_identifier,
+                "area_code": area_code,
+                "survey_date": survey_date,
+                "surface_area_m2": surface_area_m2,
+            }.items()
+            if v is not None
+        }
+        return get_green_areas_uc().list_green_areas_table_paged(
+            region_id,
+            province_id,
+            municipality_id,
+            sub_municipal_area_id=sub_municipal_area_id,
+            contained_in_area_id=contained_in_area_id,
+            parent_id=parent_id,
+            area_id=area_id,
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+            filters=filters,
+        )
 
 
 # After static paths (viewport/table): otherwise {area_id} steals those segments → 422.

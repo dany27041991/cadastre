@@ -6,6 +6,7 @@ import type { GeoJSONFeatureCollection } from '@/shared/types'
 import type { TerritoryNavigationApi } from './api'
 import type { TerritoryLevel, BreadcrumbCrumb } from './territory'
 import type { TerritoryMapFeature } from './mapFeature'
+import type { TerritorySearchHit } from './territorySearch'
 import type { MapLayerKind } from '../model/constants'
 
 export interface MapBridgeGeo {
@@ -161,6 +162,8 @@ export interface TerritoryNavigationActions {
   ) => void
   /** Drill into green area sub-areas (from detail modal CTA). */
   drillGreenArea: (areaId: number, label: string, feature?: unknown) => void
+  /** Jump from hierarchy SearchInput (bypasses overlay click guard). */
+  jumpToSearchHit: (hit: TerritorySearchHit) => Promise<void>
 }
 
 export type UseTerritoryNavigationResult = TerritoryNavigationState &

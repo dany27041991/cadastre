@@ -1,5 +1,5 @@
 /**
- * Actions column: EllipsysIcon (⋯) → Dettaglio (+ optional "Assets verdi" in dual areas view).
+ * Actions column: EllipsysIcon (⋯) → Dettaglio (EyeIcon) + optional Assets verdi (TreeIcon).
  * Portal menu avoids dxc-webkit Tooltip / reactstrap PopperContent transition.timeout warnings.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
@@ -7,7 +7,7 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { icons } from 'dxc-webkit'
 
-const { EllipsysIcon } = icons
+const { EllipsysIcon, EyeIcon, TreeIcon } = icons
 
 export type GreenTableRawRow = Record<string, unknown>
 
@@ -99,6 +99,13 @@ export function GreenTableRowActions({
             className="green-table-row-actions-tooltip__action green-table-row-actions-tooltip__action--default"
             onClick={runDetail}
           >
+            <EyeIcon
+              size="xs"
+              stroke="black"
+              fill="transparent"
+              className="green-table-row-actions-tooltip__action-icon"
+              aria-hidden
+            />
             {t('territory.table.detail')}
           </button>
           {onViewAssets != null && (
@@ -107,6 +114,13 @@ export function GreenTableRowActions({
               className="green-table-row-actions-tooltip__action green-table-row-actions-tooltip__action--default"
               onClick={runViewAssets}
             >
+              <TreeIcon
+                size="xs"
+                stroke="black"
+                fill="transparent"
+                className="green-table-row-actions-tooltip__action-icon"
+                aria-hidden
+              />
               {t('territory.table.viewAssets')}
             </button>
           )}

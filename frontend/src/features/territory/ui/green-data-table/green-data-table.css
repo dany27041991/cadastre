@@ -70,6 +70,38 @@
   box-sizing: border-box;
 }
 
+/* Gear (left) + page jump (right), above the table */
+.green-data-table-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0 0.15rem 0.45rem;
+}
+
+.green-data-table-top-bar__start {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.green-data-table-top-bar__end {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1;
+  min-width: 0;
+}
+
+.green-data-table-top-bar .green-data-table-page-jump--top {
+  margin: 0;
+  padding: 0;
+  justify-content: flex-end;
+}
+
 /* Loader overlay while fetching / refetching table pages */
 .green-data-table-body {
   position: relative;
@@ -282,8 +314,11 @@
   background: #fff;
   border-left: 1px solid rgba(0, 0, 0, 0.08);
 }
-/* Last header column: sticky right, above body cells when scrolling horizontally */
-.green-data-table-fixed-columns thead th.column-cells-__actions {
+/*
+ * Actions header: CustomTable puts `header-cell-__actions` on the inner div,
+ * not on <th> — sticky must target th:has(...).
+ */
+.green-data-table-fixed-columns thead th:has(.header-cell-__actions) {
   position: sticky;
   right: 0;
   width: 0.01%;
@@ -305,8 +340,8 @@
   display: inline-flex;
   vertical-align: middle;
 }
-.green-data-table-fixed-columns thead th.column-cells-__actions > div,
-.green-data-table-fixed-columns thead th.column-cells-__actions .header-cell-__actions {
+.green-data-table-fixed-columns thead th:has(.header-cell-__actions) > div,
+.green-data-table-fixed-columns thead th .header-cell-__actions {
   overflow: hidden;
   max-width: 100%;
   min-width: 0;
@@ -317,7 +352,7 @@
 }
 
 /* Data columns: grow up to max-width, then wrap */
-.green-data-table-fixed-columns thead th:not(.column-cells-__actions),
+.green-data-table-fixed-columns thead th:not(:has(.header-cell-__actions)),
 .green-data-table-fixed-columns tbody td:not(.column-cells-__actions) {
   width: auto;
   min-width: min-content;
@@ -328,7 +363,7 @@
   vertical-align: top;
   box-sizing: border-box;
 }
-.green-data-table-fixed-columns thead th:not(.column-cells-__actions) {
+.green-data-table-fixed-columns thead th:not(:has(.header-cell-__actions)) {
   vertical-align: middle;
   white-space: normal;
 }
@@ -428,18 +463,29 @@
   align-items: center;
   gap: 0.25rem;
   width: 100%;
+  padding: 0 0.5rem;
+  box-sizing: border-box;
 }
 .green-table-row-actions-tooltip__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   font: inherit;
   font-size: 0.875rem;
   line-height: 1.35;
   margin: 0;
-  padding: 0.125rem 0;
+  padding: 0.25rem 0.35rem;
   border: none;
   background: transparent;
   cursor: pointer;
   text-align: center;
   text-decoration: none;
+}
+.green-table-row-actions-tooltip__action-icon {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
 }
 .green-table-row-actions-tooltip__action:hover {
   text-decoration: underline;
@@ -461,7 +507,7 @@
   flex-direction: column;
   align-items: stretch;
   box-sizing: border-box;
-  min-width: 11rem;
+  min-width: 12.5rem;
   padding: 0.5rem 0 0.625rem;
   background: #fff;
   border: 1px solid #000;
@@ -479,6 +525,6 @@
   margin: 0 0 0.5rem;
   padding: 0 0 0.5rem;
   font-weight: 600;
-  color: var(--primary) !important;
+  color: var(--primary, #2762ad) !important;
   border-bottom: 1px solid #000;
 }

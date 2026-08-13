@@ -17,6 +17,8 @@ export { GREEN_DETAIL_KIND_AREA, GREEN_DETAIL_KIND_ASSET }
 
 export interface GreenDetailSummary {
   primaryLabel: string
+  /** From attribute_types (e.g. Albero / Siepe) — asset summary field label. */
+  attributeTypeLabel?: string | null
   regionLabel?: string | null
   municipalityLabel?: string | null
   provinceLabel?: string | null
@@ -75,6 +77,10 @@ function normalizeDetail(raw: Record<string, unknown>): GreenDetailDto {
   const primaryLabel = String(
     summaryRaw.primaryLabel ?? summaryRaw.primary_label ?? ''
   )
+  const attributeTypeLabel =
+    (summaryRaw.attributeTypeLabel as string | null | undefined) ??
+    (summaryRaw.attribute_type_label as string | null | undefined) ??
+    null
   const regionLabel =
     (summaryRaw.regionLabel as string | null | undefined) ??
     (summaryRaw.region_label as string | null | undefined) ??
@@ -121,6 +127,7 @@ function normalizeDetail(raw: Record<string, unknown>): GreenDetailDto {
     id: Number(raw.id),
     summary: {
       primaryLabel,
+      attributeTypeLabel,
       regionLabel,
       municipalityLabel,
       provinceLabel,

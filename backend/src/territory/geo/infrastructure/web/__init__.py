@@ -8,8 +8,12 @@ from territory.geo.infrastructure.web.municipality_ctrl import router as municip
 from territory.geo.infrastructure.web.sub_municipal_area_ctrl import (
     router as sub_municipal_area_router,
 )
+from territory.geo.infrastructure.web.territory_search_ctrl import (
+    router as territory_search_router,
+)
 
 router = APIRouter(tags=["territory-geo"])
+router.include_router(territory_search_router)
 router.include_router(region_router)
 router.include_router(province_router)
 router.include_router(municipality_router)

@@ -65,14 +65,17 @@ export function useGeoinsightMapBridge(): UseGeoinsightMapBridgeResult {
     adapterRef.current?.onMapViewChange()
   }, [mapViewEpoch, isMapReady])
 
-  return {
-    ...bridge,
-    handleFeatureInfo: bridge.handleFeatureInfo,
-    handleDrawnGeometryInfo: bridge.handleDrawnGeometryInfo,
-    flushAdapterPending: bridge.flushPending,
-    syncDrillContext: bridge.syncDrillContext,
-    setClickNavigationEnabled: (enabled: boolean) => {
-      clickNavigationEnabledRef.current = enabled
-    },
-  }
+  return useMemo(
+    () => ({
+      ...bridge,
+      handleFeatureInfo: bridge.handleFeatureInfo,
+      handleDrawnGeometryInfo: bridge.handleDrawnGeometryInfo,
+      flushAdapterPending: bridge.flushPending,
+      syncDrillContext: bridge.syncDrillContext,
+      setClickNavigationEnabled: (enabled: boolean) => {
+        clickNavigationEnabledRef.current = enabled
+      },
+    }),
+    [bridge]
+  )
 }

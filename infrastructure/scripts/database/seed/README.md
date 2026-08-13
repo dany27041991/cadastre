@@ -52,7 +52,13 @@ Carica **aree verdi** e **asset verdi** (hedges, shrubs, trees) da GeoJSON per u
 ### Ordine di caricamento
 
 1. **Aree** – `areas.geojson` → `cadastre.green_areas` (livello 1 = MANAGEMENT_UNIT).
+   - `tipologia2` → colonne tipizzate `area_classification` e `istat_classification` (enum ISTAT Ambiente urbano); non resta in `attributes`.
+   - `data_rilie` → `survey_date` (parse; valori invalidi/`NaT` → `NULL`); non resta in `attributes`.
+   - `attributes` JSONB: solo chiavi inglesi mappate (es. `location`, `surface_area_m2`, `maintenance_need`); property GeoJSON non mappate scartate.
 2. **Asset** – `hedges.geojson`, `shrubs.geojson`, `trees.geojson` → `cadastre.green_assets`, con `green_area_id` impostato per contenimento spaziale (geometria asset dentro un’area).
+   - `Famiglia`/`Genere`/`Specie` → colonne `family`/`genus`/`species` (non duplicate in JSONB).
+   - `attributes` JSONB: solo chiavi inglesi mappate (es. `location`, `plant_type_code`, `height_class`, `trunk_circumference_cm`, `length_m`).
+   - Autoctono/alloctono: colonna esistente `origin` (`NATIVE` / `EXOTIC`); sul seed Lecce resta `NULL` se assente nel GeoJSON.
 
 ### File attesi (CRS EPSG:32633, convertiti in 4326 in scrittura)
 

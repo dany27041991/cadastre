@@ -7,6 +7,8 @@ import { createLevelFetchers } from '../fetchers/mapNavigationFetchers'
 import { loadGreenSubAreas } from '../../lib/loadGreenSubAreas'
 import { restoreMapForBreadcrumb } from '../../lib/restoreMapForBreadcrumb'
 import { getRegionIdFromMapFeature } from '../../lib/featureIdentity'
+import { jumpToTerritorySearchHit } from '../../lib/jumpToTerritorySearchHit'
+import type { TerritorySearchHit } from '../../types/territorySearch'
 import type {
   TerritoryLevel,
   BreadcrumbCrumb,
@@ -313,6 +315,40 @@ export function useTerritoryNavigation(
     [resolveRegionId, loadSubAreas]
   )
 
+  const jumpToSearchHit = useCallback(
+    async (hit: TerritorySearchHit) => {
+      if (!api) return
+      await jumpToTerritorySearchHit({
+        hit,
+        api,
+        bridge: bridgeRef.current,
+        suffixProvince,
+        labelGreenAreas,
+        assetsActive: assetsActiveRef.current?.() ?? false,
+        areasActive: areasActiveRef.current?.() ?? false,
+        applyGeoJsonToBridge,
+        clearTerritoryState,
+        showGreenLayer,
+        showLeafAreaFromFeature,
+        setLevel,
+        setBreadcrumb,
+        withLoading,
+        loadRegions,
+      })
+    },
+    [
+      api,
+      suffixProvince,
+      labelGreenAreas,
+      applyGeoJsonToBridge,
+      clearTerritoryState,
+      showGreenLayer,
+      showLeafAreaFromFeature,
+      withLoading,
+      loadRegions,
+    ]
+  )
+
   return {
     level,
     breadcrumb,
@@ -324,6 +360,7 @@ export function useTerritoryNavigation(
     loadGreenAreas,
     loadSubAreas,
     drillGreenArea,
+    jumpToSearchHit,
     resyncMapLayers,
     navigateTo,
     goBack,

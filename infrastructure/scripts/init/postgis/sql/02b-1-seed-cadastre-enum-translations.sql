@@ -35,6 +35,43 @@ ON CONFLICT (entity_type, entity_name, key, lang, column_name) DO UPDATE SET
   translation = EXCLUDED.translation;
 
 -- -----------------------------------------------------------------------------
+-- istat_green_area_classification (ASSET_AREA: area_classification + istat_classification)
+-- ISTAT Ambiente urbano / Verde urbano typology.
+-- -----------------------------------------------------------------------------
+INSERT INTO public.translations (entity_type, entity_name, key, column_name, lang, translation)
+VALUES
+  ('ENUM', 'cadastre.istat_green_area_classification', 'HISTORICAL_GREEN', '', 'it', 'Verde storico'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'HISTORICAL_GREEN', '', 'en', 'Historical green'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'URBAN_PARKS', '', 'it', 'Parchi urbani'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'URBAN_PARKS', '', 'en', 'Urban parks'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'EQUIPPED_GREEN', '', 'it', 'Verde attrezzato'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'EQUIPPED_GREEN', '', 'en', 'Equipped green'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'URBAN_FURNISHING', '', 'it', 'Aree di arredo urbano'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'URBAN_FURNISHING', '', 'en', 'Urban furnishing'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'SCHOOL_GARDENS', '', 'it', 'Giardini scolastici'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'SCHOOL_GARDENS', '', 'en', 'School gardens'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'OUTDOOR_SPORTS', '', 'it', 'Aree sportive all''aperto'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'OUTDOOR_SPORTS', '', 'en', 'Outdoor sports areas'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'URBAN_FORESTRY', '', 'it', 'Forestazione urbana'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'URBAN_FORESTRY', '', 'en', 'Urban forestry'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'WOODLAND', '', 'it', 'Aree boschive'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'WOODLAND', '', 'en', 'Woodland'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'UNCULTIVATED_GREEN', '', 'it', 'Verde incolto'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'UNCULTIVATED_GREEN', '', 'en', 'Uncultivated green'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'URBAN_ALLOTMENTS', '', 'it', 'Orti urbani'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'URBAN_ALLOTMENTS', '', 'en', 'Urban allotments'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'BOTANICAL_GARDENS', '', 'it', 'Orti botanici'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'BOTANICAL_GARDENS', '', 'en', 'Botanical gardens'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'ZOOLOGICAL_GARDENS', '', 'it', 'Giardini zoologici'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'ZOOLOGICAL_GARDENS', '', 'en', 'Zoological gardens'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'CEMETERIES', '', 'it', 'Aree cimiteriali a verde'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'CEMETERIES', '', 'en', 'Cemetery green areas'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'OTHER', '', 'it', 'Altro'),
+  ('ENUM', 'cadastre.istat_green_area_classification', 'OTHER', '', 'en', 'Other')
+ON CONFLICT (entity_type, entity_name, key, lang, column_name) DO UPDATE SET
+  translation = EXCLUDED.translation;
+
+-- -----------------------------------------------------------------------------
 -- administrative_status (ASSET_AREA)
 -- -----------------------------------------------------------------------------
 INSERT INTO public.translations (entity_type, entity_name, key, column_name, lang, translation)

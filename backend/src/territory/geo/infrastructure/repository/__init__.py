@@ -7,12 +7,16 @@ from territory.geo.application.usecases.query import (
     CatalogProvinceByRegion,
     CatalogMunicipalityByProvince,
     CatalogSubMunicipalAreasByMunicipality,
+    SearchTerritoryHierarchy,
 )
 from territory.geo.infrastructure.repository.region_repository import RegionRepository
 from territory.geo.infrastructure.repository.province_repository import ProvinceRepository
 from territory.geo.infrastructure.repository.municipality_repository import MunicipalityRepository
 from territory.geo.infrastructure.repository.sub_municipal_area_repository import (
     SubMunicipalAreaRepository,
+)
+from territory.geo.infrastructure.repository.territory_search_repository import (
+    TerritorySearchRepository,
 )
 
 
@@ -32,6 +36,10 @@ def _sub_municipal_area_repository() -> SubMunicipalAreaRepository:
     return SubMunicipalAreaRepository(session_factory=get_session)
 
 
+def _territory_search_repository() -> TerritorySearchRepository:
+    return TerritorySearchRepository(session_factory=get_session)
+
+
 def get_regions_use_case() -> CatalogRegion:
     return CatalogRegion(_region_repository())
 
@@ -48,13 +56,19 @@ def get_sub_municipal_areas_by_municipality_use_case() -> CatalogSubMunicipalAre
     return CatalogSubMunicipalAreasByMunicipality(_sub_municipal_area_repository())
 
 
+def get_territory_search_use_case() -> SearchTerritoryHierarchy:
+    return SearchTerritoryHierarchy(_territory_search_repository())
+
+
 __all__ = [
     "RegionRepository",
     "ProvinceRepository",
     "MunicipalityRepository",
     "SubMunicipalAreaRepository",
+    "TerritorySearchRepository",
     "get_regions_use_case",
     "get_provinces_by_region_use_case",
     "get_municipalities_by_province_use_case",
     "get_sub_municipal_areas_by_municipality_use_case",
+    "get_territory_search_use_case",
 ]

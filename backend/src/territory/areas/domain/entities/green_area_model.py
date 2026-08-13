@@ -1,4 +1,4 @@
-"""SQLAlchemy model for cadastre.green_areas. Aligned with 02-init-schema-cadastre.sql (152-186)."""
+"""SQLAlchemy model for cadastre.green_areas. Aligned with 02-init-schema-cadastre.sql."""
 
 from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Text, text
 from sqlalchemy.sql import func
@@ -26,6 +26,8 @@ class GreenAreaModel(Base):
     attribute_type_id = Column(BigInteger, nullable=True)  # FK public.attribute_types(id)
     zril_identifier = Column(String(80), nullable=True)
     susceptibility_classification_area_id = Column(BigInteger, nullable=True)
+    area_classification = Column(String(40), nullable=True)  # cadastre.istat_green_area_classification
+    istat_classification = Column(String(40), nullable=True)  # cadastre.istat_green_area_classification
 
     # Cadastre ENUMs (stored as strings; DB enforces enum type)
     intensity_of_fruition = Column(String(20), nullable=True)
@@ -40,6 +42,7 @@ class GreenAreaModel(Base):
     valid_to = Column(DateTime(timezone=True), nullable=True)
     start_date_of_management = Column(DateTime(timezone=True), nullable=True)
     end_date_of_management = Column(DateTime(timezone=True), nullable=True)
+    survey_date = Column(DateTime(timezone=True), nullable=True)
     last_update_at = Column(DateTime(timezone=True), nullable=True, server_default=func.now())
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     last_modified_by = Column(String(80), nullable=True)

@@ -4,16 +4,24 @@
  * All filtering, sorting and pagination happen on the backend:
  *  - page / pageSize  → LIMIT / OFFSET
  *  - sort             → ORDER BY (whitelisted on server)
- *  - filterText       → column ILIKE or q free-text search
+ *  - columnFilters    → per-catalog-key AND filters (ILIKE / exact)
  */
 import './green-data-table.css'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Box, CustomTable, Text } from 'dxc-webkit'
+import { Box, Button, CustomTable, Text, icons } from 'dxc-webkit'
 import { BackNavHeader, LoadingState } from '@/shared/ui'
 import { useGreenTablePanel } from '../../context/GreenTablePanelContext'
-import { labelizeGreenColumn } from '../../lib/greenTableColumnLabel'
-import { filterGreenTableNonIdKeys } from '../../lib/greenTableColumnVisibility'
+import {
+  NON_SORTABLE_DETAIL_COLUMNS,
+  type GreenTableKind,
+} from '../../lib/greenDetailColumnCatalog'
+import {
+  loadVisibleColumns,
+  orderVisibleKeys,
+  toggleVisibleColumn,
+} from '../../lib/greenTableVisibleCols'
+import { GreenTableColumnPicker } from './GreenTableColumnPicker'
 import { GreenTableRowActions, type GreenTableRawRow } from './GreenTableRowActions'
 import {
   fetchGreenAssetsTablePaged,
@@ -27,69 +35,12 @@ import {
 
 type GreenTableRow = Record<string, string | number>
 
-const AREA_COLUMN_PRIORITY = [
-  'name',
-  'level',
-  'geometry_type',
-  'municipality_label',
-  'region_label',
-  'province_label',
-  'level_id_label',
-  'parent_label',
-  'attribute_type_label',
-  'operational_status',
-  'administrative_status',
-]
-
-const ASSET_COLUMN_PRIORITY = [
-  'asset_type',
-  'geometry_type',
-  'species',
-  'family',
-  'genus',
-  'green_area_label',
-  'municipality_label',
-  'region_label',
-  'province_label',
-  'attribute_type_label',
-  'health_status',
-]
-
 /** Debounce delay (ms) before a filter-text change triggers a fetch. */
 const FILTER_DEBOUNCE_MS = 350
 
 // ---------------------------------------------------------------------------
 // Pure helpers — no React deps, safe to call in useMemo
 // ---------------------------------------------------------------------------
-
-function collectKeys(rows: Record<string, unknown>[]): string[] {
-  const seen = new Set<string>()
-  for (const r of rows) {
-    for (const k of Object.keys(r)) seen.add(k)
-  }
-  return [...seen].sort()
-}
-
-function pickDefaultFive(allKeys: string[], priority: string[]): string[] {
-  const allSet = new Set(allKeys)
-  const out: string[] = []
-  const outSet = new Set<string>()
-  for (const k of priority) {
-    if (allSet.has(k) && !outSet.has(k)) {
-      out.push(k)
-      outSet.add(k)
-    }
-    if (out.length >= 5) return out
-  }
-  for (const k of allKeys) {
-    if (!outSet.has(k)) {
-      out.push(k)
-      outSet.add(k)
-    }
-    if (out.length >= 5) return out
-  }
-  return out
-}
 
 const FORMAT_MAX_DEPTH = 5
 
@@ -148,8 +99,8 @@ function formatComplexValue(
 }
 
 function cellValue(v: unknown, formatBoolean: (b: boolean) => string): string | number {
-  if (v == null) return '—'
-  if (typeof v === 'number' || typeof v === 'string') return v
+  if (v == null) return 'NaN'
+  if (typeof v === 'number' || typeof v === 'string') return v === '' ? 'NaN' : v
   if (typeof v === 'boolean') return formatBoolean(v)
   return formatComplexValue(v, formatBoolean, 0)
 }
@@ -210,16 +161,15 @@ export function GreenDataTable({
   )
 
   const {
-    extraColumns,
-    filterText,
-    filterColumnKey,
-    registerTableColumns,
+    columnFiltersByKind,
+    setActiveTableKind,
     setTablePanelActive,
   } = useGreenTablePanel()
 
   const dualMode = areasActive && assetsActive
   const [drillAreaId, setDrillAreaId] = useState<number | null>(null)
   const [drillAreaLabel, setDrillAreaLabel] = useState<string | null>(null)
+  const [pickingColumns, setPickingColumns] = useState(false)
 
   useEffect(() => {
     if (!dualMode) {
@@ -228,9 +178,39 @@ export function GreenDataTable({
     }
   }, [dualMode])
 
+  // Search / map drill already scopes breadcrumb to a green area: align dual-mode
+  // assets drill so the assets table uses the same green_area_id without a row click.
+  useEffect(() => {
+    if (!dualMode || assetsTableQuery == null) return
+    const fromNav = Number(new URLSearchParams(assetsTableQuery).get('green_area_id'))
+    if (!Number.isFinite(fromNav) || fromNav <= 0) {
+      setDrillAreaId(null)
+      setDrillAreaLabel(null)
+      return
+    }
+    setDrillAreaId(fromNav)
+  }, [dualMode, assetsTableQuery])
+
   // Assets-only, or dual mode after drilling into an area.
   const showGreenAssets =
     (assetsActive && !areasActive) || (dualMode && drillAreaId != null)
+
+  const tableKind: GreenTableKind = showGreenAssets ? 'asset' : 'area'
+
+  useEffect(() => {
+    setActiveTableKind(tableKind)
+  }, [tableKind, setActiveTableKind])
+
+  const activeColumnFilters = columnFiltersByKind[tableKind]
+
+  const [visibleKeys, setVisibleKeys] = useState<string[]>(() =>
+    loadVisibleColumns('area')
+  )
+
+  useEffect(() => {
+    setVisibleKeys(loadVisibleColumns(tableKind))
+    setPickingColumns(false)
+  }, [tableKind])
 
   const baseQuery = useMemo(() => {
     if (showGreenAssets) {
@@ -269,16 +249,24 @@ export function GreenDataTable({
   /** Local value for "go to page" input (CustomTable has no native number field for this). */
   const [pageInput, setPageInput] = useState('1')
 
-  // Debounced filter: avoids a fetch on every keystroke.
-  const [debouncedFilter, setDebouncedFilter] = useState(filterText)
+  // Debounced multi-field filters: avoids a fetch on every keystroke.
+  const [debouncedFilters, setDebouncedFilters] = useState<Record<string, string>>(
+    () => ({ ...activeColumnFilters }),
+  )
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const filtersSerialized = useMemo(
+    () => JSON.stringify(activeColumnFilters),
+    [activeColumnFilters],
+  )
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => setDebouncedFilter(filterText), FILTER_DEBOUNCE_MS)
+    debounceRef.current = setTimeout(() => {
+      setDebouncedFilters(JSON.parse(filtersSerialized) as Record<string, string>)
+    }, FILTER_DEBOUNCE_MS)
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [filterText])
+  }, [filtersSerialized])
 
   // Track whether panel callbacks have been fired for the current territory scope
   // so we don't dispatch redundant state updates on every page change.
@@ -299,13 +287,19 @@ export function GreenDataTable({
   // Reset page to 1 when filter / sort / dataset changes.
   // This is intentionally separate from the baseQuery reset because we want
   // to keep pageData visible (stale-while-revalidate UX) while re-fetching.
-  const prevFilterKey = useRef(`${debouncedFilter}|${filterColumnKey}|${String(sort)}|${String(showGreenAssets)}`)
+  const debouncedFiltersKey = useMemo(
+    () => JSON.stringify(debouncedFilters),
+    [debouncedFilters],
+  )
+  const prevFilterKey = useRef(
+    `${debouncedFiltersKey}|${String(sort)}|${String(showGreenAssets)}`,
+  )
   useEffect(() => {
-    const key = `${debouncedFilter}|${filterColumnKey}|${String(sort)}|${String(showGreenAssets)}`
+    const key = `${debouncedFiltersKey}|${String(sort)}|${String(showGreenAssets)}`
     if (prevFilterKey.current === key) return
     prevFilterKey.current = key
     setPage(1)
-  }, [debouncedFilter, filterColumnKey, sort, showGreenAssets])
+  }, [debouncedFiltersKey, sort, showGreenAssets])
 
   // Keep the page input in sync when the current page changes (e.g. pager clicks).
   useEffect(() => {
@@ -335,9 +329,10 @@ export function GreenDataTable({
       params['sort_by'] = sort[0]
       params['sort_dir'] = sort[1]
     }
-    if (debouncedFilter) {
-      // Use column-specific filter when a column is selected; fall back to full-text q.
-      params[filterColumnKey || 'q'] = debouncedFilter
+    if (debouncedFiltersKey !== '{}') {
+      for (const [k, v] of Object.entries(debouncedFilters)) {
+        if (v) params[k] = v
+      }
     }
 
     const fetchFn = showGreenAssets ? fetchGreenAssetsTablePaged : fetchGreenAreasTablePaged
@@ -369,47 +364,34 @@ export function GreenDataTable({
     page,
     pageSize,
     sort,
-    debouncedFilter,
-    filterColumnKey,
+    debouncedFilters,
+    debouncedFiltersKey,
     setTablePanelActive,
   ])
 
-  // Derive column metadata from the current page.
+  // Derive column metadata from the curated catalog (not from sparse page keys).
   const rawRows = pageData?.data ?? []
 
-  const allKeys = useMemo(() => filterGreenTableNonIdKeys(collectKeys(rawRows)), [rawRows])
-
-  const defaultFive = useMemo(
-    () => pickDefaultFive(allKeys, showGreenAssets ? ASSET_COLUMN_PRIORITY : AREA_COLUMN_PRIORITY),
-    [allKeys, showGreenAssets],
+  const handleToggleColumn = useCallback(
+    (key: string) => {
+      setVisibleKeys((prev) => toggleVisibleColumn(tableKind, prev, key))
+    },
+    [tableKind]
   )
 
-  useEffect(() => {
-    if (baseQuery == null || rawRows.length === 0) return
-    registerTableColumns(allKeys, defaultFive)
-  }, [baseQuery, allKeys, defaultFive, registerTableColumns, rawRows.length])
-
-  const visibleKeys = useMemo(() => {
-    const allKeysSet = new Set(allKeys)
-    const seen = new Set(defaultFive)
-    const ordered = [...defaultFive]
-    for (const k of extraColumns) {
-      if (allKeysSet.has(k) && !seen.has(k)) {
-        seen.add(k)
-        ordered.push(k)
-      }
-    }
-    return ordered
-  }, [defaultFive, extraColumns, allKeys])
+  const orderedVisibleKeys = useMemo(
+    () => orderVisibleKeys(tableKind, visibleKeys),
+    [tableKind, visibleKeys]
+  )
 
   const tableRows = useMemo(
     () =>
       rawRows.map((r) => {
         const row: GreenTableRow = {}
-        for (const k of visibleKeys) row[k] = cellValue(r[k], formatBoolean)
+        for (const k of orderedVisibleKeys) row[k] = cellValue(r[k], formatBoolean)
         return row
       }),
-    [rawRows, visibleKeys, formatBoolean],
+    [rawRows, orderedVisibleKeys, formatBoolean],
   )
 
   const rowPairs = useMemo(
@@ -420,10 +402,10 @@ export function GreenDataTable({
   const columns = useMemo(() => {
     // ⋯ always: Dettaglio; + "Assets verdi" on dual-mode areas rows.
     const showViewAssets = dualMode && !showGreenAssets
-    const dataColumns = visibleKeys.map((colId) => ({
+    const dataColumns = orderedVisibleKeys.map((colId) => ({
       id: colId as keyof GreenTableRow & string,
-      label: labelizeGreenColumn(colId),
-      isSortable: true,
+      label: t(`territory.panel.detail.meta.${colId}`, { defaultValue: colId }),
+      isSortable: !NON_SORTABLE_DETAIL_COLUMNS.has(colId),
     }))
     if (onOpenDetail == null) return dataColumns
 
@@ -447,13 +429,14 @@ export function GreenDataTable({
       },
     ]
   }, [
-    visibleKeys,
+    orderedVisibleKeys,
     rowPairs,
     dualMode,
     showGreenAssets,
     onOpenDetail,
     handleDetail,
     handleViewAssets,
+    t,
   ])
 
   const handleSort = useCallback((args: [string | number, 'asc' | 'desc'] | null) => {
@@ -503,12 +486,38 @@ export function GreenDataTable({
     </Box>
   )
 
+  const columnsSettingsButton = (
+    <Button
+      kind="bare"
+      color="primary"
+      size="sm"
+      icon
+      onClick={() => setPickingColumns(true)}
+      aria-label={t('territory.table.columnsToggle')}
+    >
+      <icons.SettingsIcon />
+    </Button>
+  )
+
   // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
 
   // Empty string is a valid nationwide query (all territory filters omitted).
   if (baseQuery == null) return null
+
+  if (pickingColumns) {
+    return (
+      <Box as="div" className="green-data-table" style={{ width: '100%' }}>
+        <GreenTableColumnPicker
+          kind={tableKind}
+          selectedKeys={orderedVisibleKeys}
+          onToggle={handleToggleColumn}
+          onBack={() => setPickingColumns(false)}
+        />
+      </Box>
+    )
+  }
 
   if (loading && !pageData) {
     return (
@@ -553,40 +562,46 @@ export function GreenDataTable({
               : 'green-data-table-body__content'
           }
         >
-          {totalPages > 1 ? (
-            <Box
-              as="div"
-              className="green-data-table-page-jump green-data-table-page-jump--top compact-table"
-              style={{ width: '100%' }}
-            >
-              <label className="green-data-table-page-jump-label" htmlFor="green-table-page-jump">
-                <Text as="span" font="f1-body-sm">
-                  {t('territory.table.goToPageLabel')}
-                </Text>
-              </label>
-              <input
-                id="green-table-page-jump"
-                type="number"
-                className="green-data-table-page-jump-input"
-                min={1}
-                max={totalPages}
-                value={pageInput}
-                disabled={loading}
-                aria-label={t('territory.table.goToPageAria', { max: totalPages })}
-                onChange={(e) => setPageInput(e.target.value)}
-                onBlur={commitPageJump}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    commitPageJump()
-                  }
-                }}
-              />
-              <Text as="span" font="f1-body-sm" className="green-data-table-page-jump-suffix">
-                {t('territory.table.goToPageOf', { total: totalPages })}
-              </Text>
+          <Box as="div" className="green-data-table-top-bar compact-table">
+            <Box as="div" className="green-data-table-top-bar__start">
+              {columnsSettingsButton}
             </Box>
-          ) : null}
+            <Box as="div" className="green-data-table-top-bar__end">
+              {totalPages > 1 ? (
+                <Box as="div" className="green-data-table-page-jump green-data-table-page-jump--top">
+                  <label
+                    className="green-data-table-page-jump-label"
+                    htmlFor="green-table-page-jump"
+                  >
+                    <Text as="span" font="f1-body-sm">
+                      {t('territory.table.goToPageLabel')}
+                    </Text>
+                  </label>
+                  <input
+                    id="green-table-page-jump"
+                    type="number"
+                    className="green-data-table-page-jump-input"
+                    min={1}
+                    max={totalPages}
+                    value={pageInput}
+                    disabled={loading}
+                    aria-label={t('territory.table.goToPageAria', { max: totalPages })}
+                    onChange={(e) => setPageInput(e.target.value)}
+                    onBlur={commitPageJump}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        commitPageJump()
+                      }
+                    }}
+                  />
+                  <Text as="span" font="f1-body-sm" className="green-data-table-page-jump-suffix">
+                    {t('territory.table.goToPageOf', { total: totalPages })}
+                  </Text>
+                </Box>
+              ) : null}
+            </Box>
+          </Box>
           <CustomTable
             color="primary-alternate"
             style={{ margin: 0 }}

@@ -107,27 +107,36 @@ def get_green_assets_table(
     sort_dir: Literal["asc", "desc"] = "asc",
     # Generic free-text search (species / family / genus / variety)
     q: str | None = None,
-    # Exact-match column filters
+    # Exact-match column filters (non-catalog)
     asset_type: str | None = None,
     geometry_type: str | None = None,
-    health_status: str | None = None,
     stability_status: str | None = None,
     structural_defect: str | None = None,
     risk_level: str | None = None,
     maintenance_priority: str | None = None,
     intervention_type: str | None = None,
-    growth_stage: str | None = None,
     origin: str | None = None,
-    protection_status: str | None = None,
     asset_status: str | None = None,
     monitoring_required: str | None = None,
     priority_level_evaluation: str | None = None,
     managing_entity: str | None = None,
-    # ILIKE column filters
+    # Catalog / ILIKE column filters
     species: str | None = None,
     family: str | None = None,
     genus: str | None = None,
     variety: str | None = None,
+    plant_code: str | None = None,
+    species_code: str | None = None,
+    area_code: str | None = None,
+    latitude: str | None = None,
+    longitude: str | None = None,
+    survey_date: str | None = None,
+    trunk_diameter_cm: str | None = None,
+    plant_height_m: str | None = None,
+    crown_diameter_m: str | None = None,
+    growth_stage: str | None = None,
+    protection_status: str | None = None,
+    health_status: str | None = None,
 ) -> GreenTablePageOut:
     """Paginated, filtered and sorted green-assets table (no geometry)."""
     # Only pass non-None values so the repository iterates a compact dict.
@@ -154,6 +163,15 @@ def get_green_assets_table(
             "family": family,
             "genus": genus,
             "variety": variety,
+            "plant_code": plant_code,
+            "species_code": species_code,
+            "area_code": area_code,
+            "latitude": latitude,
+            "longitude": longitude,
+            "survey_date": survey_date,
+            "trunk_diameter_cm": trunk_diameter_cm,
+            "plant_height_m": plant_height_m,
+            "crown_diameter_m": crown_diameter_m,
         }.items()
         if v is not None
     }

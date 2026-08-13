@@ -154,7 +154,8 @@ export const GreenDetailModal: FC<GreenDetailModalProps> = ({
 
   const summaryPrimaryLabel =
     kind === 'asset'
-      ? t('territory.panel.detail.summary.tree')
+      ? detail?.summary.attributeTypeLabel?.trim() ||
+        t('territory.panel.detail.summary.tree')
       : t('territory.panel.detail.summary.area')
 
   const primaryValue = detail?.summary.primaryLabel || selection.primaryLabel

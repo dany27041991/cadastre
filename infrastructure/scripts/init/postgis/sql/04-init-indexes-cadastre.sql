@@ -23,9 +23,12 @@ CREATE INDEX IF NOT EXISTS idx_green_areas_parent ON cadastre.green_areas(parent
 -- attribute_type_id: FK lookup (DBT catalog)
 CREATE INDEX IF NOT EXISTS idx_green_areas_attribute_type_id ON cadastre.green_areas(attribute_type_id) WHERE attribute_type_id IS NOT NULL;
 -- zril_identifier, susceptibility_*, intensity_of_fruition, geometry_type, perimeter_type: no index (rare filters)
+-- area_classification / istat_classification: filter by ISTAT typology when set
+CREATE INDEX IF NOT EXISTS idx_green_areas_area_classification ON cadastre.green_areas(area_classification) WHERE area_classification IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_green_areas_istat_classification ON cadastre.green_areas(istat_classification) WHERE istat_classification IS NOT NULL;
 -- administrative_status: filter active/approved areas
 CREATE INDEX IF NOT EXISTS idx_green_areas_administrative_status ON cadastre.green_areas(administrative_status) WHERE administrative_status IS NOT NULL;
--- operational_status, survey_status: no index unless needed
+-- operational_status, survey_status, survey_date: no index unless needed
 -- valid_from / valid_to: temporal range (optional GIST or B-tree for “valid at date”)
 -- geometry: spatial
 CREATE INDEX IF NOT EXISTS idx_green_areas_geom ON cadastre.green_areas USING GIST(geometry);

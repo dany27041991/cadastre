@@ -1,0 +1,27 @@
+/* dxc SearchInput ignores styles.option; custom Option uses CSS classes only.
+   Long hierarchy labels must wrap so the blue focus/hover bg covers the full row. */
+.wrap {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.wrap :global(.search-input-menu [role='listbox']) {
+  overflow-x: hidden !important;
+}
+
+.wrap :global(.search-input-option) {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+  white-space: normal !important;
+}
+
+.wrap :global(.search-input-option-text) {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}

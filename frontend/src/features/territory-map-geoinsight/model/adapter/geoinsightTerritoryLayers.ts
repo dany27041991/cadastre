@@ -43,7 +43,8 @@ export function loadTerritoryGeoJsonAndShowOnlyFeatureById(
     features: [match],
   }
   loadTerritoryGeoJson(host, single)
-  const bbox = geoJsonToGeoinsightGeometries(single, GEOM_PREFIX.territory).metas[0]?.bbox ?? null
+  const { metas } = geoJsonToGeoinsightGeometries(single, GEOM_PREFIX.territory)
+  const bbox = metas[0]?.bbox ?? null
   host.lastTerritoryFitBbox = bbox
   // Municipality framing (province → comune): same zoom-out as sub → comune.
   fitGeoinsightToBboxViaPoint(host, bbox, { zoomOffset: MUNICIPALITY_FRAME_ZOOM_OFFSET })

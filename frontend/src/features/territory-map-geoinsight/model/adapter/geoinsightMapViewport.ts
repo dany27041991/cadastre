@@ -36,7 +36,9 @@ export function zoomGeoinsightToBbox(
   host: GeoinsightMapRuntimeHost,
   bbox: [number, number, number, number] | null
 ): void {
-  if (!isValidBbox(bbox)) return
+  if (!isValidBbox(bbox)) {
+    return
+  }
   const fitBbox = bufferBbox(bbox)
   runGeoinsightOrQueue(host, () => {
     getGeoinsightRef()?.zoomToBBOX?.(getGeoinsightMapId(), {
@@ -160,13 +162,17 @@ export function fitGeoinsightToBboxViaPoint(
   bbox: [number, number, number, number] | null,
   options?: { zoomOffset?: number }
 ): void {
-  if (!isValidBbox(bbox)) return
+  if (!isValidBbox(bbox)) {
+    return
+  }
   const fitBbox = bufferBbox(bbox)
   const [lon, lat] = bboxCenter(fitBbox)
   const zoomOffset = options?.zoomOffset ?? 0
   runGeoinsightOrQueue(host, () => {
     const ref = getGeoinsightRef()
-    if (!ref?.zoomToPoint) return
+    if (!ref?.zoomToPoint) {
+      return
+    }
     const targetZoom = Math.min(
       VIEW_MAX_ZOOM,
       Math.max(0, fitZoomForBbox(fitBbox) + zoomOffset)

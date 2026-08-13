@@ -7,7 +7,7 @@ from collections.abc import Callable
 from typing import Any, Literal
 
 from geoalchemy2 import Geography
-from sqlalchemy import ColumnElement, cast, or_, select, func
+from sqlalchemy import ColumnElement, String, cast, or_, select, func
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Session, load_only
 
@@ -36,6 +36,8 @@ _TABLE_LOAD_COLS = (
     GreenAreaModel.attribute_type_id,
     GreenAreaModel.zril_identifier,
     GreenAreaModel.susceptibility_classification_area_id,
+    GreenAreaModel.area_classification,
+    GreenAreaModel.istat_classification,
     GreenAreaModel.intensity_of_fruition,
     GreenAreaModel.geometry_type,
     GreenAreaModel.perimeter_type,
@@ -46,6 +48,7 @@ _TABLE_LOAD_COLS = (
     GreenAreaModel.valid_to,
     GreenAreaModel.start_date_of_management,
     GreenAreaModel.end_date_of_management,
+    GreenAreaModel.survey_date,
     GreenAreaModel.last_update_at,
     GreenAreaModel.deleted_at,
     GreenAreaModel.last_modified_by,
@@ -56,18 +59,26 @@ _TABLE_LOAD_COLS = (
 )
 
 _AREA_SORT_MAP: dict[str, Any] = {col.key: col for col in _TABLE_LOAD_COLS}
+_AREA_SORT_MAP["area_code"] = GreenAreaModel.zril_identifier
 
+# Exact-match (API / non-catalog). Catalog enums use ILIKE cast below.
 _AREA_EXACT_FILTER_COLS = (
     "geometry_type",
-    "perimeter_type",
     "administrative_status",
     "operational_status",
     "survey_status",
-    "intensity_of_fruition",
     "level",
 )
 
 _AREA_ILIKE_FILTER_COLS = ("name", "zril_identifier")
+
+# Catalog enum/status fields: free-text partial match.
+_AREA_ILIKE_CAST_COLS = (
+    "perimeter_type",
+    "intensity_of_fruition",
+    "area_classification",
+    "istat_classification",
+)
 
 
 def _build_area_filter_conditions(
@@ -82,6 +93,26 @@ def _build_area_filter_conditions(
         val = filters.get(col_name)
         if val:
             conditions.append(getattr(ar, col_name).ilike(f"%{val}%"))
+    for col_name in _AREA_ILIKE_CAST_COLS:
+        val = filters.get(col_name)
+        if val:
+            conditions.append(cast(getattr(ar, col_name), String).ilike(f"%{val}%"))
+    area_code = filters.get("area_code")
+    if area_code:
+        conditions.append(ar.zril_identifier.ilike(f"%{area_code}%"))
+    survey_date = filters.get("survey_date")
+    if survey_date:
+        conditions.append(cast(ar.survey_date, String).ilike(f"%{survey_date}%"))
+    surface = filters.get("surface_area_m2")
+    if surface:
+        attr_surface = ar.attributes.op("->>")("surface_area_m2")
+        st_area_txt = cast(func.ST_Area(cast(ar.geometry, Geography)), String)
+        conditions.append(
+            or_(
+                attr_surface.ilike(f"%{surface}%"),
+                st_area_txt.ilike(f"%{surface}%"),
+            )
+        )
     q = filters.get("q")
     if q:
         # Search across all free-text fields; mirrors the or_() pattern used for assets.
@@ -121,6 +152,45 @@ class GreenAreasRepository:
             if row is None:
                 return None
             return orm_to_row_dict(ar, row, exclude=_TABLE_EXCLUDE_COLS)
+
+    def get_detail_by_pk(
+        self,
+        area_id: int,
+        region_id: int,
+        province_id: int,
+    ) -> dict[str, Any] | None:
+        """Load detail fields + attributes + geodesic area (m²) for the map panel."""
+        ar = GreenAreaModel
+        area_m2 = func.ST_Area(cast(ar.geometry, Geography)).label(
+            "surface_area_m2_computed"
+        )
+        stmt = (
+            select(
+                ar.id,
+                ar.region_id,
+                ar.province_id,
+                ar.municipality_id,
+                ar.name,
+                ar.zril_identifier,
+                ar.area_classification,
+                ar.istat_classification,
+                ar.intensity_of_fruition,
+                ar.perimeter_type,
+                ar.survey_date,
+                ar.attributes,
+                area_m2,
+            )
+            .where(ar.region_id == region_id)
+            .where(ar.province_id == province_id)
+            .where(ar.id == area_id)
+            .where(ar.deleted_at.is_(None))
+            .limit(1)
+        )
+        with self._session_factory() as session:
+            row = session.execute(stmt).mappings().first()
+            if row is None:
+                return None
+            return dict(row)
 
     def get_bbox_by_pk(
         self,
@@ -385,6 +455,7 @@ class GreenAreasRepository:
         sub_municipal_area_id: int | None = None,
         contained_in_area_id: int | None = None,
         parent_id: int | None = None,
+        area_id: int | None = None,
         page: int = 1,
         page_size: int = 50,
         sort_by: str | None = None,
@@ -405,7 +476,10 @@ class GreenAreasRepository:
             conditions.append(ar.province_id == province_id)
         if municipality_id is not None:
             conditions.append(ar.municipality_id == municipality_id)
-        if parent_id is not None:
+        if area_id is not None:
+            # Exact single-area selection (e.g. search hit / leaf detail).
+            conditions.append(ar.id == area_id)
+        elif parent_id is not None:
             conditions.append(ar.parent_id == parent_id)
         elif contained_in_area_id is not None:
             area_subq = select(ar.geometry, ar.level).where(ar.id == contained_in_area_id)
@@ -453,9 +527,33 @@ class GreenAreasRepository:
             order = ar.id.asc()
 
         count_stmt = select(func.count(ar.id)).where(*conditions)
+        area_m2 = func.ST_Area(cast(ar.geometry, Geography)).label(
+            "surface_area_m2_computed"
+        )
         data_stmt = (
-            select(ar)
-            .options(load_only(*_TABLE_LOAD_COLS, raiseload=True))
+            select(
+                ar.id,
+                ar.region_id,
+                ar.province_id,
+                ar.municipality_id,
+                ar.level_id,
+                ar.parent_id,
+                ar.name,
+                ar.attribute_type_id,
+                ar.zril_identifier,
+                ar.area_classification,
+                ar.istat_classification,
+                ar.intensity_of_fruition,
+                ar.geometry_type,
+                ar.perimeter_type,
+                ar.administrative_status,
+                ar.operational_status,
+                ar.survey_status,
+                ar.survey_date,
+                ar.level,
+                ar.attributes,
+                area_m2,
+            )
             .where(*conditions)
             .order_by(order)
             .limit(page_size)
@@ -464,9 +562,6 @@ class GreenAreasRepository:
 
         with self._session_factory() as session:
             total: int = session.execute(count_stmt).scalar_one()
-            rows = [
-                orm_to_row_dict(ar, m, exclude=_TABLE_EXCLUDE_COLS)
-                for m in session.scalars(data_stmt)
-            ]
+            rows = [dict(m) for m in session.execute(data_stmt).mappings()]
         return rows, total
 
