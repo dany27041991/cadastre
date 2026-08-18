@@ -74,6 +74,7 @@ class CatalogGreenAsset:
         municipality_id: int | None = None,
         sub_municipal_area_id: int | None = None,
         green_area_id: int | None = None,
+        clip_wkt: str | None = None,
     ) -> GeoJSONFeatureCollection:
         """Viewport-sized green assets response (national-scale map rendering).
 
@@ -91,14 +92,46 @@ class CatalogGreenAsset:
         measured 12s on 5.5M rows and grows with the dataset, while admin
         aggregates are O(#admin units).
         """
+        # Admin matview (with optional clip on unit extent) for low zooms.
         # A green-area scope has no pre-aggregated admin rows; grid/raw only.
         if green_area_id is None:
             admin = self._admin_clusters_response(
                 bbox, zoom, region_id=region_id, province_id=province_id,
                 municipality_id=municipality_id,
                 sub_municipal_area_id=sub_municipal_area_id,
+                clip_wkt=clip_wkt,
             )
             if admin is not None:
+                # #region agent log
+                try:
+                    import json as _json
+                    with open(
+                        "/Users/danilogiovannico/Desktop/LAVORO/MASE/SIV/Sviluppo/LINFA/.cursor/debug-4fe799.log",
+                        "a",
+                        encoding="utf-8",
+                    ) as _f:
+                        _f.write(
+                            _json.dumps(
+                                {
+                                    "sessionId": "4fe799",
+                                    "hypothesisId": "A-B",
+                                    "location": "catalog_green_asset.py:admin",
+                                    "message": "viewport admin path",
+                                    "data": {
+                                        "zoom": zoom,
+                                        "bbox": list(bbox),
+                                        "hasClip": bool(clip_wkt),
+                                        "path": "admin",
+                                        "featureCount": len(admin.get("features") or []),
+                                    },
+                                    "timestamp": __import__("time").time() * 1000,
+                                }
+                            )
+                            + "\n"
+                        )
+                except Exception:
+                    pass
+                # #endregion
                 return admin
 
         scope = {
@@ -107,15 +140,50 @@ class CatalogGreenAsset:
             "municipality_id": municipality_id,
             "sub_municipal_area_id": sub_municipal_area_id,
             "green_area_id": green_area_id,
+            "clip_wkt": clip_wkt,
         }
         # Raw assets always and only at the vendor's last zoom level; every
         # other zoom serves clusters. No count-based mode flip: hysteresis kept
         # clusters visible at the last level right after a drill.
         if zoom >= RAW_MIN_ZOOM:
-            return self._repository.get_raw_in_bbox(bbox, LAST_ZOOM_RAW_HARD_CAP, **scope)
+            raw = self._repository.get_raw_in_bbox(bbox, LAST_ZOOM_RAW_HARD_CAP, **scope)
+            # #region agent log
+            try:
+                import json as _json
+                with open(
+                    "/Users/danilogiovannico/Desktop/LAVORO/MASE/SIV/Sviluppo/LINFA/.cursor/debug-4fe799.log",
+                    "a",
+                    encoding="utf-8",
+                ) as _f:
+                    _f.write(
+                        _json.dumps(
+                            {
+                                "sessionId": "4fe799",
+                                "hypothesisId": "A",
+                                "location": "catalog_green_asset.py:raw",
+                                "message": "viewport raw path",
+                                "data": {
+                                    "zoom": zoom,
+                                    "bbox": list(bbox),
+                                    "hasClip": bool(clip_wkt),
+                                    "clipLen": len(clip_wkt) if clip_wkt else 0,
+                                    "path": "raw",
+                                    "featureCount": len(raw.get("features") or []),
+                                    "rawMinZoom": RAW_MIN_ZOOM,
+                                },
+                                "timestamp": __import__("time").time() * 1000,
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
+            return raw
 
-        # Pre-aggregated matview covers the grid zoom band without ad-hoc scope
-        # geometries; sub-area / green-area scopes need a live spatial intersect.
+        # Pre-aggregated matview covers the grid zoom band. Clip filters cells via
+        # extent ∩ polygon (CTE parses WKT once). Live grid is reserved for
+        # sub-area / green-area scopes that need per-asset intersects.
         matview_level = grid_matview_zoom_level(zoom)
         use_matview = (
             matview_level is not None
@@ -129,11 +197,14 @@ class CatalogGreenAsset:
                 region_id=region_id,
                 province_id=province_id,
                 municipality_id=municipality_id,
+                clip_wkt=clip_wkt,
             )
+            path = "matview"
         else:
             clusters = self._repository.get_clusters_in_bbox(
                 bbox, grid_cell_size_m(zoom), **scope
             )
+            path = "live_grid"
 
         features = []
         for cluster in clusters:
@@ -152,6 +223,40 @@ class CatalogGreenAsset:
                     "geometry": {"type": "Point", "coordinates": [lon, lat]},
                 }
             )
+        # #region agent log
+        try:
+            import json as _json
+            with open(
+                "/Users/danilogiovannico/Desktop/LAVORO/MASE/SIV/Sviluppo/LINFA/.cursor/debug-4fe799.log",
+                "a",
+                encoding="utf-8",
+            ) as _f:
+                _f.write(
+                    _json.dumps(
+                        {
+                            "sessionId": "4fe799",
+                            "runId": "post-fix",
+                            "hypothesisId": "B",
+                            "location": "catalog_green_asset.py:grid",
+                            "message": "viewport grid/cluster path",
+                            "data": {
+                                "zoom": zoom,
+                                "bbox": list(bbox),
+                                "hasClip": bool(clip_wkt),
+                                "clipLen": len(clip_wkt) if clip_wkt else 0,
+                                "path": path,
+                                "matviewLevel": matview_level,
+                                "useMatview": use_matview,
+                                "featureCount": len(features),
+                            },
+                            "timestamp": __import__("time").time() * 1000,
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
         return {"type": "FeatureCollection", "features": features}
 
     def _admin_clusters_response(
@@ -163,6 +268,7 @@ class CatalogGreenAsset:
         province_id: int | None,
         municipality_id: int | None,
         sub_municipal_area_id: int | None = None,
+        clip_wkt: str | None = None,
     ) -> GeoJSONFeatureCollection | None:
         """Admin-aggregated clusters for low zooms; None → use the grid/raw path.
 
@@ -177,6 +283,10 @@ class CatalogGreenAsset:
         level = admin_level_for_zoom(zoom)
         if level is None:
             return None
+        # Draw clip: region/province centroids rarely fall inside a sketch;
+        # serve municipality units whose extent intersects the polygon.
+        if clip_wkt and level in {"region", "province"}:
+            level = "municipality"
         # Scope floor + one-step child bump. Cascading `if` bumps previously
         # forced sub_municipal whenever municipality_id was set (region →
         # province → municipality → sub_municipal), so zoom-out never merged
@@ -230,8 +340,9 @@ class CatalogGreenAsset:
             province_id=province_id,
             municipality_id=municipality_id,
             sub_municipal_area_id=sub_municipal_area_id,
+            clip_wkt=clip_wkt,
         )
-        if level == "sub_municipal" and not clusters:
+        if not clusters and (clip_wkt or level == "sub_municipal"):
             return None
         features = []
         for cluster in clusters:
@@ -279,6 +390,7 @@ class CatalogGreenAsset:
         province_id: int | None = None,
         green_area_id: int | None = None,
         sub_municipal_area_id: int | None = None,
+        clip_wkt: str | None = None,
         page: int = 1,
         page_size: int = 50,
         sort_by: str | None = None,
@@ -291,6 +403,7 @@ class CatalogGreenAsset:
             municipality_id,
             green_area_id=green_area_id,
             sub_municipal_area_id=sub_municipal_area_id,
+            clip_wkt=clip_wkt,
             page=page,
             page_size=page_size,
             sort_by=sort_by,

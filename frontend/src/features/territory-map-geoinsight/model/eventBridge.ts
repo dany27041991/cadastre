@@ -40,8 +40,8 @@ export function listGeomIdsFromDrawnFeatures(features: unknown): string[] {
   const ids: string[] = []
   for (const feature of list) {
     const geomId = extractGeomIdFromFeatureInfo(feature)
-    // Ignore temporary detail-selection outline (GH_*), including ZWSP-prefixed ids.
-    if (geomId && !geomId.includes('GH_')) ids.push(geomId)
+    // Ignore temporary overlays (GH_ detail, CL_ draw clip), including ZWSP-prefixed ids.
+    if (geomId && !geomId.includes('GH_') && !geomId.includes('CL_')) ids.push(geomId)
   }
   return ids
 }

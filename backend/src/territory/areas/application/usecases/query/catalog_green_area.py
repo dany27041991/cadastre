@@ -83,6 +83,7 @@ class CatalogGreenArea:
         province_id: int | None = None,
         municipality_id: int | None = None,
         sub_municipal_area_id: int | None = None,
+        clip_wkt: str | None = None,
     ) -> GeoJSONFeatureCollection:
         """Root green areas intersecting the viewport bbox, simplified for the zoom.
 
@@ -99,6 +100,7 @@ class CatalogGreenArea:
             province_id=province_id,
             municipality_id=municipality_id,
             sub_municipal_area_id=sub_municipal_area_id,
+            clip_wkt=clip_wkt,
         )
         return result
 
@@ -129,6 +131,7 @@ class CatalogGreenArea:
         contained_in_area_id: int | None = None,
         parent_id: int | None = None,
         area_id: int | None = None,
+        clip_wkt: str | None = None,
         page: int = 1,
         page_size: int = 50,
         sort_by: str | None = None,
@@ -143,6 +146,7 @@ class CatalogGreenArea:
             contained_in_area_id=contained_in_area_id,
             parent_id=parent_id,
             area_id=area_id,
+            clip_wkt=clip_wkt,
             page=page,
             page_size=page_size,
             sort_by=sort_by,

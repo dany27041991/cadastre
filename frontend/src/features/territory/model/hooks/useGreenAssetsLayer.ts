@@ -52,6 +52,10 @@ export interface UseGreenAssetsLayerOptions {
   /** Independent green-areas toggle. */
   readonly areasLayerActive: boolean
   readonly onAreasLayerActiveChange: (active: boolean) => void
+  /** Draw-on-map clip WKT; omit for Area Italia (no clip_wkt on the wire). */
+  readonly clipWkt?: string | null
+  /** When true, never fetch viewport without a clip (avoids nationwide leak on redraw). */
+  readonly clipRequired?: boolean
 }
 
 export interface UseGreenAssetsLayerResult {
@@ -72,7 +76,7 @@ function scopeFromContext(context: GreenContext) {
   }
 }
 
-function areasFetcherFor(context: GreenContext) {
+function areasFetcherFor(context: GreenContext, clipWkt?: string | null) {
   const scope = scopeFromContext(context)
   const greenAreaId = context.greenAreaId
   // After Esplodi / Seleziona: keep companion areas inside the drilled scope
@@ -92,28 +96,44 @@ function areasFetcherFor(context: GreenContext) {
       )
   }
   return (bbox: [number, number, number, number], zoom: number) =>
-    territoryApi.getGreenAreasViewport({ bbox, zoom, ...scope })
+    territoryApi.getGreenAreasViewport({
+      bbox,
+      zoom,
+      ...scope,
+      ...(clipWkt ? { clipWkt } : {}),
+    })
 }
 
 function startViewportMode(
   context: GreenContext,
   loadGreenLayerViewport: ViewportFetcher,
-  includeAreas: boolean
+  includeAreas: boolean,
+  clipWkt?: string | null
 ): void {
   const scope = scopeFromContext(context)
   const greenAreaId = context.greenAreaId
   const assetsFetcher = (bbox: [number, number, number, number], zoom: number) =>
-    territoryApi.getGreenAssetsViewport({ bbox, zoom, greenAreaId, ...scope })
-  loadGreenLayerViewport(assetsFetcher, includeAreas ? areasFetcherFor(context) : undefined)
+    territoryApi.getGreenAssetsViewport({
+      bbox,
+      zoom,
+      greenAreaId,
+      ...scope,
+      ...(clipWkt ? { clipWkt } : {}),
+    })
+  loadGreenLayerViewport(
+    assetsFetcher,
+    includeAreas ? areasFetcherFor(context, clipWkt) : undefined
+  )
 }
 
 /** Assets off + areas on: keep area polygons via empty assets + areas companion. */
 function startAreasOnlyViewportMode(
   context: GreenContext,
-  loadGreenLayerViewport: ViewportFetcher
+  loadGreenLayerViewport: ViewportFetcher,
+  clipWkt?: string | null
 ): void {
   const emptyAssets = async () => EMPTY_FEATURE_COLLECTION
-  loadGreenLayerViewport(emptyAssets, areasFetcherFor(context))
+  loadGreenLayerViewport(emptyAssets, areasFetcherFor(context, clipWkt))
 }
 
 export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGreenAssetsLayerResult {
@@ -129,6 +149,8 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     onAssetsLayerActiveChange,
     areasLayerActive,
     onAreasLayerActiveChange,
+    clipWkt = null,
+    clipRequired = false,
   } = options
 
   const [loading, setLoading] = useState(false)
@@ -139,7 +161,11 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
   assetsLayerActiveRef.current = assetsLayerActive
 
   const context = useMemo(() => getGreenContext(breadcrumb), [breadcrumb])
-  const contextKey = useMemo(() => greenContextKey(context), [context])
+  const contextKey = useMemo(
+    () => `${greenContextKey(context)}#${clipWkt ?? ''}`,
+    [context, clipWkt]
+  )
+  const clipReady = !clipRequired || Boolean(clipWkt)
   const greenLevel = isGreenMapLevel(level)
 
   const turnOffAssetsLayer = useCallback(async () => {
@@ -148,8 +174,14 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     assetsLayerActiveRef.current = false
     onAssetsLayerActiveChange(false)
     if (areasLayerActiveRef.current) {
+      if (!clipReady) {
+        setGreenLayerVisible(false)
+        clearGreenLayer()
+        lastContextKeyRef.current = contextKey
+        return
+      }
       setLoading(true)
-      startAreasOnlyViewportMode(context, loadGreenLayerViewport)
+      startAreasOnlyViewportMode(context, loadGreenLayerViewport, clipWkt)
       setGreenLayerVisible(true)
       lastContextKeyRef.current = contextKey
       setLoading(false)
@@ -163,6 +195,8 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
   }, [
     context,
     contextKey,
+    clipWkt,
+    clipReady,
     loadGreenLayerViewport,
     setGreenLayerVisible,
     clearGreenLayer,
@@ -170,13 +204,14 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
   ])
 
   const loadAssetsForContext = useCallback(async () => {
+    if (!clipReady) return false
     if (greenLevel) {
       onBeforeLoadingAssets?.()
     }
     setLoading(true)
     assetsLayerActiveRef.current = true
     lastContextKeyRef.current = contextKey
-    startViewportMode(context, loadGreenLayerViewport, areasLayerActiveRef.current)
+    startViewportMode(context, loadGreenLayerViewport, areasLayerActiveRef.current, clipWkt)
     setGreenLayerVisible(true)
     onAssetsLayerActiveChange(true)
     setLoading(false)
@@ -184,6 +219,8 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
   }, [
     context,
     contextKey,
+    clipWkt,
+    clipReady,
     greenLevel,
     loadGreenLayerViewport,
     setGreenLayerVisible,
@@ -194,6 +231,12 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
   // Follow breadcrumb while assets viewport is active.
   useEffect(() => {
     if (!assetsLayerActive || !assetsLayerActiveRef.current) return
+    if (!clipReady) {
+      setGreenLayerVisible(false)
+      clearGreenLayer()
+      lastContextKeyRef.current = contextKey
+      return
+    }
     if (contextKey === lastContextKeyRef.current) return
 
     lastContextKeyRef.current = contextKey
@@ -202,7 +245,7 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     }
     setLoading(true)
     // Includes sub_areas: greenAreaId scopes clusters/trees to the drilled area.
-    startViewportMode(context, loadGreenLayerViewport, areasLayerActiveRef.current)
+    startViewportMode(context, loadGreenLayerViewport, areasLayerActiveRef.current, clipWkt)
     setGreenLayerVisible(true)
     // Preserve zoom on sub-area drill — fitting children bbox often zooms out.
     if (greenLevel && level !== LEVEL_SUB_AREAS) {
@@ -219,17 +262,26 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     setGreenLayerVisible,
     fitToGreenExtent,
     onBeforeLoadingAssets,
+    clipReady,
+    clipWkt,
+    clearGreenLayer,
   ])
 
   // Follow breadcrumb while areas-only viewport is active (assets off).
   useEffect(() => {
     if (assetsLayerActive || !areasLayerActive) return
+    if (!clipReady) {
+      setGreenLayerVisible(false)
+      clearGreenLayer()
+      lastContextKeyRef.current = contextKey
+      return
+    }
     if (contextKey === lastContextKeyRef.current) return
 
     lastContextKeyRef.current = contextKey
     setLoading(true)
     // Scoped via greenAreaId when at sub_areas (areasFetcherFor).
-    startAreasOnlyViewportMode(context, loadGreenLayerViewport)
+    startAreasOnlyViewportMode(context, loadGreenLayerViewport, clipWkt)
     setGreenLayerVisible(true)
     setLoading(false)
   }, [
@@ -239,6 +291,9 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     context,
     loadGreenLayerViewport,
     setGreenLayerVisible,
+    clipReady,
+    clipWkt,
+    clearGreenLayer,
   ])
 
   const setAssetsActive = useCallback(
@@ -264,8 +319,14 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
       areasLayerActiveRef.current = active
 
       if (assetsLayerActive) {
+        if (!clipReady) {
+          setGreenLayerVisible(false)
+          clearGreenLayer()
+          lastContextKeyRef.current = contextKey
+          return
+        }
         setLoading(true)
-        startViewportMode(context, loadGreenLayerViewport, active)
+        startViewportMode(context, loadGreenLayerViewport, active, clipWkt)
         setGreenLayerVisible(true)
         lastContextKeyRef.current = contextKey
         setLoading(false)
@@ -273,8 +334,14 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
       }
 
       if (active) {
+        if (!clipReady) {
+          setGreenLayerVisible(false)
+          clearGreenLayer()
+          lastContextKeyRef.current = contextKey
+          return
+        }
         setLoading(true)
-        startAreasOnlyViewportMode(context, loadGreenLayerViewport)
+        startAreasOnlyViewportMode(context, loadGreenLayerViewport, clipWkt)
         setGreenLayerVisible(true)
         lastContextKeyRef.current = contextKey
         setLoading(false)
@@ -291,6 +358,8 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
       onAreasLayerActiveChange,
       context,
       contextKey,
+      clipWkt,
+      clipReady,
       loadGreenLayerViewport,
       setGreenLayerVisible,
       clearGreenLayer,

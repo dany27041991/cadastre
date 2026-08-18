@@ -3,6 +3,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'react-toastify'
 import { Box } from 'dxc-webkit'
 import {
   territoryApi,
@@ -19,7 +20,12 @@ import {
   buildGreenAreasTableQuery,
   buildGreenAssetsTableQuery,
 } from '@/features/territory/lib/greenTableParams'
-import { filterGreenAreaChildren } from '@/features/territory/lib/greenAreaDrill'
+import {
+  bboxFromPolygon,
+  clipFromSimpleDrawCurrent,
+  clipPayloadToPolygon,
+  polygonToWkt,
+} from '@/features/territory/lib/spatialClipWkt'
 import {
   LAYER_KIND_GREEN_AREA,
   LAYER_KIND_GREEN_ASSET,
@@ -30,12 +36,13 @@ import type { TerritorySearchHit } from '@/features/territory/types/territorySea
 import type { GreenTableRawRow } from '@/features/territory/ui/green-data-table/GreenTableRowActions'
 import { useGreenTablePanel } from '@/features/territory/context/GreenTablePanelContext'
 import { MainContent } from '@/widgets/layout/main/MainContent'
-import { useGreenTablePanelOptional } from '@/features/territory/context/GreenTablePanelContext'
 import {
   GeoinsightFocusContainer,
   GeoinsightMapContainer,
   useGeoinsightMapBridge,
 } from '@/features/territory-map-geoinsight'
+import { DRAW_CLIP_GEOMETRY_COLOR } from '@/features/territory-map-geoinsight/model/constants'
+import { useGeoinsightStore } from '@/app/store/useGeoinsightStore'
 import { useTerritoryMapBridge } from './useTerritoryMapBridge'
 import {
   useTerritoryMapDrillSync,
@@ -69,11 +76,27 @@ export function TerritoryMapWidget() {
     clearStoredLeafArea: mapBridge.clearStoredLeafArea,
   })
 
+  const {
+    registerGreenAssetsLayer,
+    registerResetToLanding,
+    registerTerritorySearchNav,
+    resetPanelState,
+    layersPanelOpen,
+    entryMode,
+    spatialClip,
+    setSpatialClip,
+    setMapTableAccordionVisible,
+  } = useGreenTablePanel()
+
   useEffect(() => {
     // Freeze admin territory click when green overlays are on (no jump).
+    // Draw entry freezes clicks for the whole session (even with toggles off).
     // Green area/asset clicks always open the detail modal via adapter.
-    map.setClickNavigationEnabled(!(greenAssetsLayerActive || greenAreasLayerActive))
-  }, [map, greenAssetsLayerActive, greenAreasLayerActive])
+    const drawFreeze = entryMode === 'draw'
+    map.setClickNavigationEnabled(
+      !(drawFreeze || greenAssetsLayerActive || greenAreasLayerActive)
+    )
+  }, [map, greenAssetsLayerActive, greenAreasLayerActive, entryMode])
 
   const layersPanelOpenRef = useRef(false)
 
@@ -88,7 +111,6 @@ export function TerritoryMapWidget() {
   const handleMapReady = useTerritoryMapResync({ map, resyncMapLayers: resyncMapForReady })
 
   const greenDetail = useGreenFeatureDetail({ breadcrumb: nav.breadcrumb })
-  const greenTablePanel = useGreenTablePanelOptional()
   const lastMapPointerRef = useRef<{ clientX: number; clientY: number } | null>(null)
   /** Table row had no map geometry — frame once detail bbox arrives. */
   const pendingTableFrameRef = useRef(false)
@@ -96,8 +118,8 @@ export function TerritoryMapWidget() {
   // Collapse green data accordion while the detail panel is open.
   useEffect(() => {
     if (!greenDetail.isOpen) return
-    greenTablePanel?.setMapTableAccordionVisible(false)
-  }, [greenDetail.isOpen, greenTablePanel])
+    setMapTableAccordionVisible(false)
+  }, [greenDetail.isOpen, setMapTableAccordionVisible])
 
   // Red selection: recolor mounted GA_/GS_ while detail is open (no GH_ overlay labels).
   useEffect(() => {
@@ -305,17 +327,23 @@ export function TerritoryMapWidget() {
     placeDetailPanelAtMapFraction,
   ])
 
+  const clipWkt = useMemo(() => {
+    if (entryMode !== 'draw' || spatialClip == null) return null
+    try {
+      return polygonToWkt(spatialClip)
+    } catch {
+      return null
+    }
+  }, [entryMode, spatialClip])
+
   const areasTableQuery = useMemo(
-    () => buildGreenAreasTableQuery(nav.level, nav.breadcrumb),
-    [nav.level, nav.breadcrumb]
+    () => buildGreenAreasTableQuery(nav.level, nav.breadcrumb, clipWkt),
+    [nav.level, nav.breadcrumb, clipWkt]
   )
   const assetsTableQuery = useMemo(
-    () => buildGreenAssetsTableQuery(nav.breadcrumb),
-    [nav.breadcrumb]
+    () => buildGreenAssetsTableQuery(nav.breadcrumb, clipWkt),
+    [nav.breadcrumb, clipWkt]
   )
-
-  const { registerGreenAssetsLayer, registerResetToLanding, registerTerritorySearchNav, resetPanelState, layersPanelOpen } =
-    useGreenTablePanel()
 
   layersPanelOpenRef.current = layersPanelOpen
 
@@ -323,6 +351,10 @@ export function TerritoryMapWidget() {
   loadRegionsRef.current = nav.loadRegions
   const mapRef = useRef(map)
   mapRef.current = map
+  const entryModeRef = useRef(entryMode)
+  entryModeRef.current = entryMode
+  const spatialClipRef = useRef(spatialClip)
+  spatialClipRef.current = spatialClip
   const prevLayersPanelOpenRef = useRef(layersPanelOpen)
 
   // Monitoraggio → hide admin territories. Area Italia (layers) → load Italy once on enter.
@@ -335,6 +367,10 @@ export function TerritoryMapWidget() {
       return
     }
     if (!wasOpen) {
+      if (entryModeRef.current === 'draw') {
+        mapRef.current.clearTerritoryLayer()
+        return
+      }
       void loadRegionsRef.current({ fit: false })
     }
   }, [layersPanelOpen])
@@ -419,6 +455,8 @@ export function TerritoryMapWidget() {
     onAssetsLayerActiveChange: setGreenAssetsLayerActive,
     areasLayerActive: greenAreasLayerActive,
     onAreasLayerActiveChange: setGreenAreasLayerActive,
+    clipWkt,
+    clipRequired: entryMode === 'draw',
   })
 
   const setAssetsActiveRef = useRef(greenAssetsLayer.setAssetsActive)
@@ -467,6 +505,11 @@ export function TerritoryMapWidget() {
     mapRef.current.discardGreenDetailHighlight()
     mapRef.current.clearGreenLayer()
     mapRef.current.setGreenLayerVisible(false)
+    mapRef.current.deactivateDrawGeometry()
+    mapRef.current.deleteAllDrawnGeometries()
+    mapRef.current.clearSimpleDrawGeometries()
+    mapRef.current.restoreSimpleDrawTools()
+    mapRef.current.clearDrawClip()
     resetPanelState()
     layersPanelOpenRef.current = false
     // Reset breadcrumb/level to Italy, then hide admin polygons (Monitoraggio).
@@ -500,11 +543,92 @@ export function TerritoryMapWidget() {
     greenDetail.close,
   ])
 
+  useEffect(() => {
+    if (entryMode !== 'draw') {
+      map.restoreSimpleDrawTools()
+      map.deactivateDrawGeometry()
+      map.deleteAllDrawnGeometries()
+      map.clearSimpleDrawGeometries()
+      map.clearDrawClip()
+      return
+    }
+    map.restrictSimpleDrawToClosedShapes()
+    if (spatialClip != null) {
+      map.deactivateDrawGeometry()
+      map.deleteAllDrawnGeometries()
+      // Selection is the blue CL_draw overlay; simpledraw draft stays cleared.
+      return
+    }
+    map.deactivateDrawGeometry()
+    map.deleteAllDrawnGeometries()
+    map.clearSimpleDrawGeometries()
+    map.clearDrawClip()
+  }, [entryMode, spatialClip, map])
+
+  const handleGeometryDrawn = useCallback(
+    (_mapId: number, _geomId: string, _color: string, clip: Record<string, unknown>) => {
+      if (entryModeRef.current !== 'draw') return
+      const mapEpsg = useGeoinsightStore.getState().crs
+      const polygon = clipPayloadToPolygon(clip, mapEpsg)
+      if (polygon == null) {
+        toast.error(t('territory.panel.draw.invalidGeometry'))
+        return
+      }
+      try {
+        polygonToWkt(polygon)
+      } catch {
+        toast.error(t('territory.panel.draw.invalidGeometry'))
+        return
+      }
+      map.deactivateDrawGeometry()
+      map.deleteAllDrawnGeometries()
+      // Single simpledraw polygon (outline, no fill). No CL_draw duplicate.
+      map.clearDrawClip()
+      map.styleSimpleDrawOutline(DRAW_CLIP_GEOMETRY_COLOR)
+      map.deactivateSimpleDrawTool()
+      map.setKeepSimpleDrawClipFeatures(true)
+      setSpatialClip(polygon)
+      const bbox = bboxFromPolygon(polygon)
+      map.zoomToLonLatAtScreenFraction((bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2, {
+        bbox,
+      })
+    },
+    [map, setSpatialClip, t]
+  )
+
+  const handleSimpleFeatureDrawn = useCallback(
+    (current: unknown[], deleted?: unknown[]) => {
+      const currentLen = Array.isArray(current) ? current.length : 0
+      const deletedLen = Array.isArray(deleted) ? deleted.length : 0
+      const clip = clipFromSimpleDrawCurrent(current)
+      if (currentLen === 0) {
+        if (entryModeRef.current !== 'draw' || spatialClipRef.current == null) return
+        // Intentional SELECT+DELETE only. Toolbar close is blocked by keep-clip guard.
+        if (deletedLen === 0) {
+          return
+        }
+        map.setKeepSimpleDrawClipFeatures(false)
+        map.clearDrawClip()
+        map.clearSimpleDrawGeometries()
+        setSpatialClip(null)
+        return
+      }
+      if (currentLen > 1) {
+        map.keepOnlyLastSimpleDrawGeometry()
+      }
+      if (clip == null) return
+      handleGeometryDrawn(0, 'simpledraw', DRAW_CLIP_GEOMETRY_COLOR, clip)
+    },
+    [handleGeometryDrawn, map, setSpatialClip]
+  )
+
   const mapOverlay = (
     <GeoinsightFocusContainer>
       <GeoinsightMapContainer
         onFeatureInfo={map.handleFeatureInfo}
         onDrawnGeometryInfo={map.handleDrawnGeometryInfo}
+        onGeometryDrawn={handleGeometryDrawn}
+        onSimpleFeatureDrawn={handleSimpleFeatureDrawn}
         onReady={handleMapReady}
         onMapPointerDown={handleMapPointerDown}
       />

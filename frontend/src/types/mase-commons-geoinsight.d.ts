@@ -16,7 +16,10 @@ declare module '@mase/commons-geoinsight' {
     removeGeometries?: (mapId: number, geomIds: string[]) => void
     zoomToBBOX?: (mapId: number, options: { epsg: string; bbox: number[] }) => void
     zoomToPoint?: (mapId: number, coordinates: number[], epsg: string, scale?: number) => void
+    activateDrawGeometry?: (mapId: number, geometryType?: string, color?: string) => void
     deactivateDrawGeometry?: (mapId: number) => void
+    deleteAllDrawnGeometries?: (mapId: number) => void
+    deleteDrawnGeometries?: (mapId: number) => void
     activateDrawnGeometryInfo?: (mapId: number) => void
     deactivateDrawnGeometryInfo?: (mapId: number) => void
     setMapVisible?: (mapId: number, visible: boolean) => void | Promise<void>
@@ -41,6 +44,7 @@ declare module '@mase/commons-geoinsight' {
       color: string,
       clip: Record<string, unknown>
     ) => void
+    onSimpleFeatureDrawn?: (current: unknown[], deleted?: unknown[]) => void
     onDrawnGeometryInfo?: (
       mapId: number,
       coordinates: number[],

@@ -103,4 +103,28 @@ describe('eventBridge', () => {
     expect(pick?.geomId).toBe('GS_9')
     expect(pick?.pickedReason).toBe('green-asset-over-area')
   })
+
+  it('ignores the draw-clip overlay so cluster drill still wins', () => {
+    const features = {
+      type: 'FeatureCollection',
+      features: [
+        { properties: { geom_id: 'CL_draw' } },
+        { properties: { geom_id: 'GC_14_cell' } },
+      ],
+    }
+    const pick = pickBestGeomIdForGreenDrill(
+      features,
+      {
+        resolveGeomId: (geomId) => {
+          if (geomId === 'GC_14_cell') {
+            return { geomId, id: 0, layerKind: 'cluster', bbox: [1, 1, 2, 2] }
+          }
+          return undefined
+        },
+        excludeAreaIds: [],
+      },
+      []
+    )
+    expect(pick?.geomId).toBe('GC_14_cell')
+  })
 })

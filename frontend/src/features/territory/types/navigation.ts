@@ -99,7 +99,23 @@ export interface MapBridgeGreen {
   syncDrillContext: (excludeAreaIds: number[]) => void
 }
 
-export type MapBridge = MapBridgeGeo & MapBridgeFeature & MapBridgeGreen
+export interface MapBridgeDraw {
+  activateDrawPolygon: (color: string) => void
+  deactivateDrawGeometry: () => void
+  deleteAllDrawnGeometries: () => void
+  restrictSimpleDrawToClosedShapes: () => void
+  restoreSimpleDrawTools: () => void
+  clearSimpleDrawGeometries: () => void
+  deactivateSimpleDrawTool: () => void
+  styleSimpleDrawOutline: (color: string) => void
+  keepOnlyLastSimpleDrawGeometry: () => void
+  setKeepSimpleDrawClipFeatures: (keep: boolean) => void
+  persistDrawClip: (wkt: string, color?: string) => void
+  clearDrawClip: () => void
+  zoomToWgs84Bbox: (bbox: [number, number, number, number]) => void
+}
+
+export type MapBridge = MapBridgeGeo & MapBridgeFeature & MapBridgeGreen & MapBridgeDraw
 
 export interface UseTerritoryNavigationOptions {
   api?: TerritoryNavigationApi

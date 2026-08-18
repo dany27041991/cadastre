@@ -33,7 +33,7 @@ const TEMP_GEOMETRY_FILL_ALPHA_TO =
 const TEMP_GEOMETRY_LABEL_FROM =
   'if(e===!0){let v=0;ue.isNullOrUndefined(n)||(v=-36),f.text=new f5({text:o,font:"16px Arial",overflow:!0,offsetY:v,fill:new tn({color:p}),stroke:new Kr({color:b,width:3})})}return new wl(f)'
 const TEMP_GEOMETRY_LABEL_TO =
-  'if(e===!0){if(/^(GC_|GS_|GA_|T_)/.test(o))return new wl(f);const labelText=String(o).split("\\u200B")[0]||o;return new wl({text:new f5({text:labelText,font:"bold 11px sans-serif",overflow:!0,fill:new tn({color:p}),stroke:new Kr({color:b,width:2})})})}return new wl(f)'
+  'if(e===!0){if(/^(GC_|GS_|GA_|T_|CL_|GH_)/.test(o))return new wl(f);const labelText=String(o).split("\\u200B")[0]||o;return new wl({text:new f5({text:labelText,font:"bold 11px sans-serif",overflow:!0,fill:new tn({color:p}),stroke:new Kr({color:b,width:2})})})}return new wl(f)'
 
 /**
  * JSTS OverlayOp.intersection throws TopologyException on degenerate /

@@ -6,6 +6,8 @@ export const GEOM_PREFIX = {
   cluster: 'GC_',
   /** Temporary red outline while green detail modal is open (not click-target). */
   detailHighlight: 'GH_',
+  /** User polygon from Monitoraggio "Disegna su mappa" (persisted via addGeometries). */
+  drawClip: 'CL_',
 } as const
 
 export const GEOINSIGHT_EPSG_WGS84 = 'EPSG:4326'
@@ -15,3 +17,6 @@ export const TERRITORY_GEOMETRY_FILL_COLOR = '#6b7280'
 export const GREEN_AREA_GEOMETRY_COLOR = '#16a34a'
 /** Selected green area/asset outline while detail modal is open. */
 export const GREEN_DETAIL_HIGHLIGHT_COLOR = '#dc2626'
+/** User polygon from Monitoraggio "Disegna su mappa". */
+export const DRAW_CLIP_GEOMETRY_COLOR = '#1565c0'
+export const DRAW_CLIP_GEOM_ID = `${GEOM_PREFIX.drawClip}draw`

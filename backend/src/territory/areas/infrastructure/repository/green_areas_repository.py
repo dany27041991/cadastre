@@ -15,6 +15,7 @@ from territory.geo.domain.entities import GeoJSONFeatureCollection
 from territory.geo.domain.entities.sub_municipal_area_model import SubMunicipalAreaModel
 from territory.areas.infrastructure.mapper import build_green_area_feature_collection
 from territory.areas.domain.entities.green_area_model import GreenAreaModel
+from territory.common.infrastructure.clip_wkt import st_intersects_clip
 from territory.common.infrastructure.table_serialization import orm_to_row_dict
 
 # Minimum geodesic overlap (m²) between candidate and selected area; excludes boundary-only adjacency.
@@ -270,6 +271,7 @@ class GreenAreasRepository:
         province_id: int | None = None,
         municipality_id: int | None = None,
         sub_municipal_area_id: int | None = None,
+        clip_wkt: str | None = None,
     ) -> GeoJSONFeatureCollection:
         """Root green areas intersecting the bbox (viewport map rendering).
 
@@ -315,6 +317,9 @@ class GreenAreasRepository:
                 .scalar_subquery()
             )
             stmt = stmt.where(func.ST_Intersects(ar.geometry, sub_geom))
+        clip_cond = st_intersects_clip(ar.geometry, clip_wkt)
+        if clip_cond is not None:
+            stmt = stmt.where(clip_cond)
         with self._session_factory() as session:
             rows = self._rows_from_session(session, stmt)
         return build_green_area_feature_collection(rows)
@@ -456,6 +461,7 @@ class GreenAreasRepository:
         contained_in_area_id: int | None = None,
         parent_id: int | None = None,
         area_id: int | None = None,
+        clip_wkt: str | None = None,
         page: int = 1,
         page_size: int = 50,
         sort_by: str | None = None,
@@ -515,6 +521,10 @@ class GreenAreasRepository:
             ]
         else:
             conditions.append(ar.parent_id.is_(None))
+
+        clip_cond = st_intersects_clip(ar.geometry, clip_wkt)
+        if clip_cond is not None:
+            conditions.append(clip_cond)
 
         # --- Column filter conditions ---
         conditions.extend(_build_area_filter_conditions(ar, filters or {}))

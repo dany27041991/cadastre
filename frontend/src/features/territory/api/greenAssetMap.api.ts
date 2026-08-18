@@ -22,6 +22,8 @@ export type GreenAssetViewportParams = {
   subMunicipalAreaId?: number
   /** When set, only assets intersecting this green area are returned. */
   greenAreaId?: number
+  /** Optional EPSG:4326 POLYGON/MULTIPOLYGON WKT (draw-on-map clip). */
+  clipWkt?: string
 }
 
 export function buildGreenAssetViewportQuery(
@@ -39,6 +41,7 @@ export function buildGreenAssetViewportQuery(
     search.set('sub_municipal_area_id', String(params.subMunicipalAreaId))
   if (params.greenAreaId != null)
     search.set('green_area_id', String(params.greenAreaId))
+  if (params.clipWkt) search.set('clip_wkt', params.clipWkt)
   search.set('format', 'geobuf')
   return search.toString()
 }
@@ -64,7 +67,7 @@ export function createGreenAssetsApi(
     ): Promise<GeoJSONFeatureCollection> => {
       try {
         const path = `/api/territory/green-assets/viewport?${buildGreenAssetViewportQuery(params)}`
-        return await fetchGeobufOrEmpty(path)
+        return fetchGeobufOrEmpty(path)
       } catch {
         return EMPTY_GEOJSON
       }

@@ -114,6 +114,13 @@ export interface GeoinsightMapContainerProps {
     epsg: string,
     features: unknown[]
   ) => void
+  readonly onGeometryDrawn?: (
+    mapId: number,
+    geomId: string,
+    color: string,
+    clip: Record<string, unknown>
+  ) => void
+  readonly onSimpleFeatureDrawn?: (current: unknown[], deleted?: unknown[]) => void
   readonly onReady?: () => void
   /** Captures client coords for anchoring the green detail FloatingPanel. */
   readonly onMapPointerDown?: (pointer: MapPointerPosition) => void
@@ -122,6 +129,8 @@ export interface GeoinsightMapContainerProps {
 export function GeoinsightMapContainer({
   onFeatureInfo,
   onDrawnGeometryInfo,
+  onGeometryDrawn,
+  onSimpleFeatureDrawn,
   onReady,
   onMapPointerDown,
 }: GeoinsightMapContainerProps) {
@@ -292,6 +301,8 @@ export function GeoinsightMapContainer({
         style={mapStyle}
         onGetFeatureInfo={onFeatureInfo}
         onDrawnGeometryInfo={onDrawnGeometryInfo}
+        onGeometryDrawn={onGeometryDrawn}
+        onSimpleFeatureDrawn={onSimpleFeatureDrawn}
         onPointerCoordsChange={onPointerCoordsChange}
         onGenericEvent={{
           events: ['ready', 'onPointerCoordsChange'],

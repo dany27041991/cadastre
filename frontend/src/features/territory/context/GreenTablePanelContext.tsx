@@ -15,6 +15,7 @@ import {
 } from 'react'
 
 import type { GreenTableKind } from '../lib/greenDetailColumnCatalog'
+import type { SpatialClipPolygon } from '../lib/spatialClipWkt'
 import type { BreadcrumbCrumb } from '../types'
 import type { TerritorySearchHit } from '../types/territorySearch'
 
@@ -42,6 +43,8 @@ export interface TerritorySearchNavControls {
   /** Close GreenDetailModal (search clear / non-green hit). */
   readonly closeGreenDetail: () => void
 }
+
+export type TerritoryEntryMode = 'admin' | 'draw'
 
 export interface GreenTablePanelContextValue {
   readonly columnFiltersByKind: {
@@ -75,6 +78,12 @@ export interface GreenTablePanelContextValue {
    */
   readonly areasToggleLockedByGreenSearch: boolean
   readonly setAreasToggleLockedByGreenSearch: (locked: boolean) => void
+  /** Area Italia vs Disegna su mappa. */
+  readonly entryMode: TerritoryEntryMode
+  readonly setEntryMode: (mode: TerritoryEntryMode) => void
+  /** User polygon clip for draw entry (null for Area Italia). */
+  readonly spatialClip: SpatialClipPolygon | null
+  readonly setSpatialClip: (clip: SpatialClipPolygon | null) => void
 }
 
 const EMPTY_FILTERS: ColumnFiltersMap = Object.freeze({})
@@ -96,6 +105,8 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
     null
   )
   const [areasToggleLockedByGreenSearch, setAreasToggleLockedByGreenSearch] = useState(false)
+  const [entryMode, setEntryMode] = useState<TerritoryEntryMode>('admin')
+  const [spatialClip, setSpatialClip] = useState<SpatialClipPolygon | null>(null)
 
   const registerGreenAssetsLayer = useCallback((controls: GreenAssetsLayerControls | null) => {
     setGreenAssetsLayer((prev) => {
@@ -169,6 +180,8 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
     setMapTableAccordionVisible(false)
     setLayersPanelOpen(false)
     setAreasToggleLockedByGreenSearch(false)
+    setEntryMode('admin')
+    setSpatialClip(null)
   }, [])
 
   const value = useMemo(
@@ -193,6 +206,10 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
       registerTerritorySearchNav,
       areasToggleLockedByGreenSearch,
       setAreasToggleLockedByGreenSearch,
+      entryMode,
+      setEntryMode,
+      spatialClip,
+      setSpatialClip,
     }),
     [
       columnFiltersByKind,
@@ -210,6 +227,8 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
       territorySearchNav,
       registerTerritorySearchNav,
       areasToggleLockedByGreenSearch,
+      entryMode,
+      spatialClip,
     ],
   )
 

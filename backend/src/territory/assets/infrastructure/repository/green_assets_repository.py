@@ -16,6 +16,7 @@ from territory.geo.domain.entities.sub_municipal_area_model import SubMunicipalA
 from territory.assets.infrastructure.mapper import build_green_asset_feature_collection
 from territory.assets.domain.entities.green_asset_model import GreenAssetModel
 from territory.areas.domain.entities.green_area_model import GreenAreaModel
+from territory.common.infrastructure.clip_wkt import st_intersects_clip
 from territory.common.infrastructure.table_serialization import orm_to_row_dict
 
 # Columns excluded from table-view queries: heavy JSONB blobs not needed in list APIs.
@@ -442,26 +443,46 @@ class GreenAssetsRepository:
         province_id: int | None = None,
         municipality_id: int | None = None,
         sub_municipal_area_id: int | None = None,
+        clip_wkt: str | None = None,
     ) -> list[ViewportCluster]:
         """Pre-aggregated clusters per admin unit (materialized view, low zooms).
 
         Levels: region, province, municipality, sub_municipal. Response cost is
         O(#admin units in bbox) regardless of asset volume, which keeps national
         views fast at any dataset size.
+        clip_wkt keeps units whose extent intersects the user polygon
+        (matview extent may be SRID 0 — SetSRID before ST_Intersects).
+        Counts stay the precomputed unit totals.
         """
         stmt = sql_text(
             """
-            SELECT level, region_id, province_id, municipality_id, sub_municipal_area_id,
-                   asset_count, sample_id,
-                   ST_X(centroid), ST_Y(centroid),
-                   ST_XMin(extent), ST_YMin(extent), ST_XMax(extent), ST_YMax(extent)
-            FROM cadastre.green_asset_admin_clusters
-            WHERE level = :level
-              AND centroid && ST_MakeEnvelope(:minx, :miny, :maxx, :maxy, 4326)
-              AND (:region_id IS NULL OR region_id = :region_id)
-              AND (:province_id IS NULL OR province_id = :province_id)
-              AND (:municipality_id IS NULL OR municipality_id = :municipality_id)
-              AND (:sub_municipal_area_id IS NULL OR sub_municipal_area_id = :sub_municipal_area_id)
+            WITH clip AS (
+              SELECT CASE
+                WHEN CAST(:clip_wkt AS text) IS NULL THEN NULL::geometry
+                ELSE ST_SetSRID(ST_GeomFromText(CAST(:clip_wkt AS text)), 4326)
+              END AS geom
+            )
+            SELECT a.level, a.region_id, a.province_id, a.municipality_id,
+                   a.sub_municipal_area_id,
+                   a.asset_count, a.sample_id,
+                   ST_X(a.centroid), ST_Y(a.centroid),
+                   ST_XMin(a.extent), ST_YMin(a.extent),
+                   ST_XMax(a.extent), ST_YMax(a.extent)
+            FROM cadastre.green_asset_admin_clusters a
+            CROSS JOIN clip c
+            WHERE a.level = :level
+              AND a.centroid && ST_MakeEnvelope(:minx, :miny, :maxx, :maxy, 4326)
+              AND (
+                    c.geom IS NULL
+                    OR (
+                      a.extent && c.geom
+                      AND ST_Intersects(ST_SetSRID(a.extent, 4326), c.geom)
+                    )
+                  )
+              AND (:region_id IS NULL OR a.region_id = :region_id)
+              AND (:province_id IS NULL OR a.province_id = :province_id)
+              AND (:municipality_id IS NULL OR a.municipality_id = :municipality_id)
+              AND (:sub_municipal_area_id IS NULL OR a.sub_municipal_area_id = :sub_municipal_area_id)
             """
         )
         params = {
@@ -470,6 +491,7 @@ class GreenAssetsRepository:
             "miny": bbox[1],
             "maxx": bbox[2],
             "maxy": bbox[3],
+            "clip_wkt": clip_wkt,
             "region_id": region_id,
             "province_id": province_id,
             "municipality_id": municipality_id,
@@ -504,6 +526,7 @@ class GreenAssetsRepository:
         municipality_id: int | None = None,
         sub_municipal_area_id: int | None = None,
         green_area_id: int | None = None,
+        clip_wkt: str | None = None,
     ) -> list[ColumnElement[bool]]:
         """WHERE clauses for a viewport query: partition pruning + GIST bbox intersect.
 
@@ -540,6 +563,9 @@ class GreenAssetsRepository:
                 .scalar_subquery()
             )
             conditions.append(func.ST_Intersects(av.geometry, area_geom))
+        clip_cond = st_intersects_clip(av.geometry, clip_wkt)
+        if clip_cond is not None:
+            conditions.append(clip_cond)
         return conditions
 
     def get_raw_in_bbox(
@@ -551,13 +577,14 @@ class GreenAssetsRepository:
         municipality_id: int | None = None,
         sub_municipal_area_id: int | None = None,
         green_area_id: int | None = None,
+        clip_wkt: str | None = None,
     ) -> GeoJSONFeatureCollection:
         """Individual assets inside the bbox (raw mode below the cluster threshold)."""
         stmt = (
             self._select_geojson()
             .where(*self._bbox_conditions(
                 bbox, region_id, province_id, municipality_id,
-                sub_municipal_area_id, green_area_id,
+                sub_municipal_area_id, green_area_id, clip_wkt,
             ))
             .limit(limit)
         )
@@ -572,6 +599,7 @@ class GreenAssetsRepository:
         region_id: int | None = None,
         province_id: int | None = None,
         municipality_id: int | None = None,
+        clip_wkt: str | None = None,
     ) -> list[ViewportCluster]:
         """Pre-aggregated grid cells for one zoom level (materialized view).
 
@@ -580,23 +608,38 @@ class GreenAssetsRepository:
         live aggregation measured 200-414ms on dense bboxes, this is ~18ms.
         Cells split per admin unit in the view are re-aggregated here (SUM /
         count-weighted centroid), so unscoped and scoped responses share keys.
+        clip_wkt keeps cells that intersect the user polygon.
         """
         stmt = sql_text(
             """
-            SELECT cell_x, cell_y,
-                   SUM(asset_count)::bigint AS cnt,
-                   SUM(merc_x * asset_count) / SUM(asset_count) AS mx,
-                   SUM(merc_y * asset_count) / SUM(asset_count) AS my,
-                   ST_XMin(ST_Extent(extent)), ST_YMin(ST_Extent(extent)),
-                   ST_XMax(ST_Extent(extent)), ST_YMax(ST_Extent(extent)),
-                   MIN(sample_id)
-            FROM cadastre.green_asset_grid_clusters
-            WHERE zoom_level = :zoom_level
-              AND extent && ST_MakeEnvelope(:minx, :miny, :maxx, :maxy, 4326)
-              AND (CAST(:region_id AS integer) IS NULL OR region_id = :region_id)
-              AND (CAST(:province_id AS integer) IS NULL OR province_id = :province_id)
-              AND (CAST(:municipality_id AS integer) IS NULL OR municipality_id = :municipality_id)
-            GROUP BY cell_x, cell_y
+            WITH clip AS (
+              SELECT CASE
+                WHEN CAST(:clip_wkt AS text) IS NULL THEN NULL::geometry
+                ELSE ST_SetSRID(ST_GeomFromText(CAST(:clip_wkt AS text)), 4326)
+              END AS geom
+            )
+            SELECT g.cell_x, g.cell_y,
+                   SUM(g.asset_count)::bigint AS cnt,
+                   SUM(g.merc_x * g.asset_count) / SUM(g.asset_count) AS mx,
+                   SUM(g.merc_y * g.asset_count) / SUM(g.asset_count) AS my,
+                   ST_XMin(ST_Extent(g.extent)), ST_YMin(ST_Extent(g.extent)),
+                   ST_XMax(ST_Extent(g.extent)), ST_YMax(ST_Extent(g.extent)),
+                   MIN(g.sample_id)
+            FROM cadastre.green_asset_grid_clusters g
+            CROSS JOIN clip c
+            WHERE g.zoom_level = :zoom_level
+              AND g.extent && ST_MakeEnvelope(:minx, :miny, :maxx, :maxy, 4326)
+              AND (
+                    c.geom IS NULL
+                    OR (
+                      g.extent && c.geom
+                      AND ST_Intersects(ST_SetSRID(g.extent, 4326), c.geom)
+                    )
+                  )
+              AND (CAST(:region_id AS integer) IS NULL OR g.region_id = :region_id)
+              AND (CAST(:province_id AS integer) IS NULL OR g.province_id = :province_id)
+              AND (CAST(:municipality_id AS integer) IS NULL OR g.municipality_id = :municipality_id)
+            GROUP BY g.cell_x, g.cell_y
             """
         )
         params = {
@@ -605,12 +648,48 @@ class GreenAssetsRepository:
             "miny": bbox[1],
             "maxx": bbox[2],
             "maxy": bbox[3],
+            "clip_wkt": clip_wkt,
             "region_id": region_id,
             "province_id": province_id,
             "municipality_id": municipality_id,
         }
         with self._session_factory() as session:
+            # #region agent log
+            import time as _time
+            _t0 = _time.perf_counter()
+            # #endregion
             rows = session.execute(stmt, params).all()
+            # #region agent log
+            try:
+                import json as _json
+                with open(
+                    "/Users/danilogiovannico/Desktop/LAVORO/MASE/SIV/Sviluppo/LINFA/.cursor/debug-4fe799.log",
+                    "a",
+                    encoding="utf-8",
+                ) as _f:
+                    _f.write(
+                        _json.dumps(
+                            {
+                                "sessionId": "4fe799",
+                                "runId": "srid-fix",
+                                "hypothesisId": "PERF",
+                                "location": "green_assets_repository.py:matview",
+                                "message": "matview query done",
+                                "data": {
+                                    "zoomLevel": zoom_level,
+                                    "hasClip": bool(clip_wkt),
+                                    "rowCount": len(rows),
+                                    "durationMs": round((_time.perf_counter() - _t0) * 1000, 1),
+                                    "sridFix": True,
+                                },
+                                "timestamp": _time.time() * 1000,
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
         return [
             ViewportCluster(
                 cell_x=int(r[0]),
@@ -633,6 +712,7 @@ class GreenAssetsRepository:
         municipality_id: int | None = None,
         sub_municipal_area_id: int | None = None,
         green_area_id: int | None = None,
+        clip_wkt: str | None = None,
     ) -> list[ViewportCluster]:
         """Grid-cell aggregates inside the bbox (cluster mode).
 
@@ -660,12 +740,46 @@ class GreenAssetsRepository:
             )
             .where(*self._bbox_conditions(
                 bbox, region_id, province_id, municipality_id,
-                sub_municipal_area_id, green_area_id,
+                sub_municipal_area_id, green_area_id, clip_wkt,
             ))
             .group_by(cell_x, cell_y)
         )
         with self._session_factory() as session:
+            # #region agent log
+            import time as _time
+            _t0 = _time.perf_counter()
+            # #endregion
             rows = session.execute(stmt).all()
+            # #region agent log
+            try:
+                import json as _json
+                with open(
+                    "/Users/danilogiovannico/Desktop/LAVORO/MASE/SIV/Sviluppo/LINFA/.cursor/debug-4fe799.log",
+                    "a",
+                    encoding="utf-8",
+                ) as _f:
+                    _f.write(
+                        _json.dumps(
+                            {
+                                "sessionId": "4fe799",
+                                "runId": "matview-clip-fix",
+                                "hypothesisId": "PERF",
+                                "location": "green_assets_repository.py:live_grid",
+                                "message": "live grid query done",
+                                "data": {
+                                    "cellSizeM": cell_size_m,
+                                    "hasClip": bool(clip_wkt),
+                                    "rowCount": len(rows),
+                                    "durationMs": round((_time.perf_counter() - _t0) * 1000, 1),
+                                },
+                                "timestamp": _time.time() * 1000,
+                            }
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+            # #endregion
         return [
             ViewportCluster(
                 cell_x=int(r[0]),
@@ -691,6 +805,7 @@ class GreenAssetsRepository:
         *,
         green_area_id: int | None = None,
         sub_municipal_area_id: int | None = None,
+        clip_wkt: str | None = None,
         page: int = 1,
         page_size: int = 50,
         sort_by: str | None = None,
@@ -736,6 +851,10 @@ class GreenAssetsRepository:
             conditions.append(func.ST_Intersects(av.geometry, sub_geom))
         else:
             conditions.append(av.green_area_id.isnot(None))
+
+        clip_cond = st_intersects_clip(av.geometry, clip_wkt)
+        if clip_cond is not None:
+            conditions.append(clip_cond)
 
         conditions.extend(_build_asset_filter_conditions(av, filters or {}))
 

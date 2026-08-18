@@ -18,7 +18,7 @@ describe('patchGeoinsightBundleSource', () => {
       'image:new ea({radius:6,fill:new tn({color:t==="#15803d"?Ya.printRgbAsStr(i,.42):d}),stroke:new Kr({color:d,width:1.5})})'
     )
     expect(patched).toContain('t==="#0f7637"?.42:t==="#38bdf8"?.38:.1')
-    expect(patched).toContain('/^(GC_|GS_|GA_|T_)/.test(o)')
+    expect(patched).toContain('/^(GC_|GS_|GA_|T_|CL_|GH_)/.test(o)')
     expect(patched).not.toContain(
       'image:new ea({radius:7,fill:new tn({color:a}),stroke:new Kr({color:d,width:2})})'
     )

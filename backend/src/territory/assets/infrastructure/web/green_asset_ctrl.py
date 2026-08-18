@@ -11,6 +11,7 @@ from fastapi.responses import Response
 
 from core.api.dependencies import get_green_assets_uc
 from territory.assets.infrastructure.dto.output import GreenAssetsOutput
+from territory.common.infrastructure.clip_wkt import ClipWktError, normalize_clip_wkt
 from territory.common.infrastructure.dto.green_detail_out import GreenDetailOut
 from territory.common.infrastructure.green_table_page_out import GreenTablePageOut
 
@@ -19,6 +20,13 @@ router = APIRouter(tags=["territory-assets"])
 GEOBUF_MEDIA_TYPE = "application/x-geobuf"
 
 _EMPTY_GEOBUF = geobuf.encode({"type": "FeatureCollection", "features": []})
+
+
+def _clip_wkt_or_400(clip_wkt: str | None) -> str | None:
+    try:
+        return normalize_clip_wkt(clip_wkt)
+    except ClipWktError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _empty_response(output_format: str | None) -> GreenAssetsOutput | Response:
@@ -63,6 +71,7 @@ def get_green_assets_viewport(
     municipality_id: int | None = None,
     sub_municipal_area_id: int | None = None,
     green_area_id: int | None = None,
+    clip_wkt: str | None = Query(None, description="EPSG:4326 POLYGON/MULTIPOLYGON WKT clip"),
     output_format: str | None = Query(None, alias="format"),
 ) -> GreenAssetsOutput | Response:
     """Viewport-sized green assets for map rendering at national scale.
@@ -84,6 +93,7 @@ def get_green_assets_viewport(
         municipality_id=municipality_id,
         sub_municipal_area_id=sub_municipal_area_id,
         green_area_id=green_area_id,
+        clip_wkt=_clip_wkt_or_400(clip_wkt),
     )
     if not result.get("features"):
         return _empty_response(output_format)
@@ -99,6 +109,7 @@ def get_green_assets_table(
     municipality_id: int | None = None,
     green_area_id: int | None = None,
     sub_municipal_area_id: int | None = None,
+    clip_wkt: str | None = Query(None, description="EPSG:4326 POLYGON/MULTIPOLYGON WKT clip"),
     # Pagination
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
@@ -181,6 +192,7 @@ def get_green_assets_table(
         province_id=province_id,
         green_area_id=green_area_id,
         sub_municipal_area_id=sub_municipal_area_id,
+        clip_wkt=_clip_wkt_or_400(clip_wkt),
         page=page,
         page_size=page_size,
         sort_by=sort_by,

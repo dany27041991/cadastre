@@ -31,6 +31,8 @@ export type GreenAreaViewportParams = {
   municipalityId?: number
   /** When set, only areas intersecting this sub-municipal area are returned. */
   subMunicipalAreaId?: number
+  /** Optional EPSG:4326 POLYGON/MULTIPOLYGON WKT (draw-on-map clip). */
+  clipWkt?: string
 }
 
 export function buildGreenAreasViewportQuery(
@@ -46,6 +48,7 @@ export function buildGreenAreasViewportQuery(
     search.set('municipality_id', String(params.municipalityId))
   if (params.subMunicipalAreaId != null)
     search.set('sub_municipal_area_id', String(params.subMunicipalAreaId))
+  if (params.clipWkt) search.set('clip_wkt', params.clipWkt)
   search.set('format', 'geobuf')
   return search.toString()
 }

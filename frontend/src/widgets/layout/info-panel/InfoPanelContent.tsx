@@ -13,11 +13,13 @@ import { Button, InfoPanel, icons } from 'dxc-webkit'
 import { useGreenTablePanelOptional } from '@/features/territory/context/GreenTablePanelContext'
 import { GreenTablePanelSections } from './GreenTablePanelSections'
 import { LayersPanel } from './LayersPanel'
+import { DrawPromptPanel } from './DrawPromptPanel'
 import { MonitoraggioPanel, type MonitoraggioActionId } from './MonitoraggioPanel'
 
-type PanelStep = 'monitoraggio' | 'layers' | 'filters'
+type PanelStep = 'monitoraggio' | 'draw' | 'layers' | 'filters'
 
 const AREA_ITALIA: MonitoraggioActionId = 'area-italia'
+const DRAW_ON_MAP: MonitoraggioActionId = 'draw-on-map'
 
 const panelShellStyle = {
   height: '100%',
@@ -138,6 +140,7 @@ export function InfoPanelContent() {
     }
   }, [step, hasActiveLayer])
 
+  const goToDraw = () => setStep('draw')
   const goToLayers = () => setStep('layers')
   const goToFilters = () => {
     if (!hasActiveLayer) return
@@ -150,23 +153,50 @@ export function InfoPanelContent() {
     setStep('monitoraggio')
   }
 
+  const abortDraw = () => {
+    if (panel?.entryMode !== 'draw') return
+    panel.setEntryMode('admin')
+    panel.setSpatialClip(null)
+  }
+
   const handleSearch = () => {
     panel?.setMapTableAccordionVisible(true)
   }
 
   const handleMonitoraggioSelect = (id: MonitoraggioActionId) => {
     setSelectedId(id)
+    if (id === DRAW_ON_MAP) {
+      panel?.setSpatialClip(null)
+      panel?.setEntryMode('draw')
+      goToDraw()
+      return
+    }
+    abortDraw()
     if (id === AREA_ITALIA) {
       goToLayers()
     }
-    // TODO: wire draw / upload / search actions when available
   }
+
+  useEffect(() => {
+    if (panel?.entryMode !== 'draw') return
+    if (panel.spatialClip != null) {
+      if (step === 'draw') setStep('layers')
+      return
+    }
+    if (step === 'layers' || step === 'filters') {
+      panel.setMapTableAccordionVisible(false)
+      void panel.greenAssetsLayer?.setActive(false)
+      void panel.greenAssetsLayer?.setAreasActive(false)
+      setStep('draw')
+    }
+  }, [step, panel, panel?.spatialClip, panel?.entryMode])
 
   if (step === 'monitoraggio') {
     return (
       <div
         onClick={() => {
           setSelectedId(null)
+          abortDraw()
           const focused = document.activeElement
           if (focused instanceof HTMLElement && focused.classList.contains('list-item')) {
             focused.blur()
@@ -178,10 +208,29 @@ export function InfoPanelContent() {
           <MonitoraggioPanel
             selectedId={selectedId}
             onSelect={handleMonitoraggioSelect}
-            onClearSelection={() => setSelectedId(null)}
+            onClearSelection={() => {
+              setSelectedId(null)
+              abortDraw()
+            }}
           />
         </InfoPanel>
       </div>
+    )
+  }
+
+  if (step === 'draw') {
+    return (
+      <PanelShell
+        footer={
+          <InfoPanelFooter
+            backLabel={t('territory.panel.btnBack')}
+            onBack={goToMonitoraggio}
+            showPrimary={false}
+          />
+        }
+      >
+        <DrawPromptPanel />
+      </PanelShell>
     )
   }
 

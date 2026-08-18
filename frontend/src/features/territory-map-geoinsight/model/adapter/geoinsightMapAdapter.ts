@@ -27,10 +27,25 @@ import { onGreenAssetMapViewChange, onGreenAssetMapZoomChange } from './geoinsig
 import {
   activateGeoinsightDrawnGeometryInfo,
   addGeoinsightGeometries,
+  deactivateGeoinsightDrawGeometry,
+  deleteAllGeoinsightDrawnGeometries,
+  activateGeoinsightDrawPolygon,
+  persistGeoinsightDrawClip,
+  clearPersistedGeoinsightDrawClip,
   flushGeoinsightPending,
   removeGeoinsightGeomIds,
+  zoomGeoinsightToWgs84Bbox,
   type GeoinsightMapRuntimeHost,
 } from './geoinsightMapRuntime'
+import {
+  restrictGeoinsightSimpleDrawToClosedShapes,
+  restoreGeoinsightSimpleDrawTools,
+  clearGeoinsightSimpleDrawGeometries,
+  deactivateGeoinsightSimpleDrawTool,
+  styleGeoinsightSimpleDrawOutline,
+  keepOnlyLastGeoinsightSimpleDrawGeometry,
+  setKeepGeoinsightSimpleDrawClipFeatures,
+} from './geoinsightSimpleDrawTools'
 import {
   syncGeoinsightZoomFromMap,
   panGeoinsightToLonLatKeepZoom,
@@ -205,6 +220,19 @@ export class GeoinsightMapAdapter implements GeoinsightMapRuntimeHost, Geoinsigh
         setDetailHighlightGeom(this, feature, options),
       clearGreenDetailHighlight: () => clearDetailHighlightGeom(this),
       discardGreenDetailHighlight: () => discardDetailHighlightGeom(this),
+      activateDrawPolygon: (color) => activateGeoinsightDrawPolygon(color),
+      deactivateDrawGeometry: () => deactivateGeoinsightDrawGeometry(),
+      deleteAllDrawnGeometries: () => deleteAllGeoinsightDrawnGeometries(),
+      restrictSimpleDrawToClosedShapes: () => restrictGeoinsightSimpleDrawToClosedShapes(),
+      restoreSimpleDrawTools: () => restoreGeoinsightSimpleDrawTools(),
+      clearSimpleDrawGeometries: () => clearGeoinsightSimpleDrawGeometries(),
+      deactivateSimpleDrawTool: () => deactivateGeoinsightSimpleDrawTool(),
+      styleSimpleDrawOutline: (color) => styleGeoinsightSimpleDrawOutline(color),
+      keepOnlyLastSimpleDrawGeometry: () => keepOnlyLastGeoinsightSimpleDrawGeometry(),
+      setKeepSimpleDrawClipFeatures: (keep) => setKeepGeoinsightSimpleDrawClipFeatures(keep),
+      persistDrawClip: (wkt, color) => persistGeoinsightDrawClip(wkt, color),
+      clearDrawClip: () => clearPersistedGeoinsightDrawClip(),
+      zoomToWgs84Bbox: (bbox) => zoomGeoinsightToWgs84Bbox(bbox),
     }
   }
 

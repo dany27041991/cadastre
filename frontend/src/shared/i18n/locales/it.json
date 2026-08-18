@@ -29,8 +29,15 @@
         "searchManagedAreas": "Cerca aree gestite",
         "searchGreenAssets": "Cerca asset verdi"
       },
+      "draw": {
+        "title": "Disegna su mappa",
+        "description": "Apri lo strumento di disegno geometrie sulla mappa e scegli rettangolo, poligono o cerchio. Punto e linea non sono disponibili in questa modalità. Chiudi la forma per delimitare l'area di consultazione.",
+        "invalidGeometry": "Il poligono disegnato non è valido. Riprova.",
+        "togglesLockedHelp": "Disponibili dopo aver delimitato l'area sulla mappa."
+      },
       "layersTitle": "Aree gestite e Assets verdi",
       "layersDescription": "Applica i layer per consultare le aree censite e gli assets verdi sulla mappa.",
+      "layersDescriptionDraw": "Per selezionare l'area apri lo strumento di disegno sulla mappa e traccia un rettangolo, un poligono o un cerchio. Al termine resta la geometria di selezione (blu). Un nuovo disegno sostituisce il precedente. Per cancellare, seleziona la geometria e usa il cestino per rimuovere le geometrie selezionate.",
       "territorySearchLabel": "Cerca territorio",
       "territorySearchPlaceholder": "Regione, provincia, comune, area…",
       "btnBack": "Indietro",
