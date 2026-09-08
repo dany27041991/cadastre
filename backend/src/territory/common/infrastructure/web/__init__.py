@@ -1,0 +1,1 @@
+"""Territory common web adapters."""

@@ -89,6 +89,41 @@ class Settings(BaseSettings):
         default=86400, validation_alias="ADMIN_AREAS_CACHE_TTL_SECONDS"
     )
 
+    # Lakehouse (MinIO + DuckDB) — green assets/areas serving (always on).
+    lakehouse_s3_endpoint: str = Field(
+        default="http://localhost:9000", validation_alias="LAKEHOUSE_S3_ENDPOINT"
+    )
+    lakehouse_s3_access_key: str = Field(
+        default="cadastre_lake", validation_alias="LAKEHOUSE_S3_ACCESS_KEY"
+    )
+    lakehouse_s3_secret_key: str = Field(
+        default="cadastre_lake_dev_change_me", validation_alias="LAKEHOUSE_S3_SECRET_KEY"
+    )
+    lakehouse_s3_bucket: str = Field(default="cadastre-lake", validation_alias="LAKEHOUSE_S3_BUCKET")
+    lakehouse_s3_region: str = Field(default="us-east-1", validation_alias="LAKEHOUSE_S3_REGION")
+    lakehouse_catalog_cache_ttl_sec: int = Field(
+        default=60, validation_alias="LAKEHOUSE_CATALOG_CACHE_TTL_SEC"
+    )
+    # Draw-clip exact cluster counts (silver∩clip). 0 disables exact path → empty clusters when clip set.
+    clip_exact_clusters_enabled: bool = Field(
+        default=True, validation_alias="CLIP_EXACT_CLUSTERS"
+    )
+    clip_exact_max_municipalities: int = Field(
+        default=40, validation_alias="CLIP_EXACT_MAX_MUNICIPALITIES"
+    )
+    clip_exact_max_km2: float = Field(
+        default=2000.0, validation_alias="CLIP_EXACT_MAX_KM2"
+    )
+
+    @field_validator("clip_exact_clusters_enabled", mode="before")
+    @classmethod
+    def parse_clip_exact_clusters_enabled(cls, v: object) -> bool:
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.strip().lower() not in ("false", "0", "no", "off")
+        return True
+
     @property
     def database_url(self) -> str:
         return (

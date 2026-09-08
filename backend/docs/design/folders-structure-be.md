@@ -102,8 +102,7 @@ backend/
 │   │   ├── domain/
 │   │   │   ├── __init__.py
 │   │   │   └── entities/
-│   │   │       ├── __init__.py
-│   │   │       └── green_area_model.py
+│   │   │       └── __init__.py             # no PostGIS ORM (lakehouse-only)
 │   │   ├── application/
 │   │   │   ├── __init__.py
 │   │   │   └── usecases/
@@ -129,7 +128,7 @@ backend/
 │   │       │   └── green_area_feature_collection_mapper.py
 │   │       ├── repository/
 │   │       │   ├── __init__.py
-│   │       │   └── green_areas_repository.py
+│   │       │   └── green_areas_lakehouse_repository.py
 │   │       └── web/
 │   │           ├── __init__.py
 │   │           └── green_area_ctrl.py      # GET /green-areas
@@ -138,8 +137,7 @@ backend/
 │       ├── domain/
 │       │   ├── __init__.py
 │       │   └── entities/
-│       │       ├── __init__.py
-│       │       └── green_asset_model.py
+│       │       └── __init__.py             # no PostGIS ORM (lakehouse-only)
 │       ├── application/
 │       │   ├── __init__.py
 │       │   └── usecases/
@@ -165,11 +163,12 @@ backend/
 │           │   └── green_asset_feature_collection_mapper.py
 │           ├── repository/
 │           │   ├── __init__.py
-│           │   └── green_assets_repository.py
+│           │   └── green_assets_lakehouse_repository.py
 │           └── web/
 │               ├── __init__.py
 │               └── green_asset_ctrl.py     # GET /green-assets
 │
+├── common/infrastructure/lakehouse/       # DuckDB + MinIO catalog/silver/gold
 ├── requirements.txt
 ├── Dockerfile
 └── README.md
@@ -216,13 +215,13 @@ Dependencies: **territory** submodules → **territory.geo.domain.entities** (Ge
 
 - **__init__.py**: exposes a single `router` with prefix `/api/territory` that includes geo, areas and assets routers (from each submodule’s **infrastructure/web/**).
 - **geo/**, **areas/**, **assets/**: three submodules. In each:
-  - **domain/entities/**: entities (e.g. **region_model.py**, **green_area_model.py**); **geo** defines **GeoJSONFeatureCollection** in **entities/__init__.py**; areas/assets re-export from **territory.geo.domain.entities**.
+  - **domain/entities/**: geo entities (e.g. **region_model.py**); green areas/assets **non** hanno ORM PostGIS (SoR = lakehouse MinIO). **geo** defines **GeoJSONFeatureCollection** in **entities/__init__.py**.
   - **application/**: **usecases/query/** (read use cases, e.g. CatalogRegion, CatalogGreenArea); **usecases/query/cache/** (cache layer: per-catalog modules with get_cached_*, invalidate_cache; use cases delegate to cache for cached catalog data); **usecases/command/** (write use cases, if any). Use cases receive the concrete repository in the constructor (injected by container).
-  - **infrastructure/**: **dto/** with **input/** and **output/**; **repository/** (PostGIS); **mapper/** (geo: feature_collection_mapper; areas/assets: green_area/asset_feature_collection_mapper); **web/** (FastAPI controllers: geo uses **region_ctrl.py**, **province_ctrl.py**, etc.; areas **green_area_ctrl.py**; assets **green_asset_ctrl.py**; all use **core.api.dependencies** for use cases).
+  - **infrastructure/**: **dto/** with **input/** and **output/**; **repository/** (geo = PostGIS; areas/assets = `*LakehouseRepository` via DuckDB/MinIO); **mapper/** (geo: feature_collection_mapper; areas/assets: green_area/asset_feature_collection_mapper); **web/** (FastAPI controllers: geo uses **region_ctrl.py**, **province_ctrl.py**, etc.; areas **green_area_ctrl.py**; assets **green_asset_ctrl.py**; all use **core.api.dependencies** for use cases). Shared lakehouse: **territory/common/infrastructure/lakehouse/**.
 
 ### 4. **main.py** (under **src/**)
 
-- Creates the FastAPI app, mounts the router from **territory** (e.g. `from territory import router as territory_router`; `app.include_router(territory_router)`).
+- Creates the FastAPI app, mounts the router from **territory** (e.g. `from territory.router import router as territory_router`; `app.include_router(territory_router)`).
 - **Local run:** from **backend/** run `uvicorn main:app --reload` with `PYTHONPATH=src` (e.g. `PYTHONPATH=src uvicorn main:app --reload`), or `cd src && uvicorn main:app --reload`. The Dockerfile sets `WORKDIR /app/src` so the container runs from the equivalent of **src/**.
 
 ### 5. **Language**

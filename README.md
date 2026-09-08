@@ -4,11 +4,12 @@ National SaaS webapp for census and management of geospatial green assets of Ita
 
 ## Architecture
 
-- **PostgreSQL + PostGIS**: geospatial database with partitioning by ISTAT code
+- **PostgreSQL + PostGIS**: administrative territory, OBT catalogs (`public.*`); schema `cadastre` empty placeholder (no green tables)
+- **MinIO + DuckDB**: SoR for green areas/assets viz (Parquet silver/gold); FastAPI reads via DuckDB
 - **Redis**: cache for frequent queries
 - **FastAPI**: multi-tenant backend with JWT authentication
-- **React + OpenLayers + OSM**: frontend with interactive map
-- **ClickHouse**: OLAP analytics
+- **React + Geoinsight**: frontend with interactive map
+- **ClickHouse**: OLAP analytics (optional / planned)
 - **PgAdmin**: DB management (optional)
 
 ## Quick start

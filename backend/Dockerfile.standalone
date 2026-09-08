@@ -14,10 +14,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Python dependencies (solo requirements.txt).
+# DuckDB from public PyPI first (lakehouse serving) so the image has it even if a later
+# Nexus-only rebuild is deferred; still listed in requirements.txt for non-Docker installs.
 # Per mase-utils-secu da Nexus: passare build-args PIP_EXTRA_INDEX_URL e opzionale PIP_TRUSTED_HOST.
 ARG PIP_EXTRA_INDEX_URL
 ARG PIP_TRUSTED_HOST
 COPY requirements.txt .
+RUN pip install --no-cache-dir "duckdb>=1.1.0"
 RUN pip install --no-cache-dir \
     ${PIP_EXTRA_INDEX_URL:+--extra-index-url "$PIP_EXTRA_INDEX_URL"} \
     ${PIP_TRUSTED_HOST:+--trusted-host "$PIP_TRUSTED_HOST"} \

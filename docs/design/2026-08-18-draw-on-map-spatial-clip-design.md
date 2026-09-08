@@ -6,6 +6,11 @@
 **Vincolo UI:** solo dxc-webkit / wrapper già usati (List/ListItem Monitoraggio, Toggle Layers, filtri tabella). Nessun controllo draw custom: strumento nativo Geoinsight.  
 **Obiettivo correlato:** voce Monitoraggio `draw-on-map` (oggi TODO in `InfoPanelContent`).
 
+> **Addendum 2026-09-04 (lakehouse-only):** `clip_wkt` resta ortogonale alla fonte dati. Si applica in **DuckDB** sul mosaico temporale risolto (silver/gold Parquet). Niente matview PostGIS. Wire contract invariato.  
+> Vedi [2026-09-04-green-lakehouse-only-pg-drop-design.md](./2026-09-04-green-lakehouse-only-pg-drop-design.md).
+>
+> **Addendum 2026-09-08 (cluster count esatti):** con `clip_wkt`, i count cluster gold (presenza + totale cella) sono insufficienti. Target: aggregazione silver ∩ clip sotto soft cap — [2026-09-08-draw-clip-exact-cluster-counts-design.md](./2026-09-08-draw-clip-exact-cluster-counts-design.md).
+
 ## Obiettivo
 
 Consentire di **disegnare un poligono** sulla mappa Geoinsight e mostrare aree gestite / asset verdi **solo** se intersecano quel poligono, anche dopo pan/zoom fuori dal disegno.
@@ -64,7 +69,7 @@ ST_Intersects(geometry, ST_GeomFromText(:clip_wkt, 4326))
 Viewport: **clip AND bbox** della vista (paging mappa).  
 Tabella: clip + stessi filtri colonna/paginazione di oggi; senza id amministrativi = “nazionale ma dentro il poligono” (radici aree come Area Italia, asset senza `green_area_id`).
 
-Cluster asset: si usano le matview precalcolate anche con clip. Admin: `ST_Intersects(centroid, clip)` (a zoom regione/provincia si forzano i comuni). Grid: `ST_Intersects(extent, clip)`. I count restano i totali dell’unità/cella, non il sottoinsieme stretto del poligono. Raw e tabella restano `ST_Intersects` sulla geometria.
+Cluster asset: con **`clip_wkt`** i count sono **esatti** (silver ∩ clip) sotto soft cap — vedi [2026-09-08-draw-clip-exact-cluster-counts-design.md](./2026-09-08-draw-clip-exact-cluster-counts-design.md). Senza clip: gold Parquet precalcolato. Raw e tabella: intersezione geometrica stretta.
 
 | Caso | Comportamento |
 |------|----------------|

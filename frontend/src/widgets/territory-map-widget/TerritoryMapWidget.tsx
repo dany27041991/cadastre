@@ -62,20 +62,6 @@ export function TerritoryMapWidget() {
   greenAssetsLayerActiveRef.current = greenAssetsLayerActive
   const greenAreasLayerActiveRef = useRef(greenAreasLayerActive)
   greenAreasLayerActiveRef.current = greenAreasLayerActive
-  const nav = useTerritoryNavigation(mapBridge, {
-    api: territoryApi,
-    t,
-    isAssetsLayerActive: () => greenAssetsLayerActiveRef.current,
-    isAreasLayerActive: () => greenAreasLayerActiveRef.current,
-  })
-
-  useTerritoryMapFeatureSelect({ map, handleFeatureSelect: nav.handleFeatureSelect })
-  useTerritoryMapDrillSync({ map, level: nav.level, breadcrumb: nav.breadcrumb })
-  useTerritoryMapLeafCleanup({
-    breadcrumb: nav.breadcrumb,
-    clearStoredLeafArea: mapBridge.clearStoredLeafArea,
-  })
-
   const {
     registerGreenAssetsLayer,
     registerResetToLanding,
@@ -86,7 +72,25 @@ export function TerritoryMapWidget() {
     spatialClip,
     setSpatialClip,
     setMapTableAccordionVisible,
+    dateFromIso,
+    dateToIso,
   } = useGreenTablePanel()
+
+  const nav = useTerritoryNavigation(mapBridge, {
+    api: territoryApi,
+    t,
+    isAssetsLayerActive: () => greenAssetsLayerActiveRef.current,
+    isAreasLayerActive: () => greenAreasLayerActiveRef.current,
+    dateFromIso,
+    dateToIso,
+  })
+
+  useTerritoryMapFeatureSelect({ map, handleFeatureSelect: nav.handleFeatureSelect })
+  useTerritoryMapDrillSync({ map, level: nav.level, breadcrumb: nav.breadcrumb })
+  useTerritoryMapLeafCleanup({
+    breadcrumb: nav.breadcrumb,
+    clearStoredLeafArea: mapBridge.clearStoredLeafArea,
+  })
 
   useEffect(() => {
     // Freeze admin territory click when green overlays are on (no jump).
@@ -110,7 +114,11 @@ export function TerritoryMapWidget() {
 
   const handleMapReady = useTerritoryMapResync({ map, resyncMapLayers: resyncMapForReady })
 
-  const greenDetail = useGreenFeatureDetail({ breadcrumb: nav.breadcrumb })
+  const greenDetail = useGreenFeatureDetail({
+    breadcrumb: nav.breadcrumb,
+    dateFrom: dateFromIso,
+    dateTo: dateToIso,
+  })
   const lastMapPointerRef = useRef<{ clientX: number; clientY: number } | null>(null)
   /** Table row had no map geometry — frame once detail bbox arrives. */
   const pendingTableFrameRef = useRef(false)
@@ -337,12 +345,20 @@ export function TerritoryMapWidget() {
   }, [entryMode, spatialClip])
 
   const areasTableQuery = useMemo(
-    () => buildGreenAreasTableQuery(nav.level, nav.breadcrumb, clipWkt),
-    [nav.level, nav.breadcrumb, clipWkt]
+    () =>
+      buildGreenAreasTableQuery(nav.level, nav.breadcrumb, clipWkt, {
+        dateFrom: dateFromIso,
+        dateTo: dateToIso,
+      }),
+    [nav.level, nav.breadcrumb, clipWkt, dateFromIso, dateToIso]
   )
   const assetsTableQuery = useMemo(
-    () => buildGreenAssetsTableQuery(nav.breadcrumb, clipWkt),
-    [nav.breadcrumb, clipWkt]
+    () =>
+      buildGreenAssetsTableQuery(nav.breadcrumb, clipWkt, {
+        dateFrom: dateFromIso,
+        dateTo: dateToIso,
+      }),
+    [nav.breadcrumb, clipWkt, dateFromIso, dateToIso]
   )
 
   layersPanelOpenRef.current = layersPanelOpen
@@ -393,6 +409,8 @@ export function TerritoryMapWidget() {
             provinceId: last.provinceId,
             municipalityId: last.id,
             subMunicipalAreaId: last.subMunicipalAreaId,
+            dateFrom: dateFromIso,
+            dateTo: dateToIso,
           })
         : await territoryApi.getGreenAreas({
             regionId: last.regionId,
@@ -401,6 +419,8 @@ export function TerritoryMapWidget() {
               last.municipalityId ??
               nav.breadcrumb.find((c) => c.level === 'green_areas')?.id,
             containedInAreaId: last.id,
+            dateFrom: dateFromIso,
+            dateTo: dateToIso,
           })
     const isValidGeoJson =
       geojson != null && (geojson as { type?: string }).type === 'FeatureCollection'
@@ -426,7 +446,7 @@ export function TerritoryMapWidget() {
       map.clearGreenLayer()
     }
     map.setGreenLayerVisible(true)
-  }, [nav.breadcrumb, map, mapBridge])
+  }, [nav.breadcrumb, map, mapBridge, dateFromIso, dateToIso])
 
   const onBeforeLoadingAssets = useCallback(() => {
     const features = map.getGreenLayerFeatures()
@@ -457,6 +477,8 @@ export function TerritoryMapWidget() {
     onAreasLayerActiveChange: setGreenAreasLayerActive,
     clipWkt,
     clipRequired: entryMode === 'draw',
+    dateFrom: dateFromIso,
+    dateTo: dateToIso,
   })
 
   const setAssetsActiveRef = useRef(greenAssetsLayer.setAssetsActive)

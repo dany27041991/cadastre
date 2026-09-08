@@ -2,6 +2,8 @@
 
 Requisiti sulle **FeatureCollection** restituite da `/api/territory` e passate a MapBridge, affinché conversione WKT, click e navigazione funzionino correttamente.
 
+> **Green viewport:** shape wire invariato (GeoJSON/`GC_*`/`GS_*`/`GA_*`). Fonte = lakehouse; le GET green richiedono `date_from`/`date_to`.
+
 ---
 
 ## Struttura minima

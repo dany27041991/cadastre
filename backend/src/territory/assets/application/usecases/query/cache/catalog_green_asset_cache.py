@@ -1,8 +1,13 @@
 """Cache logic for catalog green assets (trees, rows, lawns, etc.).
 
-Cache key: (region_id, province_id, municipality_id[, sub_municipal_area_id]).
+Cache key: (region_id, province_id, municipality_id, date_from, date_to[, sub_municipal_area_id]).
 No cache for single green_area_id queries.
 """
+
+from __future__ import annotations
+
+from datetime import date
+from typing import Any
 
 from core.cache import CompressedLRUCache
 from territory.geo.domain.entities import GeoJSONFeatureCollection
@@ -11,32 +16,40 @@ _EMPTY: GeoJSONFeatureCollection = {"type": "FeatureCollection", "features": []}
 _green_asset_cache: CompressedLRUCache = CompressedLRUCache(maxsize=2048)
 
 
+def _date_key(repository: Any) -> tuple[str | None, str | None]:
+    df: date | None = getattr(repository, "_date_from", None)
+    dt: date | None = getattr(repository, "_date_to", None)
+    return (
+        df.isoformat() if df is not None else None,
+        dt.isoformat() if dt is not None else None,
+    )
+
+
 def get_cached_green_assets(
+    repository: Any,
     region_id: int,
     province_id: int,
     municipality_id: int,
     green_area_id: int | None,
     sub_municipal_area_id: int | None = None,
 ) -> GeoJSONFeatureCollection:
-    """Return green assets (from cache when applicable)."""
-    from territory.assets.infrastructure.repository import _green_assets_repository
-
-    repo = _green_assets_repository()
+    """Return green assets (from cache when applicable). Uses the dated lakehouse repo."""
     if green_area_id is not None:
-        return repo.get_within_area(region_id, province_id, municipality_id, green_area_id)
+        return repository.get_within_area(region_id, province_id, municipality_id, green_area_id)
+    dates = _date_key(repository)
     if sub_municipal_area_id is not None:
-        key = (region_id, province_id, municipality_id, sub_municipal_area_id)
+        key = (region_id, province_id, municipality_id, *dates, sub_municipal_area_id)
         if key in _green_asset_cache:
             return _green_asset_cache[key]
-        result = repo.get_within_municipality_intersecting_sub_municipal_area(
+        result = repository.get_within_municipality_intersecting_sub_municipal_area(
             region_id, province_id, municipality_id, sub_municipal_area_id
         )
         _green_asset_cache[key] = result
         return result
-    key = (region_id, province_id, municipality_id)
+    key = (region_id, province_id, municipality_id, *dates)
     if key in _green_asset_cache:
         return _green_asset_cache[key]
-    result = repo.get_within_municipality(region_id, province_id, municipality_id)
+    result = repository.get_within_municipality(region_id, province_id, municipality_id)
     _green_asset_cache[key] = result
     return result
 

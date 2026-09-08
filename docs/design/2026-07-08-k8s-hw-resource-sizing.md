@@ -5,6 +5,10 @@
 **Ambiente target:** Kubernetes (produzione nazionale)  
 **Stato:** bozza per revisione infrastruttura
 
+> **Addendum 2026-09-04 (lakehouse-only):** SoR green viz = **MinIO (Parquet) + DuckDB** in FastAPI. PostGIS = admin/OBT only.  
+> Le sezioni PVC 400–500 Gi e replica “per GET mappa green” sotto restano **stime pre-cutover** dove non aggiornate (§3.3 storage già rivisto). Aggiungere object storage / MinIO al capacity planning.  
+> Design: [2026-09-04-green-lakehouse-only-pg-drop-design.md](./2026-09-04-green-lakehouse-only-pg-drop-design.md).
+
 ---
 
 ## 1. Scopo e perimetro
@@ -13,9 +17,10 @@ Il documento definisce il dimensionamento delle risorse hardware (CPU, RAM, stor
 
 | Componente | In perimetro | Note |
 |------------|:------------:|------|
-| Backend FastAPI | ✓ | API territorio, aree verdi, asset verdi |
+| Backend FastAPI | ✓ | API territorio + green via DuckDB/MinIO |
 | Frontend React (nginx) | ✓ | Bundle statico in produzione |
-| PostgreSQL + PostGIS | ✓ | Database primario + read replica |
+| PostgreSQL + PostGIS | ✓ | Admin + cataloghi DBT (non green feature) |
+| MinIO / S3 lakehouse | ✓ | Silver/gold Parquet + catalog ingest |
 | Geoinsight / WebGIS MASE | ✗ | Servizio esterno; requisiti client documentati |
 | Hazelcast / cache distribuita | ✗ | Escluso per scelta; analisi con cache in-process |
 | ClickHouse / Redis | ✗ | Non presenti nello stack compose attuale |
@@ -64,18 +69,21 @@ Il documento definisce il dimensionamento delle risorse hardware (CPU, RAM, stor
 | Roma (`run_boost_municipality.sh`) | ~1.600 aree, ~320k alberi, ~119k filari |
 | ISTAT (solo capoluoghi, alberi censiti) | ~2–3,6 M alberi (dato parziale) |
 
-### 3.3 Storage database stimato (scenario Target)
+### 3.3 Storage stimato (scenario Target) — post cutover lakehouse-only
 
-| Componente | Dimensione stimata |
-|------------|-------------------:|
-| `green_assets` (dati + indici GIST) | 150–250 GB |
-| `green_areas` (poligoni + indici GIST) | 50–80 GB |
-| Territorio ISTAT + catalogo DBT + traduzioni | ~5 GB |
-| Storico (`asset_area_history`, `asset_green_history`) | 40–80 GB |
-| WAL, vacuum, crescita 3 anni (~20%) | 40% buffer |
-| **PVC primario PostGIS** | **~400–500 GB** |
-| Backup (snapshot 7 giorni) | +800 GB |
-| **Totale storage con backup** | **~1,2 TB** |
+> **Nota 2026-09-04:** green data **non** stanno più su PVC PostGIS. Le stime sotto separano admin PG vs object storage MinIO. Cifre storiche PG green (150–250 GB GIST, history 40–80 GB) sono **obsolete** come sizing DB.
+
+| Componente | Dove | Dimensione stimata |
+|------------|------|-------------------:|
+| Territorio ISTAT + catalogo DBT + traduzioni | PostGIS `public.*` | ~5 GB |
+| Schema `cadastre` | PostGIS (vuoto) | ~0 |
+| Green silver + gold Parquet + catalog | **MinIO** (S3) | 80–200 GB *(ordine di grandezza; dipende compressione/ingest)* |
+| Storico green (`asset_*_history`) | — | **Non in V1** |
+| WAL / vacuum / buffer admin PG | PostGIS | ~40% su footprint admin |
+| **PVC primario PostGIS** | K8s | **~20–50 GB** (admin only; non 400–500 GB) |
+| **Object storage lakehouse** | MinIO / S3 | **~100–250 GB** (+ retention ingest) |
+| Backup PG (snapshot 7 giorni) | | proporzionale al PVC admin |
+| Backup lakehouse | | policy bucket / versioning |
 
 ---
 

@@ -1,43 +1,49 @@
 #!/usr/bin/env python3
 """
-Tree Cadastre - Seed: load green areas and green assets from municipality GeoJSON.
+Tree Cadastre - Seed: load green areas and assets from municipality GeoJSON → MinIO lakehouse.
 
-Loads in order:
-  1. areas.geojson → cadastre.green_areas (level 1 = MANAGEMENT_UNIT)
-  2. hedges.geojson, shrubs.geojson, trees.geojson → cadastre.green_assets,
-     with green_area_id set by spatial containment in the loaded areas.
+Writes silver Parquet (green_areas / green_assets), gold clusters, and catalog upsert.
+PostGIS is used read-only for municipality / attribute_type lookups (admin + DBT catalog).
 
-Source CRS: EPSG:32633 (WGS 84 / UTM 33N). Storage: EPSG:4326.
-Aligned with docs/database (green_areas, green_assets, area_level, asset_type)
-and DBT catalog: docs/database/obt/types (primary_types, secondary_types, attribute_types).
+Source CRS: EPSG:32633 (WGS 84 / UTM 33N). Storage geometries: EPSG:4326 WKB.
 
 Usage:
-  From host (requires DATABASE_URL, DATA_DIR):
-    python load_lecce_green_data.py [--municipality Lecce] [--data-dir PATH]
-  In Docker (init image):
-    python3 /scripts/database/seed/populate_lecce_data/load_lecce_green_data.py --municipality Lecce
-    (DATA_DIR=/data, DATABASE_URL from env)
+  From host (DATABASE_URL + LAKEHOUSE_S3_*, DATA_DIR optional):
+    python load_lecce_green_data.py [--municipality Lecce] [--data-dir PATH] [--ingest-date YYYY-MM-DD]
+  Via runner:
+    ./infrastructure/scripts/database/seed/run_populate_lecce.sh
 """
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 import warnings
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 # Pyogrio warns when GeoJSON features have duplicate/missing id; it fixes them. We do not use that id.
 warnings.filterwarnings("ignore", message="Several features with id = 0 have been found")
 
 try:
-    import pandas as pd
     import geopandas as gpd
+    import pandas as pd
     import psycopg
+    import pyarrow as pa
+    from shapely import make_valid, to_wkb
+    from shapely.geometry.base import BaseGeometry
 except ImportError as e:
     print(f"Error: missing dependency - {e}", file=sys.stderr)
     sys.exit(1)
+
+_LAKEHOUSE_DIR = Path(__file__).resolve().parents[2] / "lakehouse"
+if str(_LAKEHOUSE_DIR) not in sys.path:
+    sys.path.insert(0, str(_LAKEHOUSE_DIR))
+
+from lakehouse_writer import (  # noqa: E402
+    ingest_municipality_tables,
+    s3_client,
+)
 
 # -----------------------------------------------------------------------------
 # Config
@@ -45,36 +51,27 @@ except ImportError as e:
 # Catalog and level references must match the init SQL that populates the DB:
 #   01-init-schema-public.sql     (area_level, primary_types, secondary_types, attribute_types)
 #   01-init-seed-01-area-level.sql   → level_id 1 = MANAGEMENT_UNIT
-#   01-init-seed-02-primary-types.sql → TP 1–4
-#   01-init-seed-03-secondary-types.sql → TS: id 3 = Pianta (ts_code 03), id 25 = Area convenzionata (ts_code 25)
-#   01-init-seed-04-attribute-types.sql → (secondary_type_id, ts_code, geom_type) UNIQUE lookup
-#   02-init-schema-cadastre.sql   (green_areas.attribute_type_id, level_id; green_assets.attribute_type_id)
-#   02b-1-seed-cadastre-enum-translations.sql (asset_type, geometry_type enums)
+# Silver lakehouse schema: docs/infrastructure/lakehouse-parquet-layout.md
 SRID_SOURCE = 32633  # GeoJSON Lecce
 SRID_TARGET = 4326
 LEVEL_MANAGEMENT_UNIT = 1
-LEVEL_ID_MANAGEMENT = 1  # area_level.level_id 1 = MANAGEMENT_UNIT (01-init-seed-01-area-level.sql)
-AREA_GEOMETRY_TYPE = "S"  # Surface (MultiPolygon); cadastre.geometry_type
 DEFAULT_AREA_NAME = "Area verde"
 ASSET_FILES = (
-    ("hedges.geojson", "hedge", "L"),   # asset_type, geometry_type (cadastre enums)
-    ("shrubs.geojson", "other", "P"),   # shrub → asset_type other; DBT ATT 109 Cespuglio
+    ("hedges.geojson", "hedge", "L"),
+    ("shrubs.geojson", "other", "P"),
     ("trees.geojson", "tree", "P"),
 )
 
-# DBT catalog: resolve attribute_type_id from public.attribute_types (same keys as 01-init-seed-04).
-# (secondary_type_id, ts_code, geom_type) → id. Areas: TS 25 ATT 500 S. Assets: TS 03 ATT 107 L, 108 P, 109 P.
-AREA_ATTRIBUTE_TYPE = (25, "500", "S")   # Limite area di gestione (id 45 in seed)
+# DBT catalog lookup (informational / future columns); silver V1 does not store attribute_type_id.
+AREA_ATTRIBUTE_TYPE = (25, "500", "S")
 ASSET_ATTRIBUTE_TYPES = {
-    ("hedge", "L"): (3, "107", "L"),   # Siepe (id 32)
-    ("tree", "P"): (3, "108", "P"),    # Albero (id 33)
-    ("other", "P"): (3, "109", "P"),   # Cespuglio singolo/arbusto (id 34)
+    ("hedge", "L"): (3, "107", "L"),
+    ("tree", "P"): (3, "108", "P"),
+    ("other", "P"): (3, "109", "P"),
 }
 
-# Keys promoted from GeoJSON properties to typed columns (excluded from attributes JSONB).
 _AREA_ATTRS_PROMOTED = frozenset({"tipologia2", "data_rilie", "denominaz", "denominazione"})
 
-# GeoJSON property → English attributes key (areas). Only listed keys are kept.
 _AREA_ATTR_KEY_MAP: dict[str, str] = {
     "ubicazione": "location",
     "superficie": "surface_area_m2",
@@ -87,14 +84,11 @@ _AREA_ATTR_KEY_MAP: dict[str, str] = {
     "% area arb": "shrub_cover_class",
 }
 
-# Taxonomy already stored in family/genus/species columns — exclude from JSONB.
 _ASSET_ATTRS_PROMOTED = frozenset({
     "Famiglia", "Genere", "Specie",
     "geometry", "green_area_id", "index_right", "_aid", "id",
 })
 
-# GeoJSON property → English attributes key (assets). Multiple source aliases share one target.
-# Only listed keys are kept; unknown GeoJSON fields are dropped.
 _ASSET_ATTR_KEY_MAP: dict[str, str] = {
     "ubicazione": "location",
     "Divisione": "division",
@@ -134,6 +128,23 @@ _ASSET_ATTR_KEY_MAP: dict[str, str] = {
     "N_ind.": "specimen_count",
 }
 
+_TIPOLOGIA2_TO_ISTAT: dict[str, str] = {
+    "aree di arredo urbano": "URBAN_FURNISHING",
+    "piazzali alberati": "URBAN_FURNISHING",
+    "verde attrezzato di quartiere": "EQUIPPED_GREEN",
+    "verde attrezzato di vicinato": "EQUIPPED_GREEN",
+    "parchi urbani": "URBAN_PARKS",
+    "verde storico pubblico": "HISTORICAL_GREEN",
+    "verde storico privato": "HISTORICAL_GREEN",
+    "giardini scolastici comunali": "SCHOOL_GARDENS",
+    "aree sportive a prevalente superficie a verde": "OUTDOOR_SPORTS",
+    "verde incolto": "UNCULTIVATED_GREEN",
+    "forestazione urbana": "URBAN_FORESTRY",
+    "orti urbani": "URBAN_ALLOTMENTS",
+    "orti botanici": "BOTANICAL_GARDENS",
+    "aree cimiteriali a prevalente superficie a verde": "CEMETERIES",
+}
+
 
 def _is_empty_attr_value(value: object) -> bool:
     if value is None:
@@ -160,7 +171,6 @@ def _normalize_attr_value(value: object) -> object:
             pass
     if isinstance(value, datetime):
         return value.date().isoformat()
-    # pandas Timestamp
     if hasattr(value, "to_pydatetime"):
         try:
             dt = value.to_pydatetime()
@@ -170,7 +180,6 @@ def _normalize_attr_value(value: object) -> object:
             pass
     if isinstance(value, str):
         text = value.strip()
-        # Prefer ISO date when the field looks like a calendar date (YYYY-MM-DD / DD/MM/YYYY).
         if len(text) >= 8 and ("-" in text or "/" in text) and any(ch.isdigit() for ch in text):
             ts = pd.to_datetime(text, errors="coerce", utc=True)
             if ts is not None and not pd.isna(ts):
@@ -201,30 +210,10 @@ def build_english_attributes(
         if _is_empty_attr_value(value):
             continue
         eng = key_map[src_key]
-        # First non-empty wins when aliases map to the same English key.
         if eng in out:
             continue
         out[eng] = _normalize_attr_value(value)
     return out
-
-
-# Lecce tipologia2 → cadastre.istat_green_area_classification (ISTAT Ambiente urbano).
-_TIPOLOGIA2_TO_ISTAT: dict[str, str] = {
-    "aree di arredo urbano": "URBAN_FURNISHING",
-    "piazzali alberati": "URBAN_FURNISHING",
-    "verde attrezzato di quartiere": "EQUIPPED_GREEN",
-    "verde attrezzato di vicinato": "EQUIPPED_GREEN",
-    "parchi urbani": "URBAN_PARKS",
-    "verde storico pubblico": "HISTORICAL_GREEN",
-    "verde storico privato": "HISTORICAL_GREEN",
-    "giardini scolastici comunali": "SCHOOL_GARDENS",
-    "aree sportive a prevalente superficie a verde": "OUTDOOR_SPORTS",
-    "verde incolto": "UNCULTIVATED_GREEN",
-    "forestazione urbana": "URBAN_FORESTRY",
-    "orti urbani": "URBAN_ALLOTMENTS",
-    "orti botanici": "BOTANICAL_GARDENS",
-    "aree cimiteriali a prevalente superficie a verde": "CEMETERIES",
-}
 
 
 def map_tipologia2_to_istat(tipologia2: object) -> str | None:
@@ -246,13 +235,7 @@ def _is_plausible_survey_year(year: object) -> bool:
 
 
 def parse_survey_date(value: object) -> datetime | None:
-    """Parse GeoJSON data_rilie into timestamptz; NaT / invalid → None.
-
-    GeoPandas promotes mixed null/ISO date columns to datetime64, so missing
-    values arrive as ``pd.NaT``. ``isinstance(NaT, datetime)`` is True; returning
-    NaT to psycopg can persist a non-Python-representable timestamptz and break
-    SQLAlchemy loads (``ValueError: year … is out of range``).
-    """
+    """Parse GeoJSON data_rilie into timestamptz; NaT / invalid → None."""
     if value is None:
         return None
     try:
@@ -288,14 +271,14 @@ def get_data_dir(municipality_name: str) -> Path:
     if "DATA_DIR" in os.environ:
         base = Path(os.environ["DATA_DIR"])
     else:
-        # Script is in infrastructure/scripts/database/seed/populate_lecce_data/
-        base = Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "infrastructure" / "data"
+        base = (
+            Path(__file__).resolve().parent.parent.parent.parent.parent.parent
+            / "infrastructure"
+            / "data"
+        )
     return base / "municipality" / municipality_name.lower().replace(" ", "_")
 
 
-# -----------------------------------------------------------------------------
-# DB helpers
-# -----------------------------------------------------------------------------
 def get_municipality_ids(conn, municipality_name: str) -> tuple[int, int, int] | None:
     with conn.cursor() as cur:
         cur.execute(
@@ -315,10 +298,7 @@ def get_municipality_ids(conn, municipality_name: str) -> tuple[int, int, int] |
 def get_attribute_type_id(
     conn, secondary_type_id: int, ts_code: str, geom_type: str
 ) -> int | None:
-    """Resolve public.attribute_types.id from DBT catalog.
-    Keys match 01-init-schema-public.sql UNIQUE(secondary_type_id, ts_code, geom_type)
-    and 01-init-seed-04-attribute-types.sql INSERTs.
-    """
+    """Resolve public.attribute_types.id from DBT catalog (read-only check)."""
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -332,23 +312,41 @@ def get_attribute_type_id(
     return row[0] if row else None
 
 
-def delete_municipality_cadastre(conn, municipality_id: int) -> None:
-    with conn.cursor() as cur:
-        cur.execute("DELETE FROM cadastre.green_assets WHERE municipality_id = %s", (municipality_id,))
-        n_assets = cur.rowcount
-        cur.execute("DELETE FROM cadastre.green_areas WHERE municipality_id = %s", (municipality_id,))
-        n_areas = cur.rowcount
-    print(f"  Cleared: {n_assets} green_assets, {n_areas} green_areas for municipality_id={municipality_id}")
+def _geom_to_wkb_lon_lat(geom: BaseGeometry) -> tuple[bytes | None, float | None, float | None]:
+    if geom is None or geom.is_empty:
+        return None, None, None
+    try:
+        fixed = make_valid(geom)
+    except Exception:
+        fixed = geom
+    try:
+        centroid = fixed.centroid
+        lon = float(centroid.x)
+        lat = float(centroid.y)
+    except Exception:
+        lon, lat = None, None
+    try:
+        wkb = to_wkb(fixed, hex=False)
+    except Exception:
+        wkb = None
+    return wkb, lon, lat
 
 
-def load_areas(
-    conn,
+def _str_prop(row, key: str) -> str | None:
+    v = row.get(key)
+    if v is None or pd.isna(v):
+        return None
+    s = str(v).strip()
+    return s if s else None
+
+
+def load_areas_table(
     data_dir: Path,
     municipality_id: int,
     province_id: int,
     region_id: int,
-    attribute_type_id: int | None,
-) -> gpd.GeoDataFrame:
+    ingest_date: date,
+) -> tuple[gpd.GeoDataFrame, pa.Table]:
     areas_path = data_dir / "areas.geojson"
     if not areas_path.exists():
         raise FileNotFoundError(f"areas.geojson not found: {areas_path}")
@@ -357,82 +355,106 @@ def load_areas(
     if gdf.crs is None:
         gdf.set_crs(epsg=SRID_SOURCE, inplace=True)
     gdf = gdf.to_crs(epsg=SRID_TARGET)
-    gdf = gdf[gdf.geometry.notna() & ~gdf.geometry.is_empty]
+    gdf = gdf[gdf.geometry.notna() & ~gdf.geometry.is_empty].copy()
+    gdf["_lh_id"] = range(1, len(gdf) + 1)
 
-    gdf["_db_id"] = None
-    with conn.cursor() as cur:
-        for _, row in gdf.iterrows():
-            name = (row.get("denominaz") or row.get("denominazione") or DEFAULT_AREA_NAME)
-            if name is None or (isinstance(name, float) and str(name) == "nan"):
-                name = DEFAULT_AREA_NAME
-            name = str(name).strip() or DEFAULT_AREA_NAME
-            classification = map_tipologia2_to_istat(row.get("tipologia2"))
-            survey_date = parse_survey_date(row.get("data_rilie"))
-            attrs = build_english_attributes(
-                row, _AREA_ATTR_KEY_MAP, exclude=_AREA_ATTRS_PROMOTED
-            )
-            wkt_geom = row.geometry.wkt if hasattr(row.geometry, "wkt") else row.geometry
-            # Schema: 02-init-schema-cadastre.sql green_areas. NOT NULL: region_id, province_id,
-            # municipality_id, name, level (default 1); we set level_id (FK area_level), geometry_type,
-            # geometry (4326), area_classification, istat_classification, survey_date, attributes,
-            # attribute_type_id. Other columns use DEFAULT or NULL.
-            cur.execute(
-                """
-                INSERT INTO cadastre.green_areas (
-                    region_id, province_id, municipality_id, name, level, level_id,
-                    geometry_type, geometry, area_classification, istat_classification,
-                    survey_date, attributes, attribute_type_id
-                ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s,
-                    -- Source polygons can self-intersect; invalid geometries make the map
-                    -- vendor's JSTS click hit-test throw TopologyException on every click.
-                    ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_SetSRID(ST_GeomFromText(%s), %s)), 3)),
-                    %s, %s, %s, %s, %s
-                )
-                RETURNING id
-                """,
-                (
-                    region_id,
-                    province_id,
-                    municipality_id,
-                    name[:255],
-                    LEVEL_MANAGEMENT_UNIT,
-                    LEVEL_ID_MANAGEMENT,
-                    AREA_GEOMETRY_TYPE,
-                    wkt_geom,
-                    SRID_TARGET,
-                    classification,
-                    classification,
-                    survey_date,
-                    json.dumps(attrs, default=str),
-                    attribute_type_id,
-                ),
-            )
-            rid = cur.fetchone()[0]
-            gdf.at[row.name, "_db_id"] = rid
+    ids: list[int] = []
+    region_ids: list[int] = []
+    province_ids: list[int] = []
+    municipality_ids: list[int] = []
+    ingest_dates: list[date] = []
+    parent_ids: list[int | None] = []
+    levels: list[int] = []
+    names: list[str] = []
+    lons: list[float | None] = []
+    lats: list[float | None] = []
+    wkbs: list[bytes | None] = []
+    classifications: list[str | None] = []
+    admin_statuses: list[str | None] = []
+    survey_dates: list[datetime | None] = []
 
-    if "_db_id" not in gdf.columns:
-        gdf["_db_id"] = None
-    print(f"  Inserted {len(gdf)} green_areas")
-    return gdf
+    for _, row in gdf.iterrows():
+        name = row.get("denominaz") or row.get("denominazione") or DEFAULT_AREA_NAME
+        if name is None or (isinstance(name, float) and str(name) == "nan"):
+            name = DEFAULT_AREA_NAME
+        name = str(name).strip() or DEFAULT_AREA_NAME
+        classification = map_tipologia2_to_istat(row.get("tipologia2"))
+        survey_date = parse_survey_date(row.get("data_rilie"))
+        # attributes mapped for parity with legacy seed; silver V1 schema omits JSONB column
+        _ = build_english_attributes(row, _AREA_ATTR_KEY_MAP, exclude=_AREA_ATTRS_PROMOTED)
+        wkb, lon, lat = _geom_to_wkb_lon_lat(row.geometry)
+
+        ids.append(int(row["_lh_id"]))
+        region_ids.append(region_id)
+        province_ids.append(province_id)
+        municipality_ids.append(municipality_id)
+        ingest_dates.append(ingest_date)
+        parent_ids.append(None)
+        levels.append(LEVEL_MANAGEMENT_UNIT)
+        names.append(name[:255])
+        lons.append(lon)
+        lats.append(lat)
+        wkbs.append(wkb)
+        classifications.append(classification)
+        admin_statuses.append("ACTIVE")
+        survey_dates.append(survey_date)
+
+    table = pa.table(
+        {
+            "id": pa.array(ids, type=pa.int64()),
+            "region_id": pa.array(region_ids, type=pa.int32()),
+            "province_id": pa.array(province_ids, type=pa.int32()),
+            "municipality_id": pa.array(municipality_ids, type=pa.int32()),
+            "ingest_date": pa.array(ingest_dates, type=pa.date32()),
+            "parent_id": pa.array(parent_ids, type=pa.int64()),
+            "level": pa.array(levels, type=pa.int32()),
+            "name": pa.array(names, type=pa.string()),
+            "lon": pa.array(lons, type=pa.float64()),
+            "lat": pa.array(lats, type=pa.float64()),
+            "geom_wkb": pa.array(wkbs, type=pa.binary()),
+            "area_classification": pa.array(classifications, type=pa.string()),
+            "administrative_status": pa.array(admin_statuses, type=pa.string()),
+            "survey_date": pa.array(survey_dates, type=pa.timestamp("us", tz="UTC")),
+        }
+    )
+    print(f"  Built {len(gdf)} green_areas (silver)")
+    return gdf, table
 
 
-def load_assets(
-    conn,
+def load_assets_table(
     data_dir: Path,
     areas_gdf: gpd.GeoDataFrame,
     municipality_id: int,
     province_id: int,
     region_id: int,
-    asset_attribute_type_ids: dict[tuple[str, str], int | None],
-) -> None:
-    if areas_gdf.empty or "_db_id" not in areas_gdf.columns:
+    ingest_date: date,
+) -> pa.Table:
+    if areas_gdf.empty or "_lh_id" not in areas_gdf.columns:
         raise ValueError("No green_areas loaded; cannot assign green_area_id to assets")
 
-    areas_for_join = areas_gdf[["_db_id", "geometry"]].copy()
-    areas_for_join = areas_for_join.rename(columns={"_db_id": "green_area_id"})
+    areas_for_join = areas_gdf[["_lh_id", "geometry"]].copy()
+    areas_for_join = areas_for_join.rename(columns={"_lh_id": "green_area_id"})
 
-    total = 0
+    ids: list[int] = []
+    green_area_ids: list[int | None] = []
+    region_ids: list[int] = []
+    province_ids: list[int] = []
+    municipality_ids: list[int] = []
+    ingest_dates: list[date] = []
+    asset_types: list[str] = []
+    geometry_types: list[str] = []
+    lons: list[float | None] = []
+    lats: list[float | None] = []
+    wkbs: list[bytes | None] = []
+    species_l: list[str | None] = []
+    family_l: list[str | None] = []
+    genus_l: list[str | None] = []
+    variety_l: list[str | None] = []
+    health_l: list[str | None] = []
+    status_l: list[str | None] = []
+    survey_l: list[datetime | None] = []
+
+    next_id = 1
     for filename, asset_type, geometry_type in ASSET_FILES:
         path = data_dir / filename
         if not path.exists():
@@ -448,7 +470,7 @@ def load_assets(
             print(f"  Skip {filename}: no valid geometries")
             continue
 
-        # Spatial join: assign each asset to an area that contains it (one area per asset)
+        gdf = gdf.copy()
         gdf["_aid"] = range(len(gdf))
         gdf = gpd.sjoin(gdf, areas_for_join, how="left", predicate="within")
         gdf = gdf.drop_duplicates(subset=["_aid"], keep="first")
@@ -458,65 +480,79 @@ def load_assets(
         else:
             gdf["green_area_id"] = gdf["green_area_id"].astype("Int64")
 
-        attr_type_id = asset_attribute_type_ids.get((asset_type, geometry_type))
-        with conn.cursor() as cur:
-            for _, row in gdf.iterrows():
-                _gid = row.get("green_area_id")
-                green_area_id = None if pd.isna(_gid) or _gid is None else int(_gid)
-                genus = _str_prop(row, "Genere")
-                species = _str_prop(row, "Specie")
-                family = _str_prop(row, "Famiglia")
-                attrs = build_english_attributes(
-                    row, _ASSET_ATTR_KEY_MAP, exclude=_ASSET_ATTRS_PROMOTED
-                )
-                wkt_geom = row.geometry.wkt if hasattr(row.geometry, "wkt") else row.geometry
-                # Schema: 02-init-schema-cadastre.sql green_assets. NOT NULL: region_id, province_id,
-                # municipality_id, asset_type, geometry_type, geometry; we set attribute_type_id,
-                # family, genus, species, attributes (English keys only). Other columns DEFAULT/NULL.
-                cur.execute(
-                    """
-                    INSERT INTO cadastre.green_assets (
-                        green_area_id, region_id, province_id, municipality_id,
-                        asset_type, geometry_type, geometry, family, genus, species, attributes, attribute_type_id
-                    ) VALUES (%s, %s, %s, %s, %s, %s, ST_SetSRID(ST_GeomFromText(%s), %s), %s, %s, %s, %s, %s)
-                    """,
-                    (
-                        green_area_id,
-                        region_id,
-                        province_id,
-                        municipality_id,
-                        asset_type,
-                        geometry_type,
-                        wkt_geom,
-                        SRID_TARGET,
-                        family[:80] if family else None,
-                        genus[:50] if genus else None,
-                        species[:50] if species else None,
-                        json.dumps(attrs, default=str),
-                        attr_type_id,
-                    ),
-                )
-                total += 1
-        print(f"  Inserted {len(gdf)} green_assets from {filename} (asset_type={asset_type})")
-    print(f"  Total green_assets inserted: {total}")
+        n_file = 0
+        for _, row in gdf.iterrows():
+            _gid = row.get("green_area_id")
+            green_area_id = None if pd.isna(_gid) or _gid is None else int(_gid)
+            genus = _str_prop(row, "Genere")
+            species = _str_prop(row, "Specie")
+            family = _str_prop(row, "Famiglia")
+            _ = build_english_attributes(row, _ASSET_ATTR_KEY_MAP, exclude=_ASSET_ATTRS_PROMOTED)
+            wkb, lon, lat = _geom_to_wkb_lon_lat(row.geometry)
+
+            ids.append(next_id)
+            next_id += 1
+            green_area_ids.append(green_area_id)
+            region_ids.append(region_id)
+            province_ids.append(province_id)
+            municipality_ids.append(municipality_id)
+            ingest_dates.append(ingest_date)
+            asset_types.append(asset_type)
+            geometry_types.append(geometry_type)
+            lons.append(lon)
+            lats.append(lat)
+            wkbs.append(wkb)
+            species_l.append(species[:50] if species else None)
+            family_l.append(family[:80] if family else None)
+            genus_l.append(genus[:50] if genus else None)
+            variety_l.append(None)
+            health_l.append(None)
+            status_l.append("ACTIVE")
+            survey_l.append(None)
+            n_file += 1
+        print(f"  Built {n_file} green_assets from {filename} (asset_type={asset_type})")
+
+    print(f"  Total green_assets: {len(ids)}")
+    return pa.table(
+        {
+            "id": pa.array(ids, type=pa.int64()),
+            "green_area_id": pa.array(green_area_ids, type=pa.int64()),
+            "region_id": pa.array(region_ids, type=pa.int32()),
+            "province_id": pa.array(province_ids, type=pa.int32()),
+            "municipality_id": pa.array(municipality_ids, type=pa.int32()),
+            "ingest_date": pa.array(ingest_dates, type=pa.date32()),
+            "asset_type": pa.array(asset_types, type=pa.string()),
+            "geometry_type": pa.array(geometry_types, type=pa.string()),
+            "lon": pa.array(lons, type=pa.float64()),
+            "lat": pa.array(lats, type=pa.float64()),
+            "geom_wkb": pa.array(wkbs, type=pa.binary()),
+            "species": pa.array(species_l, type=pa.string()),
+            "family": pa.array(family_l, type=pa.string()),
+            "genus": pa.array(genus_l, type=pa.string()),
+            "variety": pa.array(variety_l, type=pa.string()),
+            "health_status": pa.array(health_l, type=pa.string()),
+            "asset_status": pa.array(status_l, type=pa.string()),
+            "survey_date": pa.array(survey_l, type=pa.timestamp("us", tz="UTC")),
+        }
+    )
 
 
-def _str_prop(row, key: str) -> str | None:
-    v = row.get(key)
-    if v is None or pd.isna(v):
-        return None
-    s = str(v).strip()
-    return s if s else None
-
-
-# -----------------------------------------------------------------------------
-# Main
-# -----------------------------------------------------------------------------
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Load municipality green areas and assets from GeoJSON")
+    parser = argparse.ArgumentParser(
+        description="Load municipality GeoJSON green data into MinIO lakehouse"
+    )
     parser.add_argument("--municipality", default="Lecce", help="Municipality name (default: Lecce)")
-    parser.add_argument("--data-dir", type=Path, default=None, help="Directory containing areas.geojson, hedges.geojson, etc. Default: DATA_DIR/municipality/<name>")
-    parser.add_argument("--no-clean", action="store_true", help="Do not delete existing green_areas/green_assets for the municipality")
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=None,
+        help="Directory with areas.geojson, hedges.geojson, … Default: DATA_DIR/municipality/<name>",
+    )
+    parser.add_argument(
+        "--ingest-date",
+        default=date.today().isoformat(),
+        help="Lakehouse batch date YYYY-MM-DD (default: today)",
+    )
     args = parser.parse_args()
 
     data_dir = args.data_dir or get_data_dir(args.municipality)
@@ -529,47 +565,66 @@ def main() -> int:
         print("Error: set DATABASE_URL or DATABASE_DIRECT_URL", file=sys.stderr)
         return 1
 
+    ingest_date = date.fromisoformat(args.ingest_date)
     print(f"Data dir: {data_dir}")
     print(f"Municipality: {args.municipality}")
+    print(f"Ingest date: {ingest_date}")
+    print("Target: MinIO lakehouse (silver + gold + catalog)")
 
     try:
         with psycopg.connect(url) as conn:
-            conn.autocommit = True
             ids = get_municipality_ids(conn, args.municipality)
             if not ids:
-                print(f"Error: municipality '{args.municipality}' not found in public.municipalities", file=sys.stderr)
+                print(
+                    f"Error: municipality '{args.municipality}' not found in public.municipalities",
+                    file=sys.stderr,
+                )
                 return 1
             municipality_id, province_id, region_id = ids
-            print(f"  municipality_id={municipality_id}, province_id={province_id}, region_id={region_id}")
+            print(
+                f"  municipality_id={municipality_id}, province_id={province_id}, region_id={region_id}"
+            )
 
-            # Resolve DBT attribute_type_id (catalog: primary_types, secondary_types, attribute_types)
             area_att_id = get_attribute_type_id(conn, *AREA_ATTRIBUTE_TYPE)
             if not area_att_id:
-                print("Warning: attribute_type for areas (TS 25, ATT 500, S) not found in public.attribute_types", file=sys.stderr)
-            asset_att_ids = {
-                (k1, k2): get_attribute_type_id(conn, *v) for (k1, k2), v in ASSET_ATTRIBUTE_TYPES.items()
-            }
+                print(
+                    "Warning: attribute_type for areas (TS 25, ATT 500, S) not found "
+                    "in public.attribute_types",
+                    file=sys.stderr,
+                )
+            for (k1, k2), keys in ASSET_ATTRIBUTE_TYPES.items():
+                if not get_attribute_type_id(conn, *keys):
+                    print(
+                        f"Warning: attribute_type for asset {k1}/{k2} not found",
+                        file=sys.stderr,
+                    )
 
-            if not args.no_clean:
-                print("Cleaning existing cadastre data for municipality...")
-                delete_municipality_cadastre(conn, municipality_id)
+        print("Loading green areas from areas.geojson...")
+        areas_gdf, areas_table = load_areas_table(
+            data_dir, municipality_id, province_id, region_id, ingest_date
+        )
+        if areas_gdf.empty:
+            print("Error: no areas loaded", file=sys.stderr)
+            return 1
 
-            print("Loading green areas from areas.geojson...")
-            areas_gdf = load_areas(conn, data_dir, municipality_id, province_id, region_id, area_att_id)
-            if areas_gdf.empty:
-                print("Error: no areas loaded", file=sys.stderr)
-                return 1
+        print("Loading green assets (hedges, shrubs, trees)...")
+        assets_table = load_assets_table(
+            data_dir, areas_gdf, municipality_id, province_id, region_id, ingest_date
+        )
 
-            print("Loading green assets (hedges, shrubs, trees)...")
-            load_assets(conn, data_dir, areas_gdf, municipality_id, province_id, region_id, asset_att_ids)
-
-            # Viewport cluster matviews aggregate green_assets; without a refresh
-            # the map would keep serving pre-load (or empty) clusters.
-            print("Refreshing viewport cluster materialized views...")
-            with conn.cursor() as cur:
-                cur.execute("REFRESH MATERIALIZED VIEW cadastre.green_asset_admin_clusters")
-                cur.execute("REFRESH MATERIALIZED VIEW cadastre.green_asset_grid_clusters")
-
+        meta = {
+            "municipality_id": municipality_id,
+            "province_id": province_id,
+            "region_id": region_id,
+            "name": args.municipality,
+        }
+        ingest_municipality_tables(
+            s3_client(),
+            meta=meta,
+            assets=assets_table,
+            areas=areas_table,
+            ingest_date=ingest_date,
+        )
         print("Done.")
         return 0
     except Exception as e:

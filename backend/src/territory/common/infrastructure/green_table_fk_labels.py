@@ -1,19 +1,19 @@
 """Batch-resolve FK ids to human-readable labels for green area / asset table APIs.
 
 Region, province and municipality names are considered immutable at runtime and
-are held in process-level dicts after the first DB lookup.  Attribute-type and
-green-area names can change via user actions and are always resolved from the DB.
+are held in process-level dicts after the first DB lookup. Attribute-type labels
+come from public catalogs. Green-area / parent names are resolved from the same
+result page when present (PostGIS green tables removed — lakehouse-only).
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import select, tuple_
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from shared.domain.entities.translation_model import TranslationModel
-from territory.areas.domain.entities.green_area_model import GreenAreaModel
 from territory.geo.domain.entities.attribute_type_model import AttributeTypeModel
 from territory.geo.domain.entities.area_level_model import AreaLevelModel
 from territory.geo.domain.entities.municipality_model import MunicipalityModel
@@ -95,11 +95,28 @@ def _resolve_attribute_type_labels(
     return labels
 
 
+def _names_from_page(
+    rows: list[dict[str, Any]],
+) -> dict[tuple[int, int, int], str | None]:
+    """Build (id, region_id, province_id) → name from rows that carry a name."""
+    out: dict[tuple[int, int, int], str | None] = {}
+    for r in rows:
+        rid = r.get("region_id")
+        pid = r.get("province_id")
+        aid = r.get("id")
+        name = r.get("name")
+        if aid is None or rid is None or pid is None:
+            continue
+        if name is not None:
+            out[(int(aid), int(rid), int(pid))] = str(name)
+    return out
+
+
 def enrich_green_area_table_rows(session: Session, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Add *_label fields for FK columns (keeps original ids).
 
     Region / province / municipality labels are resolved from the process-level
-    cache; level, attribute-type and parent-area labels always hit the DB.
+    cache; level and attribute-type from public catalogs; parent from same page.
     """
     if not rows:
         return rows
@@ -109,12 +126,6 @@ def enrich_green_area_table_rows(session: Session, rows: list[dict[str, Any]]) -
     municipality_ids = {r["municipality_id"] for r in rows if r.get("municipality_id") is not None}
     level_ids = {r["level_id"] for r in rows if r.get("level_id") is not None}
     attr_ids = {r["attribute_type_id"] for r in rows if r.get("attribute_type_id") is not None}
-
-    parent_keys: set[tuple[int, int, int]] = set()
-    for r in rows:
-        pid = r.get("parent_id")
-        if pid is not None and r.get("region_id") is not None and r.get("province_id") is not None:
-            parent_keys.add((int(pid), int(r["region_id"]), int(r["province_id"])))
 
     regions = _resolve_regions(session, region_ids)
     provinces = _resolve_provinces(session, province_ids)
@@ -128,21 +139,7 @@ def enrich_green_area_table_rows(session: Session, rows: list[dict[str, Any]]) -
         levels = {i: n for i, n in session.execute(stmt).all()}
 
     attr_labels = _resolve_attribute_type_labels(session, attr_ids)
-
-    parent_labels: dict[tuple[int, int, int], str | None] = {}
-    if parent_keys:
-        stmt = select(
-            GreenAreaModel.id,
-            GreenAreaModel.region_id,
-            GreenAreaModel.province_id,
-            GreenAreaModel.name,
-        ).where(
-            tuple_(GreenAreaModel.id, GreenAreaModel.region_id, GreenAreaModel.province_id).in_(
-                list(parent_keys)
-            )
-        )
-        for aid, rid, pid, name in session.execute(stmt):
-            parent_labels[(int(aid), int(rid), int(pid))] = name
+    page_names = _names_from_page(rows)
 
     enriched: list[dict[str, Any]] = []
     for r in rows:
@@ -164,7 +161,7 @@ def enrich_green_area_table_rows(session: Session, rows: list[dict[str, Any]]) -
                 "province_label": provinces.get(pid) if pid is not None else None,
                 "municipality_label": municipalities.get(mid) if mid is not None else None,
                 "level_id_label": levels.get(lid) if lid is not None else None,
-                "parent_label": parent_labels.get(parent_key) if parent_key else None,
+                "parent_label": page_names.get(parent_key) if parent_key else None,
                 "attribute_type_label": attr_labels.get(atid) if atid is not None else None,
             }
         )
@@ -174,8 +171,8 @@ def enrich_green_area_table_rows(session: Session, rows: list[dict[str, Any]]) -
 def enrich_green_asset_table_rows(session: Session, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Add *_label fields for FK columns on green_assets table rows.
 
-    Region / province / municipality labels are resolved from the process-level
-    cache; attribute-type and green-area labels always hit the DB.
+    Green-area labels are not resolved from PostGIS (lakehouse-only); left None
+    unless a future lakehouse label join is added.
     """
     if not rows:
         return rows
@@ -185,32 +182,11 @@ def enrich_green_asset_table_rows(session: Session, rows: list[dict[str, Any]]) 
     municipality_ids = {r["municipality_id"] for r in rows if r.get("municipality_id") is not None}
     attr_ids = {r["attribute_type_id"] for r in rows if r.get("attribute_type_id") is not None}
 
-    green_area_keys: set[tuple[int, int, int]] = set()
-    for r in rows:
-        gaid = r.get("green_area_id")
-        if gaid is not None and r.get("region_id") is not None and r.get("province_id") is not None:
-            green_area_keys.add((int(gaid), int(r["region_id"]), int(r["province_id"])))
-
     regions = _resolve_regions(session, region_ids)
     provinces = _resolve_provinces(session, province_ids)
     municipalities = _resolve_municipalities(session, municipality_ids)
 
     attr_labels = _resolve_attribute_type_labels(session, attr_ids)
-
-    green_area_labels: dict[tuple[int, int, int], str | None] = {}
-    if green_area_keys:
-        stmt = select(
-            GreenAreaModel.id,
-            GreenAreaModel.region_id,
-            GreenAreaModel.province_id,
-            GreenAreaModel.name,
-        ).where(
-            tuple_(GreenAreaModel.id, GreenAreaModel.region_id, GreenAreaModel.province_id).in_(
-                list(green_area_keys)
-            )
-        )
-        for aid, rid, pid, name in session.execute(stmt):
-            green_area_labels[(int(aid), int(rid), int(pid))] = name
 
     enriched: list[dict[str, Any]] = []
     for r in rows:
@@ -218,12 +194,6 @@ def enrich_green_asset_table_rows(session: Session, rows: list[dict[str, Any]]) 
         pid = r.get("province_id")
         mid = r.get("municipality_id")
         atid = r.get("attribute_type_id")
-        gaid = r.get("green_area_id")
-        ga_key = (
-            (int(gaid), int(rid), int(pid))
-            if gaid is not None and rid is not None and pid is not None
-            else None
-        )
         enriched.append(
             {
                 **r,
@@ -231,7 +201,7 @@ def enrich_green_asset_table_rows(session: Session, rows: list[dict[str, Any]]) 
                 "province_label": provinces.get(pid) if pid is not None else None,
                 "municipality_label": municipalities.get(mid) if mid is not None else None,
                 "attribute_type_label": attr_labels.get(atid) if atid is not None else None,
-                "green_area_label": green_area_labels.get(ga_key) if ga_key else None,
+                "green_area_label": None,
             }
         )
     return enriched

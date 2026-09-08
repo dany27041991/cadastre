@@ -43,14 +43,10 @@ psql -q -h postgis -U "$U" -d "$D" -f /scripts/init/postgis/sql/04-init-indexes-
 echo "Init: load territorial data from GeoJSON..."
 python3 /scripts/init/postgis/py/administrative_boundaries/load_geojson.py
 
-echo "Init: create partitions (requires regions/provinces populated)..."
+echo "Init: create partitions (noop — no green tables in PostGIS; lakehouse-only)..."
 psql -q -h postgis -U "$U" -d "$D" -f /scripts/init/postgis/sql/06-create-partitions.sql
 
-echo "Init: autovacuum tuning on leaf partitions (05, after 06 so all leaves exist)..."
+echo "Init: autovacuum tuning (noop — no green leaf partitions)..."
 psql -q -h postgis -U "$U" -d "$D" -f /scripts/init/postgis/sql/05-autovacuum-tuning.sql
-
-echo "Init: viewport cluster materialized views (07-08, empty until asset seed + refresh)..."
-psql -q -h postgis -U "$U" -d "$D" -f /scripts/init/postgis/sql/07-matview-green-asset-admin-clusters.sql
-psql -q -h postgis -U "$U" -d "$D" -f /scripts/init/postgis/sql/08-matview-green-asset-grid-clusters.sql
 
 echo "Init done."

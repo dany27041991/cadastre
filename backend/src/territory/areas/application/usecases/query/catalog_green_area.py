@@ -2,24 +2,24 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any, Literal
-
-from sqlalchemy.orm import Session
 
 from core.exceptions.base import NotFoundError
 from core.logger import log_invocation
 from territory.common.infrastructure.dto.green_detail_out import GreenDetailOut, build_area_detail
-from territory.common.infrastructure.green_table_fk_labels import enrich_green_area_table_rows
 from territory.common.infrastructure.green_metadata_projection import merge_area_table_row
 from territory.common.infrastructure.green_table_page_out import GreenTablePageOut
 from territory.geo.domain.entities import GeoJSONFeatureCollection
-from territory.areas.infrastructure.repository.green_areas_repository import GreenAreasRepository
+from territory.areas.infrastructure.repository.green_areas_lakehouse_repository import (
+    GreenAreasLakehouseRepository,
+)
 from territory.areas.application.usecases.query.cache import (
     get_cached_green_areas,
     invalidate_cache,
     invalidate_cache_for_municipality,
 )
+
+GreenAreasRepositoryPort = GreenAreasLakehouseRepository
 
 __all__ = ["CatalogGreenArea", "invalidate_cache", "invalidate_cache_for_municipality"]
 
@@ -47,11 +47,9 @@ class CatalogGreenArea:
 
     def __init__(
         self,
-        repository: GreenAreasRepository,
-        session_factory: Callable[[], Session],
+        repository: GreenAreasRepositoryPort,
     ) -> None:
         self._repository = repository
-        self._session_factory = session_factory
 
     @log_invocation(log_args=True, log_result=False)
     def catalog_green_areas(
@@ -65,6 +63,7 @@ class CatalogGreenArea:
         contained_in_area_id: int | None = None,
     ) -> GeoJSONFeatureCollection:
         return get_cached_green_areas(
+            self._repository,
             region_id,
             province_id,
             parent_id,
@@ -117,9 +116,7 @@ class CatalogGreenArea:
             raise NotFoundError()
         bbox = self._repository.get_bbox_by_pk(area_id, region_id, province_id)
         geometry = self._repository.get_geometry_by_pk(area_id, region_id, province_id)
-        with self._session_factory() as session:
-            enriched = enrich_green_area_table_rows(session, [row])[0]
-        return build_area_detail(enriched, bbox=bbox, geometry=geometry)
+        return build_area_detail(row, bbox=bbox, geometry=geometry)
 
     def list_green_areas_table_paged(
         self,
@@ -154,8 +151,6 @@ class CatalogGreenArea:
             filters=filters,
         )
         if rows:
-            with self._session_factory() as session:
-                rows = enrich_green_area_table_rows(session, rows)
             rows = [merge_area_table_row(r) for r in rows]
         return GreenTablePageOut.build(
             data=rows,

@@ -24,6 +24,9 @@ export type GreenAssetViewportParams = {
   greenAreaId?: number
   /** Optional EPSG:4326 POLYGON/MULTIPOLYGON WKT (draw-on-map clip). */
   clipWkt?: string
+  /** Ingest window (ISO YYYY-MM-DD); required by BE (lakehouse-only). */
+  dateFrom?: string
+  dateTo?: string
 }
 
 export function buildGreenAssetViewportQuery(
@@ -42,6 +45,8 @@ export function buildGreenAssetViewportQuery(
   if (params.greenAreaId != null)
     search.set('green_area_id', String(params.greenAreaId))
   if (params.clipWkt) search.set('clip_wkt', params.clipWkt)
+  if (params.dateFrom) search.set('date_from', params.dateFrom)
+  if (params.dateTo) search.set('date_to', params.dateTo)
   search.set('format', 'geobuf')
   return search.toString()
 }

@@ -1,12 +1,18 @@
-"""Territory module: composed router (geo + areas + assets)."""
+"""Territory module.
 
-from fastapi import APIRouter
+Import `router` lazily so unit tests can import repositories without loading FastAPI web stack.
+"""
 
-from territory.geo.infrastructure.web import router as geo_router
-from territory.areas.infrastructure.web.green_area_ctrl import router as areas_router
-from territory.assets.infrastructure.web.green_asset_ctrl import router as assets_router
+from __future__ import annotations
 
-router = APIRouter(prefix="/api/territory", tags=["territory"])
-router.include_router(geo_router)
-router.include_router(areas_router)
-router.include_router(assets_router)
+from typing import Any
+
+__all__ = ["router"]
+
+
+def __getattr__(name: str) -> Any:
+    if name == "router":
+        from territory.router import router as territory_router
+
+        return territory_router
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

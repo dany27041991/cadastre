@@ -2,7 +2,9 @@
 
 **Spec:** [2026-08-12-green-detail-metadata-subset-design.md](./2026-08-12-green-detail-metadata-subset-design.md)  
 **Data:** 2026-08-13  
-**Stato:** done
+**Stato:** done  
+
+> **Addendum cutover:** detail load via `*LakehouseRepository` + DuckDB; `date_from`/`date_to` obbligatori.
 
 ## Goal
 
@@ -37,7 +39,7 @@ API detail e modale mostrano solo il subset prodotto (8 area / 15 asset), sempre
 
 ### 2. BE — repository detail load
 
-**File:** `green_areas_repository.py`, `green_assets_repository.py`
+**File:** `green_areas_lakehouse_repository.py`, `green_assets_lakehouse_repository.py`
 
 Aggiungere (preferito, senza sporcare table API):
 

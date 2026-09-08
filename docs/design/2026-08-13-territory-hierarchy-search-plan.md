@@ -3,6 +3,9 @@
 **Spec:** [2026-08-13-territory-hierarchy-search-design.md](./2026-08-13-territory-hierarchy-search-design.md)  
 **Stato:** ready  
 
+> **Addendum cutover 2026-09-04:** Infrastructure search = UNION su `public.regions|provinces|municipalities|sub_municipal_area` only.  
+> Nessun JOIN su `cadastre.green_areas`. Hit `green_areas` / `sub_areas` non emessi dall’API search.
+
 ## 0. Vincoli
 
 - Nessuna regressione su click mappa, toggle, viewport verde, filtri tabella, detail.
@@ -19,7 +22,7 @@
 |-------|--------|
 | Domain | DTO/entity hit: `value`, `label`, `level`, `id`, parent ids |
 | Application | Use case `SearchTerritoryHierarchy(q, limit)` |
-| Infrastructure | Repository SQL UNION/JOIN su `regions`, `provinces`, `municipalities`, `sub_municipal_area`, `cadastre.green_areas` (+ parent chain per sub-area se modellata) |
+| Infrastructure | Repository SQL UNION/JOIN su `regions`, `provinces`, `municipalities`, `sub_municipal_area` (**admin only**; no green PG) |
 | Web | `GET /api/territory/search?q=&limit=` in nuovo o esistente ctrl; registrare router |
 
 **SQL v1**

@@ -1,0 +1,35 @@
+.wrap {
+  margin-top: 1rem;
+}
+
+.row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.field {
+  flex: 1 1 8rem;
+  min-width: 8rem;
+}
+
+.hint {
+  margin-bottom: 0.75rem;
+  opacity: 0.85;
+}
+
+/*
+ * Calendar above InfoPanel scroll/footer.
+ * Popper is portaled to body and wrapped with DXC `.custom-form-group` in TSX
+ * so style.css selectors (`.custom-form-group .react-datepicker…`) still match.
+ */
+:global(#linfa-ingest-datepicker-portal) {
+  position: relative;
+  z-index: 10050;
+}
+
+:global(#linfa-ingest-datepicker-portal .react-datepicker-popper) {
+  z-index: 10050 !important;
+}

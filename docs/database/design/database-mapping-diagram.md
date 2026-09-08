@@ -1,3 +1,17 @@
+# Database mapping — modello dati Catasto Arboreo
+
+| Layer | Dove | Contenuto |
+|-------|------|-----------|
+| **Fisico PostGIS** | schema `public` (init `01-*`) | REGIONS, PROVINCES, MUNICIPALITIES, SUBMUNICIPAL_AREA, CENSUS_SECTION, AREA_LEVEL, tipi DBT, TRANSLATIONS |
+| **Fisico lakehouse** | MinIO Parquet + catalog | ASSET_AREA / ASSET_GREEN (silver `green_areas` / `green_assets`), gold clusters; **nessuna** tabella `cadastre.green_*` |
+| **Logico (questo ER)** | diagramma sotto | Contratto di dominio (campi, FK logiche, enum). I nomi `ASSET_*` restano; lo storage green **non** è PostgreSQL |
+
+**Design cutover:** [../../design/2026-09-04-green-lakehouse-only-pg-drop-design.md](../../design/2026-09-04-green-lakehouse-only-pg-drop-design.md)  
+**Layout Parquet (colonne silver/gold):** [../../infrastructure/lakehouse-parquet-layout.md](../../infrastructure/lakehouse-parquet-layout.md)  
+**Init:** `infrastructure/scripts/init/postgis/sql/02-init-schema-cadastre.sql` = schema `cadastre` **vuoto** (placeholder).
+
+> Schema `cadastre` in Postgres: solo `CREATE SCHEMA`; ENUM PG green e tabelle partizionate **rimossi**. I valori enum green vivono come **stringhe** nei Parquet; le label UI restano in `public.translations` (seed `02b-1`).
+
 ```mermaid
 erDiagram
     %% =====================================================
@@ -121,37 +135,38 @@ erDiagram
     }
 
     %% =====================================================
-    %% GREEN AREAS (TP = 3 and green area)
+    %% GREEN AREAS — logical ASSET_AREA (physical: lakehouse silver green_areas/)
     %% =====================================================
 
     ASSET_AREA {
         BIGINT id PK
         "Progressive unique object identifier (OBJ_ID)"
 
-        %% ---------- Technical partitioning & security ----------
+        %% ---------- Technical keys (hive partitions in lakehouse) ----------
         BIGINT region_id FK
-        "Reference to REGIONS.id. Technical partitioning key for region-level sharding/partition pruning.
+        "Reference to REGIONS.id. Hive partition / prune key in Parquet.
          NOT authoritative administrative boundary source."
 
         BIGINT province_id FK
-        "Reference to PROVINCES.id. Technical partitioning key for province-level partitioning and row-level security."
+        "Reference to PROVINCES.id. Hive partition / prune key in Parquet."
 
         BIGINT municipality_id FK
         "Reference to MUNICIPALITIES.id. Municipality (comune) owner / logical tenant identifier."
 
         %% ---------- Hierarchy ----------
         BIGINT level_id FK
-        "Reference to AREA_LEVEL.level_id defining the semantic hierarchy level."
+        "Reference to AREA_LEVEL.level_id defining the semantic hierarchy level.
+         Resolved via public.area_level (PostGIS) at seed / UI label time."
 
         BIGINT parent_area_id FK
         "Self-reference to ASSET_AREA.id representing containment hierarchy."
 
         %% ---------- Internal identification ----------
         VARCHAR(255) area_name
-        "Human-readable name (e.g., 'Parco Sempione')."
+        "Human-readable name (e.g., 'Parco Sempione'). Silver column: name."
 
         BIGINT attribute_type_id FK
-        "Reference to ATTRIBUTE_TYPES.id (DBT classification: geometry + primary + secondary + attribute)."
+        "Reference to ATTRIBUTE_TYPES.id (DBT classification). Lookup in public.attribute_types."
 
         %% ---------- Survey / operational identification (ID_ZRIL) ----------
         VARCHAR(80) zril_identifier
@@ -166,25 +181,22 @@ erDiagram
         "Area susceptibility to tree fall or structural instability."
 
         ENUM area_classification
-        "Operational / municipal green-area typology.
-         Type: cadastre.istat_green_area_classification (nullable).
+        "Operational / municipal green-area typology (string in Parquet).
          Allowed: HISTORICAL_GREEN, URBAN_PARKS, EQUIPPED_GREEN,
          URBAN_FURNISHING, SCHOOL_GARDENS, OUTDOOR_SPORTS,
          URBAN_FORESTRY, WOODLAND, UNCULTIVATED_GREEN,
          URBAN_ALLOTMENTS, BOTANICAL_GARDENS, ZOOLOGICAL_GARDENS,
          CEMETERIES, OTHER.
          Source: ISTAT Ambiente urbano / Verde urbano typology.
-         Implemented as column green_areas.area_classification.
-         Must NOT be duplicated inside attributes JSONB (e.g. no tipologia2)."
+         Must NOT be duplicated inside attributes JSON (e.g. no tipologia2).
+         Labels: public.translations (entity ENUM istat_green_area_classification)."
 
         ENUM istat_classification
-        "ISTAT Ambiente urbano green-area classification (nullable).
-         Same enum type as area_classification
-         (cadastre.istat_green_area_classification).
-         Implemented as column green_areas.istat_classification."
+        "ISTAT Ambiente urbano green-area classification (nullable string in Parquet).
+         Same value set as area_classification."
 
         ENUM intensity_of_fruition
-        "Allowed: NONE, LOW, MEDIUM, HIGH."
+        "Allowed: NONE, LOW, MEDIUM, HIGH (string in Parquet)."
 
         %% ---------- Geometry ----------
         ENUM geometry_type
@@ -192,9 +204,8 @@ erDiagram
          Must be consistent with the stored geometry type."
 
         GEOMETRY geometry
-        "Spatial geometry in official national CRS
-         (recommended: ETRF2000 / EPSG:7791–7794).
-         Geometry validity and topology must be enforced at DB level."
+        "Spatial geometry. Serving CRS: EPSG:4326 (WKB / lon-lat in silver).
+         Validity enforced at ingest (seed/writer), not by PostGIS constraints."
 
         %% ---------- Perimeter semantics ----------
         ENUM perimeter_type
@@ -228,8 +239,8 @@ erDiagram
 
         TIMESTAMP survey_date
         "Date of the area survey / rilievo (nullable).
-         Implemented as column green_areas.survey_date.
-         Must NOT be duplicated inside attributes JSONB (e.g. no data_rilie)."
+         Silver column: survey_date.
+         Must NOT be duplicated inside attributes JSON (e.g. no data_rilie)."
 
         TIMESTAMP last_update_at
         "Last modification timestamp."
@@ -242,14 +253,14 @@ erDiagram
         "Responsible operator or system user."
 
         %% ---------- Flexible attributes ----------
-        JSONB attributes
-        "Non-structured thematic attributes.
+        JSON attributes
+        "Non-structured thematic attributes (JSON string / struct in Parquet).
          Must NOT duplicate structured columns
          (area_classification, istat_classification, survey_date, name, …).
          Reserved for optional TP-specific data."
 
         %% ---------- Media ----------
-        JSONB media
+        JSON media
         "Linked digital resources (images, PDFs, technical reports, documents).
          Each item may include: type, URL, title, author, date."
 
@@ -257,59 +268,59 @@ erDiagram
         TEXT note
     }
 
-    %% ---------- Asset area history (temporal snapshots) ----------
+    %% ---------- Asset area history — LOGICAL ONLY (V1: no PG table, no lakehouse substitute) ----------
     ASSET_AREA_HISTORY {
         BIGINT history_id PK
 
         BIGINT asset_area_id FK "Reference to ASSET_AREA.id"
 
         BIGINT region_id FK
-        "Reference to REGIONS.id. Technical partitioning key for region-level sharding/partition pruning.
-         NOT authoritative administrative boundary source."
+        "Logical region key (was PG partition key)."
 
         BIGINT province_id FK
-        "Reference to PROVINCES.id. Technical partitioning key for province-level partitioning and row-level security."
+        "Logical province key."
 
         BIGINT municipality_id FK
-        "Reference to MUNICIPALITIES.id. Municipality (comune) owner / logical tenant identifier."
+        "Logical municipality key."
 
-        JSONB snapshot "Full asset snapshot; validity inside JSONB: valid_from NOT NULL, valid_to nullable NULL = active, plus area_name, level_id, geometry, statuses, attributes, media, note, etc."
+        JSON snapshot "Full asset snapshot; validity inside JSON: valid_from NOT NULL, valid_to nullable NULL = active, plus area_name, level_id, geometry, statuses, attributes, media, note, etc.
+         NOT persisted in lakehouse V1."
     }
 
     %% =====================================================
-    %% GREEN ASSETS (TP = 1)
+    %% GREEN ASSETS — logical ASSET_GREEN (physical: lakehouse silver green_assets/)
     %% =====================================================
 
     ASSET_GREEN {
         BIGINT id PK "Progressive unique object identifier (OBJ_ID)"
 
         %% ---------- Relation to area ----------
-        BIGINT area_id FK "Reference to ASSET_AREA.id (validated by spatial containment)"
+        BIGINT area_id FK "Reference to ASSET_AREA.id (validated by spatial containment at ingest)"
 
-        %% ---------- Administrative identifiers ----------
+        %% ---------- Technical keys (hive partitions in lakehouse) ----------
         BIGINT region_id FK
-        "Reference to REGIONS.id. Technical partitioning key for region-level sharding/partition pruning.
+        "Reference to REGIONS.id. Hive partition / prune key in Parquet.
          NOT authoritative administrative boundary source."
 
         BIGINT province_id FK
-        "Reference to PROVINCES.id. Technical partitioning key for province-level partitioning and row-level security."
+        "Reference to PROVINCES.id. Hive partition / prune key in Parquet."
 
         BIGINT municipality_id FK
         "Reference to MUNICIPALITIES.id. Municipality (comune) owner / logical tenant identifier."
 
         %% ---------- DBT classification ----------
-        BIGINT attribute_type_id FK "Reference to ATTRIBUTE_TYPES.id"
+        BIGINT attribute_type_id FK "Reference to ATTRIBUTE_TYPES.id (public.attribute_types)"
 
         %% ---------- Geometry ----------
-        ENUM geometry_type "Allowed: P,L,S"
-        GEOMETRY geometry "GEOMETRY(GEOMETRY, 4326) geometry Point, LineString, or Polygon geometry in WGS84 (EPSG:4326)"
+        ENUM geometry_type "Allowed: P,L,S (string in Parquet)"
+        GEOMETRY geometry "Point, LineString, or Polygon; serving CRS EPSG:4326 (WKB / lon-lat in silver)"
 
         %% ---------- Biological / physical attributes ----------
         VARCHAR(80) family "Botanical family grouping related genera (e.g., 'Platanaceae', 'Fagaceae', 'Oleaceae')"
         VARCHAR(50) genus "Plant genus, first part of the scientific name (e.g., 'Platanus', 'Quercus', 'Olea')"
         VARCHAR(50) species "Plant species, second part of the scientific name (e.g., 'acerifolia', 'ilex', 'europaea')"
         VARCHAR(50) variety "Plant variety or subspecific designation, if present (e.g., 'Austriaca' in 'Pinus nigra var. Austriaca')"
-        JSONB attributes
+        JSON attributes
         "Non-geometric properties such as:
          height_meters, trunk_diameter_centimeters,
          crown_diameter_meters, vegetation_width_meters."
@@ -321,7 +332,7 @@ erDiagram
         TIMESTAMP last_update_at "Last update timestamp"
         TIMESTAMP deleted_at "Cancellation date"
 
-        %% ---------- Status ----------
+        %% ---------- Status (string enums in Parquet; labels via public.translations) ----------
         ENUM health_status "Allowed: UNKNOWN, HEALTHY, DEGRADED, DECLINING, SICK, DECEASED"
         ENUM stability_status "Allowed: STABLE, PARTIALLY_UNSTABLE, UNSTABLE, FALLEN"
         ENUM structural_defect "Allowed: NONE, ROOT, TRUNK, BRANCH, MULTIPLE"
@@ -345,30 +356,30 @@ erDiagram
         ENUM priority_level_evaluation "Allowed: NONE, LOW, MEDIUM, HIGH"
 
         %% ---------- Media ----------
-        JSONB media
+        JSON media
         "Collection of linked digital resources (images, PDFs, reports, documents)."
 
         %% ---------- Topology ----------
         TEXT note
     }
 
-    %% ---------- Asset green history (temporal snapshots) ----------
+    %% ---------- Asset green history — LOGICAL ONLY (V1: no PG table, no lakehouse substitute) ----------
     ASSET_GREEN_HISTORY {
         BIGINT history_id PK
 
         BIGINT asset_green_id FK "Reference to ASSET_GREEN.id"
 
         BIGINT region_id FK
-        "Reference to REGIONS.id. Technical partitioning key for region-level sharding/partition pruning.
-         NOT authoritative administrative boundary source."
+        "Logical region key (was PG partition key)."
 
         BIGINT province_id FK
-        "Reference to PROVINCES.id. Technical partitioning key for province-level partitioning and row-level security."
+        "Logical province key."
 
         BIGINT municipality_id FK
-        "Reference to MUNICIPALITIES.id. Municipality (comune) owner / logical tenant identifier."
+        "Logical municipality key."
 
-        JSONB snapshot "Full green asset snapshot; validity inside JSONB: valid_from NOT NULL, valid_to nullable NULL = active, plus area_id, geometry, species, statuses, lifecycle, monitoring, media, note, etc."
+        JSON snapshot "Full green asset snapshot; validity inside JSON: valid_from NOT NULL, valid_to nullable NULL = active, plus area_id, geometry, species, statuses, lifecycle, monitoring, media, note, etc.
+         NOT persisted in lakehouse V1."
     }
 
     %% =====================================================
@@ -404,6 +415,21 @@ erDiagram
     ATTRIBUTE_TYPES ||--o{ ASSET_AREA  : coded_as
     ATTRIBUTE_TYPES ||--o{ ASSET_GREEN : coded_as
 ```
+
+---
+
+## Storage fisico (allineato al cutover lakehouse-only)
+
+| Entità ER | Storage | Note |
+|-----------|---------|------|
+| REGIONS, PROVINCES, MUNICIPALITIES, SUBMUNICIPAL_AREA, CENSUS_SECTION, AREA_LEVEL | PostGIS `public.*` | Seed GeoJSON / SQL init |
+| PRIMARY_TYPES, SECONDARY_TYPES, ATTRIBUTE_TYPES, TRANSLATIONS | PostGIS `public.*` | Cataloghi OBT / label enum |
+| ASSET_AREA | MinIO silver `…/green_areas/` | Hive: `region_id` / `province_id` / `municipality_id` / `ingest_date` |
+| ASSET_GREEN | MinIO silver `…/green_assets/` | Stesso hive; FK logica `area_id` |
+| Cluster viz (ex matview 07/08) | MinIO gold `…/green_asset_clusters/` | Aggregati zoom; non PostGIS |
+| ASSET_*_HISTORY | — | **Non implementato in V1** (né PG né lakehouse) |
+
+Serving: FastAPI + DuckDB su Parquet (range date → `max(ingest)` per comune). Dettaglio colonne: [lakehouse-parquet-layout.md](../../infrastructure/lakehouse-parquet-layout.md).
 
 ---
 

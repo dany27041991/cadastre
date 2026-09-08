@@ -1,5 +1,8 @@
 # Catalogo oggetti DBT: Tipi principali, secondari e attributi
 
+> **Storage:** tipi TP/TS/ATT in PostGIS `public.primary_types` / `secondary_types` / `attribute_types` (seed OBT).  
+> Le feature green referenziano `attribute_type_id` nei Parquet silver; non in `cadastre.*`.
+
 ## Struttura logica
 
 Il catalogo organizza gli oggetti del verde in tre livelli:

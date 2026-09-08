@@ -6,6 +6,9 @@
 **Aggiorna:** sezione “Subset metadati” di [2026-07-30-green-detail-click-modal-design.md](./2026-07-30-green-detail-click-modal-design.md) e del popover design superseduto.  
 **Vincolo UI:** invariato — `GreenDetailModal` (dxc-webkit); nessuna nuova libreria UI.
 
+> **Storage (post-cutover):** campi sotto = colonne / attributi **silver Parquet** (DuckDB), non colonne `cadastre.green_*`. Contratto API invariato.  
+> `date_from` / `date_to` obbligatori sulle GET detail.
+
 ## Obiettivo
 
 Nel modale di dettaglio mappa mostrare **solo** i metadati di prodotto sotto elencati. Nessun altro campo. Chiavi sempre presenti nell’ordine fisso; valore assente → stringa `"NaN"`.
@@ -43,7 +46,7 @@ Sentinel mancante: **`"NaN"`** (non `null`, non `"—"`, non omissione della chi
 
 | # | `key` | Label IT (i18n) | Fonte |
 |---|-------|-----------------|--------|
-| 1 | `name` | Nome area | `green_areas.name` |
+| 1 | `name` | Nome area | silver `green_areas.name` |
 | 2 | `area_code` | Codice area | `zril_identifier` |
 | 3 | `area_classification` | Classificazione area | colonna |
 | 4 | `istat_classification` | Classificazione ISTAT | colonna |
@@ -58,7 +61,7 @@ Sentinel mancante: **`"NaN"`** (non `null`, non `"—"`, non omissione della chi
 
 | # | `key` | Label IT (i18n) | Fonte |
 |---|-------|-----------------|--------|
-| 1 | `plant_code` | Codice pianta | `green_assets.id` (sempre valorizzato) |
+| 1 | `plant_code` | Codice pianta | silver `green_assets.id` (sempre valorizzato) |
 | 2 | `species_code` | Codice specie | `attributes.species_code` |
 | 3 | `area_code` | Codice area | `green_area_id` |
 | 4 | `latitude` | Latitudine | `ST_Y(ST_Centroid(geometry))` WGS84 |

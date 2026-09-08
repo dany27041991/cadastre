@@ -20,6 +20,7 @@
     "@mase/commons-geoinsight": "^1.4.0",
     "@mase/commons-utility": "^1.4.0",
     "dxc-webkit": "1.6.0",
+    "esbuild": "^0.28.2",
     "flatgeobuf": "^4.4.0",
     "geobuf": "^3.0.2",
     "i18next": "^25.8.13",

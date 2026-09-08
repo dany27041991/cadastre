@@ -6,6 +6,8 @@
 **Correlati:** [2026-08-13-green-table-detail-columns-design.md](./2026-08-13-green-table-detail-columns-design.md)  
 **Vincolo UI:** solo dxc-webkit (`InfoPanel`, `SearchInput`, `Text`, `Box`).
 
+> **Addendum cutover:** filtri AND su table lakehouse (DuckDB); stessi query param date del fetch tabella.
+
 ## Obiettivo
 
 Dopo **Avanti** dallo step “Aree gestite e Assets verdi”, mostrare un form di filtri di ricerca con **un campo per ogni colonna del catalogo detail** (stesso del picker Colonne). I filtri non vuoti sono combinati in **AND** sul fetch tabella server-side.

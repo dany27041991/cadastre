@@ -1,19 +1,44 @@
 """Assets repository and wiring (use case factory)."""
 
-from core.database import get_session
+from __future__ import annotations
 
-from territory.assets.application.usecases.query import CatalogGreenAsset
-from territory.assets.infrastructure.repository.green_assets_repository import (
-    GreenAssetsRepository,
+from datetime import date
+
+from territory.assets.infrastructure.repository.green_assets_lakehouse_repository import (
+    GreenAssetsLakehouseRepository,
 )
 
-
-def _green_assets_repository() -> GreenAssetsRepository:
-    return GreenAssetsRepository(session_factory=get_session)
+GreenAssetsRepositoryPort = GreenAssetsLakehouseRepository
 
 
-def get_green_assets_use_case() -> CatalogGreenAsset:
-    return CatalogGreenAsset(_green_assets_repository(), get_session)
+def _green_assets_repository(
+    *,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> GreenAssetsRepositoryPort:
+    from core.database import get_session
+
+    return GreenAssetsLakehouseRepository(
+        session_factory=get_session,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
 
-__all__ = ["GreenAssetsRepository", "get_green_assets_use_case"]
+def get_green_assets_use_case(
+    *,
+    date_from: date | None = None,
+    date_to: date | None = None,
+):
+    from territory.assets.application.usecases.query import CatalogGreenAsset
+
+    return CatalogGreenAsset(
+        _green_assets_repository(date_from=date_from, date_to=date_to),
+    )
+
+
+__all__ = [
+    "GreenAssetsLakehouseRepository",
+    "GreenAssetsRepositoryPort",
+    "get_green_assets_use_case",
+]

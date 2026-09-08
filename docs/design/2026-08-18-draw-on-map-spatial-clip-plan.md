@@ -1,7 +1,9 @@
 # Piano — Disegna su mappa (clip spaziale)
 
 **Spec:** [2026-08-18-draw-on-map-spatial-clip-design.md](./2026-08-18-draw-on-map-spatial-clip-design.md)  
-**Stato:** ready
+**Stato:** ready  
+
+> **Addendum cutover:** clip in DuckDB su lakehouse; cluster = gold Parquet (non matview PG).
 
 ## 0. Vincoli
 
@@ -29,7 +31,7 @@ Helper condiviso (es. `territory/common` o funzione locale duplicata minima):
 | `GET .../green-assets/viewport` | `clip_wkt` → use case viewport. |
 | `GET .../green-assets/table` | `clip_wkt` → `list_table_rows_paged`. |
 
-**Asset cluster + clip:** con `clip_wkt` si usano comunque le matview. Admin: `ST_Intersects(centroid, clip)` (a zoom regione/provincia si forzano i comuni). Grid: `ST_Intersects(extent, clip)`. I count restano i totali precalcolati dell'unità/cella. Raw e tabella restano `ST_Intersects` stretto sulla geometria. Se l'admin è vuoto → grid/raw live.
+**Asset cluster + clip:** gold Parquet + clip in DuckDB (centroid/extent). Count = totali precalcolati cella/unità. Raw/tabella = intersezione stretta sulla geometria.
 
 Wire: ctrl → use case (`viewport_*`, `list_*_table_paged`) → repository. Nessun nuovo bounded context.
 

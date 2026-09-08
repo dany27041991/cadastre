@@ -6,6 +6,8 @@
 **Correlati:** [2026-08-12-green-detail-metadata-subset-design.md](./2026-08-12-green-detail-metadata-subset-design.md)  
 **Vincolo UI:** solo dxc-webkit (`CustomTable`, `Checkbox`, `Button`, `Text`, `Box`, icone documentate).
 
+> **Addendum cutover:** table API = `*LakehouseRepository`; date obbligatorie sul fetch.
+
 ## Obiettivo
 
 1. Le **stesse informazioni** del modale di dettaglio sono disponibili come colonne nelle tabelle aree / asset.  

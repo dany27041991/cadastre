@@ -4,6 +4,8 @@
 **Stato:** sostituisce il design hover (`green-detail-popover`)  
 **Vincolo UI:** solo componenti **dxc-webkit** (regola `frontend-ui-components-only`).
 
+> **Addendum cutover:** GET detail → lakehouse silver; **`date_from`/`date_to` obbligatori**. Subset campi: [2026-08-12-green-detail-metadata-subset-design.md](./2026-08-12-green-detail-metadata-subset-design.md).
+
 ## Obiettivo
 
 Al **click** su un’**area verde** o un **asset verde** in mappa, aprire un **Modal** con scheda dettaglio (summary + METADATI).  

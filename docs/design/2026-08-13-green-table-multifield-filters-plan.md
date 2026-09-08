@@ -1,7 +1,9 @@
 # Piano — Filtri multi-campo InfoPanel
 
 **Spec:** [2026-08-13-green-table-multifield-filters-design.md](./2026-08-13-green-table-multifield-filters-design.md)  
-**Stato:** done
+**Stato:** done  
+
+> **Addendum cutover:** fetch table lakehouse + date obbligatorie (stesso path di T5).
 
 ## 1. FE — context + tabella
 

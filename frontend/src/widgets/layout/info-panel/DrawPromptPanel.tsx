@@ -1,14 +1,26 @@
 /**
- * Draw step — same InfoPanel header style as Layers (Text + Line).
- * Instructs the user to use Geoinsight simpledraw (closed shapes only).
+ * Draw step — instruct Geoinsight simpledraw; ingest dates required before toggles.
+ * Toggles stay locked until the user closes a draw geometry (spatialClip).
  */
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Text } from 'dxc-webkit'
 import { Line } from '@/shared/ui'
+import { useGreenTablePanelOptional } from '@/features/territory/context/GreenTablePanelContext'
 import { GreenLayerToggles } from './GreenAssetsLayerToggle'
+import { IngestDateRangeFields } from './IngestDateRangeFields'
 
 export function DrawPromptPanel() {
   const { t } = useTranslation()
+  const panel = useGreenTablePanelOptional()
+  const rangeReady = panel?.hasIngestDateRange === true
+  const layer = panel?.greenAssetsLayer
+
+  useEffect(() => {
+    if (rangeReady || layer == null) return
+    if (layer.active) void layer.setActive(false)
+    if (layer.areasActive) void layer.setAreasActive(false)
+  }, [rangeReady, layer?.active, layer?.areasActive, layer?.setActive, layer?.setAreasActive])
 
   return (
     <div className="mb-5">
@@ -24,9 +36,14 @@ export function DrawPromptPanel() {
       <Text as="p" font="f1-body-sm" color="text-body" style={{ marginTop: '0.75rem' }}>
         {t('territory.panel.draw.description')}
       </Text>
-      <div style={{ marginTop: '1rem' }}>
-        <GreenLayerToggles locked />
-      </div>
+
+      <IngestDateRangeFields />
+
+      {rangeReady ? (
+        <div style={{ marginTop: '1rem' }}>
+          <GreenLayerToggles />
+        </div>
+      ) : null}
     </div>
   )
 }

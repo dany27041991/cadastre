@@ -535,7 +535,7 @@ export function GreenDataTable({
       <Box as="div" className="green-data-table" padding="m" style={{ width: '100%' }}>
         {drillHeader}
         <Text font="f1-body-sm" style={{ color: 'var(--gray-600, #6c757d)' }}>
-          {t('territory.table.emptyRows')}
+          {t('territory.panel.noDataInPeriod')}
         </Text>
       </Box>
     )

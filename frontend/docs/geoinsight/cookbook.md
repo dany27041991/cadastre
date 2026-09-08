@@ -2,6 +2,8 @@
 
 Ricette pratiche copy-paste per i casi più comuni. Presuppongono setup standard (`initGeoinsightModule`, `GeoinsightMapContainer`, `useGeoinsightMapBridge`).
 
+> **Green API:** `getGreenAssetsViewport` / `getGreenAreasViewport` / table / detail richiedono **`dateFrom`/`dateTo`** (ISO). Fonte dati = lakehouse.
+
 ---
 
 ## 1. Montare la mappa da zero
@@ -115,15 +117,16 @@ map.fitToGreenExtent()
 
 ## 7. Caricare asset verdi (modalità viewport server)
 
-Gli asset verdi non vengono più scaricati per intero: il layer è alimentato per bbox+zoom dal backend, che restituisce cluster PostGIS (griglia / amministrativi pre-aggregati) ai livelli bassi e asset raw all'ultimo livello di zoom.
+Gli asset verdi non vengono più scaricati per intero: il layer è alimentato per bbox+zoom dal backend, che restituisce cluster lakehouse (gold: griglia / amministrativi pre-aggregati) ai livelli bassi e asset raw all'ultimo livello di zoom.
 
 ```ts
 const scope = { regionId: 12, provinceId: 58, municipalityId: 58091 }
+const dates = { dateFrom: '2024-01-01', dateTo: '2025-01-01' }
 
 map.loadGreenLayerViewport(
   (bbox, zoom) =>
-    territoryApi.getGreenAssetsViewport({ bbox, zoom, greenAreaId: 1001, ...scope }),
-  (bbox, zoom) => territoryApi.getGreenAreasViewport({ bbox, zoom, ...scope })
+    territoryApi.getGreenAssetsViewport({ bbox, zoom, greenAreaId: 1001, ...scope, ...dates }),
+  (bbox, zoom) => territoryApi.getGreenAreasViewport({ bbox, zoom, ...scope, ...dates })
 )
 map.setGreenLayerVisible(true)
 map.setTerritoryFillVisible(false)
@@ -165,9 +168,10 @@ Pattern `useGreenAssetsLayer` (hook in `features/territory`, toggle UI `GreenAss
 ```ts
 // ON
 const scope = { regionId, provinceId, municipalityId, subMunicipalAreaId }
+const dates = { dateFrom, dateTo } // da GreenTablePanelContext (ISO)
 map.loadGreenLayerViewport(
-  (bbox, zoom) => territoryApi.getGreenAssetsViewport({ bbox, zoom, greenAreaId, ...scope }),
-  (bbox, zoom) => territoryApi.getGreenAreasViewport({ bbox, zoom, ...scope })
+  (bbox, zoom) => territoryApi.getGreenAssetsViewport({ bbox, zoom, greenAreaId, ...scope, ...dates }),
+  (bbox, zoom) => territoryApi.getGreenAreasViewport({ bbox, zoom, ...scope, ...dates })
 )
 map.setGreenLayerVisible(true)
 map.setTerritoryFillVisible(false)

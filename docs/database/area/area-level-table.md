@@ -1,5 +1,7 @@
 # Tabella completa dei livelli AREA_LEVEL
 
+> **Storage:** i valori `AREA_LEVEL` vivono in PostGIS `public.area_level`. Le aree verdi (ASSET_AREA) li referenziano via `level_id` nei **Parquet silver** (`green_areas/`), non in tabelle `cadastre.*`. Vedi [database-mapping-diagram.md](../design/database-mapping-diagram.md).
+
 ## Tabella livelli
 
 | Livello (level_name) | Ordine gerarchico | Descrizione semantica | Cosa rappresenta in pratica | Esempi tipici | Note GIS operative |
@@ -127,7 +129,7 @@ Ed è:
 
 - stabile nel tempo  
 - indipendente da tipologie specifiche  
-- pronta per PostGIS, QGIS, GeoPackage, Digital Twin urbano  
+- pronta per PostGIS (`public.area_level`), lakehouse silver (colonne `level_id`), QGIS, GeoPackage, Digital Twin urbano  
 
 ---
 

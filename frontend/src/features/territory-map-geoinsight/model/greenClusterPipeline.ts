@@ -101,7 +101,7 @@ export function buildGreenClusterLayerPayload(
 }
 
 /**
- * Converts a server viewport response (raw assets or PostGIS grid clusters from
+ * Converts a server viewport response (raw assets or lakehouse gold clusters from
  * GET /green-assets/viewport) into display items for the standard mount pipeline.
  * Cluster features carry cluster_count / cluster_key / cluster_bbox properties.
  */

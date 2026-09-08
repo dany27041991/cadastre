@@ -2,6 +2,12 @@
 
 Questo documento illustra come modellare i **cambi di stato** (amministrativo e operativo) e gli **eventi temporanei** sulle aree verdi, con esempi concreti.
 
+> **Implementazione V1 (lakehouse-only):** ASSET_AREA / ASSET_GREEN sono **silver Parquet** (attributi corrente + enum string).  
+> **Non** esistono tabelle PG `asset_*_history` né substitute lakehouse per storico stati/eventi.  
+> Gli esempi sotto (`ASSET_STATUS_HISTORY`, `ASSET_TEMPORARY_EVENT`) sono **modello logico / futuro** — non SoR attuale.  
+> Snapshot corrente: colonne silver (es. `asset_status`, `valid_from`/`valid_to` se presenti) + gold clusters.  
+> Cutover: [../../design/2026-09-04-green-lakehouse-only-pg-drop-design.md](../../design/2026-09-04-green-lakehouse-only-pg-drop-design.md).
+
 ---
 
 ## 3. Esempi di cambiamento di stato (senza evento)

@@ -1,16 +1,27 @@
 /**
  * Layers step — same InfoPanel header style as cu1.5 (Text + Line).
  */
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Text } from 'dxc-webkit'
 import { Line } from '@/shared/ui'
 import { useGreenTablePanelOptional } from '@/features/territory/context/GreenTablePanelContext'
 import { GreenLayerToggles } from './GreenAssetsLayerToggle'
+import { IngestDateRangeFields } from './IngestDateRangeFields'
 import { TerritorySearchInput } from './TerritorySearchInput'
 
 export function LayersPanel() {
   const { t } = useTranslation()
-  const entryMode = useGreenTablePanelOptional()?.entryMode ?? 'admin'
+  const panel = useGreenTablePanelOptional()
+  const entryMode = panel?.entryMode ?? 'admin'
+  const rangeReady = panel?.hasIngestDateRange === true
+  const layer = panel?.greenAssetsLayer
+
+  useEffect(() => {
+    if (rangeReady || layer == null) return
+    if (layer.active) void layer.setActive(false)
+    if (layer.areasActive) void layer.setAreasActive(false)
+  }, [rangeReady, layer?.active, layer?.areasActive, layer?.setActive, layer?.setAreasActive])
 
   return (
     <div className="mb-5">
@@ -31,15 +42,19 @@ export function LayersPanel() {
         )}
       </Text>
 
+      <IngestDateRangeFields />
+
       {entryMode === 'admin' ? (
         <div style={{ marginTop: '1rem' }}>
           <TerritorySearchInput />
         </div>
       ) : null}
 
-      <div style={{ marginTop: '1rem' }}>
-        <GreenLayerToggles />
-      </div>
+      {rangeReady ? (
+        <div style={{ marginTop: '1rem' }}>
+          <GreenLayerToggles />
+        </div>
+      ) : null}
     </div>
   )
 }

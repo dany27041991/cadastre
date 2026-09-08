@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Literal
 
 import geobuf
@@ -14,6 +15,7 @@ from territory.assets.infrastructure.dto.output import GreenAssetsOutput
 from territory.common.infrastructure.clip_wkt import ClipWktError, normalize_clip_wkt
 from territory.common.infrastructure.dto.green_detail_out import GreenDetailOut
 from territory.common.infrastructure.green_table_page_out import GreenTablePageOut
+from territory.common.infrastructure.lakehouse.http_dates import parse_lakehouse_date_range
 
 router = APIRouter(tags=["territory-assets"])
 
@@ -29,10 +31,30 @@ def _clip_wkt_or_400(clip_wkt: str | None) -> str | None:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-def _empty_response(output_format: str | None) -> GreenAssetsOutput | Response:
+def _empty_response(
+    output_format: str | None,
+    *,
+    headers: dict[str, str] | None = None,
+) -> GreenAssetsOutput | Response:
     if output_format == "geobuf":
-        return Response(content=_EMPTY_GEOBUF, media_type=GEOBUF_MEDIA_TYPE)
+        return Response(content=_EMPTY_GEOBUF, media_type=GEOBUF_MEDIA_TYPE, headers=headers)
+    # JSON path: encode flag via empty collection only (header still set on Response if needed)
+    if headers:
+        return Response(
+            content='{"type":"FeatureCollection","features":[]}',
+            media_type="application/json",
+            headers=headers,
+        )
     return GreenAssetsOutput(features=[])
+
+
+_DATE_FROM = Query(..., description="Ingest range start inclusive (ISO date, required)")
+_DATE_TO = Query(..., description="Ingest range end inclusive (ISO date, required)")
+
+
+def _uc(date_from: date, date_to: date):
+    df, dt = parse_lakehouse_date_range(date_from, date_to)
+    return get_green_assets_uc(date_from=df, date_to=dt)
 
 
 @router.get("/green-assets", response_model=None)
@@ -42,13 +64,15 @@ def get_green_assets(
     municipality_id: int,
     green_area_id: int | None = None,
     sub_municipal_area_id: int | None = None,
+    date_from: date = _DATE_FROM,
+    date_to: date = _DATE_TO,
     # Renamed from `format` to avoid shadowing the Python built-in.
     output_format: str | None = Query(None, alias="format"),
 ) -> GreenAssetsOutput | Response:
     """Return green assets (trees, rows, lawns, etc.) for the given area.
     When sub_municipal_area_id is set, only assets intersecting that sub-municipal area are returned.
     region_id and province_id required. Use ?format=geobuf for compact binary response."""
-    result = get_green_assets_uc().catalog_green_assets(
+    result = _uc(date_from, date_to).catalog_green_assets(
         region_id,
         municipality_id,
         province_id=province_id,
@@ -72,20 +96,29 @@ def get_green_assets_viewport(
     sub_municipal_area_id: int | None = None,
     green_area_id: int | None = None,
     clip_wkt: str | None = Query(None, description="EPSG:4326 POLYGON/MULTIPOLYGON WKT clip"),
+    date_from: date = _DATE_FROM,
+    date_to: date = _DATE_TO,
     output_format: str | None = Query(None, alias="format"),
 ) -> GreenAssetsOutput | Response:
     """Viewport-sized green assets for map rendering at national scale.
 
-    Returns raw assets at the vendor's last zoom level, PostGIS clusters otherwise.
-    Cluster features carry cluster_count / cluster_key / cluster_bbox properties.
-    Territory filters are optional: omit them for a nationwide view."""
+    Returns raw assets at the vendor's last zoom level, gold lakehouse clusters otherwise.
+    With clip_wkt, cluster counts are exact (silver∩clip) under soft cap; over-cap sets
+    header X-Cadastre-Cluster-Over-Cap: 1.
+    """
+    from territory.common.infrastructure.lakehouse.clip_exact_flag import (
+        is_cluster_over_cap,
+        reset_cluster_over_cap,
+    )
+
     try:
         parts = [float(p) for p in bbox.split(",")]
     except ValueError:
         parts = []
     if len(parts) != 4:
         raise HTTPException(status_code=422, detail="bbox must be minLon,minLat,maxLon,maxLat")
-    result = get_green_assets_uc().viewport_green_assets(
+    reset_cluster_over_cap()
+    result = _uc(date_from, date_to).viewport_green_assets(
         (parts[0], parts[1], parts[2], parts[3]),
         zoom,
         region_id=region_id,
@@ -95,10 +128,23 @@ def get_green_assets_viewport(
         green_area_id=green_area_id,
         clip_wkt=_clip_wkt_or_400(clip_wkt),
     )
+    over_headers = (
+        {"X-Cadastre-Cluster-Over-Cap": "1"} if is_cluster_over_cap() else None
+    )
     if not result.get("features"):
-        return _empty_response(output_format)
+        return _empty_response(output_format, headers=over_headers)
     if output_format == "geobuf":
-        return Response(content=geobuf.encode(result), media_type=GEOBUF_MEDIA_TYPE)
+        return Response(
+            content=geobuf.encode(result),
+            media_type=GEOBUF_MEDIA_TYPE,
+            headers=over_headers,
+        )
+    if over_headers:
+        return Response(
+            content=GreenAssetsOutput.model_validate(result).model_dump_json(),
+            media_type="application/json",
+            headers=over_headers,
+        )
     return GreenAssetsOutput.model_validate(result)
 
 
@@ -148,6 +194,8 @@ def get_green_assets_table(
     growth_stage: str | None = None,
     protection_status: str | None = None,
     health_status: str | None = None,
+    date_from: date = _DATE_FROM,
+    date_to: date = _DATE_TO,
 ) -> GreenTablePageOut:
     """Paginated, filtered and sorted green-assets table (no geometry)."""
     # Only pass non-None values so the repository iterates a compact dict.
@@ -186,7 +234,7 @@ def get_green_assets_table(
         }.items()
         if v is not None
     }
-    return get_green_assets_uc().list_green_assets_table_paged(
+    return _uc(date_from, date_to).list_green_assets_table_paged(
         region_id,
         municipality_id,
         province_id=province_id,
@@ -207,9 +255,11 @@ def get_green_asset_detail(
     asset_id: int,
     region_id: int = Query(..., description="Partition key region_id"),
     province_id: int = Query(..., description="Partition key province_id"),
+    date_from: date = _DATE_FROM,
+    date_to: date = _DATE_TO,
 ) -> GreenDetailOut:
     """Curated detail for map popover (summary + metadata subset)."""
-    return get_green_assets_uc().get_green_asset_detail(
+    return _uc(date_from, date_to).get_green_asset_detail(
         asset_id,
         region_id=region_id,
         province_id=province_id,

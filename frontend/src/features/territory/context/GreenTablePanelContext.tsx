@@ -15,6 +15,7 @@ import {
 } from 'react'
 
 import type { GreenTableKind } from '../lib/greenDetailColumnCatalog'
+import { hasIngestDateRange, toIsoDate } from '../lib/ingestDateRange'
 import type { SpatialClipPolygon } from '../lib/spatialClipWkt'
 import type { BreadcrumbCrumb } from '../types'
 import type { TerritorySearchHit } from '../types/territorySearch'
@@ -84,6 +85,18 @@ export interface GreenTablePanelContextValue {
   /** User polygon clip for draw entry (null for Area Italia). */
   readonly spatialClip: SpatialClipPolygon | null
   readonly setSpatialClip: (clip: SpatialClipPolygon | null) => void
+  /**
+   * Ingest window for green viewport/table/detail (BE requires both when querying).
+   * Null until the user picks a bound — toggles stay hidden until `hasIngestDateRange`.
+   */
+  readonly dateFrom: Date | null
+  readonly dateTo: Date | null
+  readonly dateFromIso: string
+  readonly dateToIso: string
+  /** True when both dates are set and from ≤ to. */
+  readonly hasIngestDateRange: boolean
+  readonly setDateFrom: (d: Date | null) => void
+  readonly setDateTo: (d: Date | null) => void
 }
 
 const EMPTY_FILTERS: ColumnFiltersMap = Object.freeze({})
@@ -107,6 +120,22 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
   const [areasToggleLockedByGreenSearch, setAreasToggleLockedByGreenSearch] = useState(false)
   const [entryMode, setEntryMode] = useState<TerritoryEntryMode>('admin')
   const [spatialClip, setSpatialClip] = useState<SpatialClipPolygon | null>(null)
+  const [dateFrom, setDateFromState] = useState<Date | null>(null)
+  const [dateTo, setDateToState] = useState<Date | null>(null)
+
+  const setDateFrom = useCallback((d: Date | null) => {
+    setDateFromState(d)
+  }, [])
+  const setDateTo = useCallback((d: Date | null) => {
+    setDateToState(d)
+  }, [])
+
+  const dateFromIso = useMemo(() => (dateFrom ? toIsoDate(dateFrom) : ''), [dateFrom])
+  const dateToIso = useMemo(() => (dateTo ? toIsoDate(dateTo) : ''), [dateTo])
+  const ingestRangeReady = useMemo(
+    () => hasIngestDateRange(dateFrom, dateTo),
+    [dateFrom, dateTo],
+  )
 
   const registerGreenAssetsLayer = useCallback((controls: GreenAssetsLayerControls | null) => {
     setGreenAssetsLayer((prev) => {
@@ -182,6 +211,8 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
     setAreasToggleLockedByGreenSearch(false)
     setEntryMode('admin')
     setSpatialClip(null)
+    setDateFromState(null)
+    setDateToState(null)
   }, [])
 
   const value = useMemo(
@@ -210,6 +241,13 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
       setEntryMode,
       spatialClip,
       setSpatialClip,
+      dateFrom,
+      dateTo,
+      dateFromIso,
+      dateToIso,
+      hasIngestDateRange: ingestRangeReady,
+      setDateFrom,
+      setDateTo,
     }),
     [
       columnFiltersByKind,
@@ -229,6 +267,13 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
       areasToggleLockedByGreenSearch,
       entryMode,
       spatialClip,
+      dateFrom,
+      dateTo,
+      dateFromIso,
+      dateToIso,
+      ingestRangeReady,
+      setDateFrom,
+      setDateTo,
     ],
   )
 

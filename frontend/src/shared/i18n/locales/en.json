@@ -33,11 +33,16 @@
         "title": "Draw on map",
         "description": "Open the map geometry drawing tool and choose rectangle, polygon, or circle. Point and line are not available in this mode. Close the shape to define the consultation area.",
         "invalidGeometry": "The drawn polygon is not valid. Try again.",
-        "togglesLockedHelp": "Available after you define the area on the map."
+        "togglesLockedHelp": "Available after you define the area on the map.",
+        "clusterOverCap": "Area too large for exact counts: shrink the drawing or zoom in."
       },
       "layersTitle": "Managed areas and green assets",
       "layersDescription": "Toggle layers to explore managed areas and green assets on the map.",
       "layersDescriptionDraw": "To select the area, open the map drawing tool and draw a rectangle, polygon, or circle. When finished, only the blue selection geometry remains. A new drawing replaces the previous one. To clear, select the geometry and use the trash button to remove selected geometries.",
+      "dateFrom": "Date from",
+      "dateTo": "Date to",
+      "noDataInPeriod": "No data in the selected period",
+      "ingestPeriodHint": "Choose the period for which to view data. If multiple snapshots fall in the range, the most recent one is used.",
       "territorySearchLabel": "Search territory",
       "territorySearchPlaceholder": "Region, province, municipality, area…",
       "btnBack": "Back",

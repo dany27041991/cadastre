@@ -297,8 +297,8 @@ L’interfaccia `MapBridge` (`src/features/territory/types/navigation.ts`) è l�
 
 Con `loadGreenLayerViewport(fetcher, areasFetcher?)`:
 
-1. l'adapter calcola bbox+zoom correnti e chiama il fetcher (`GET /green-assets/viewport`);
-2. il backend decide cluster (griglia PostGIS / amministrativi pre-aggregati) o asset raw all'ultimo livello di zoom;
+1. l'adapter calcola bbox+zoom correnti e chiama il fetcher (`GET /green-assets/viewport` con **`date_from`/`date_to`**);
+2. il backend (DuckDB su MinIO) decide cluster **gold** (admin/grid preaggregati) o asset raw all'ultimo livello di zoom;
 3. la risposta viene montata con diff (aggiunge/rimuove solo geometrie cambiate, `GC_*` / `GS_*`);
 4. ogni pan/zoom assestato (debounce interno) rifetcha il viewport;
 5. click su cluster con `memberCount > 1` → `zoomToBbox` per drill incrementale.

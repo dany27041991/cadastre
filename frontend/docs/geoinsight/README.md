@@ -24,6 +24,7 @@ La mappa è la stessa di **cu1.5-fe**: WebGIS **155**, CU **PNRR**, `mapId=1`.
 | Documento | Contenuto |
 |-----------|-----------|
 | [Design parità cu1.5](../../../docs/design/2026-07-06-geoinsight-cu15-parity-design.md) | Decisioni architetturali |
+| [Lakehouse-only green](../../../docs/design/2026-09-04-green-lakehouse-only-pg-drop-design.md) | SoR viz = MinIO+DuckDB; date obbligatorie |
 | [Auth standalone](../security/autenticazione-e-utenza-mock-standalone.md) | Cookie + FGP per dev/proxy |
 
 ---

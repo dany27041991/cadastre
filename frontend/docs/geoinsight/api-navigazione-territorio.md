@@ -2,6 +2,9 @@
 
 Reference per **`useTerritoryNavigation`** e le **API backend** `/api/territory` che alimentano la mappa.
 
+> **Green viz (post-cutover):** viewport/table/detail aree e asset → MinIO + DuckDB. Query params **`date_from` / `date_to` sempre obbligatori**.  
+> Il livello UI `green_areas` / `sub_areas` è **navigazione/breadcrumb**, non tabella PostGIS. Search typeahead = solo admin (`public.*`).
+
 ---
 
 ## Hook `useTerritoryNavigation`
@@ -240,7 +243,7 @@ flowchart TD
 A partire da `green_areas` / `sub_areas`, il toggle asset verdi (`GreenAssetsLayerToggle` + hook `useGreenAssetsLayer`):
 
 1. Deriva lo scope amministrativo dal breadcrumb (`getGreenContext`).
-2. Chiama `loadGreenLayerViewport(fetcher, areasFetcher)`: l'adapter fetcha per bbox+zoom (`territoryApi.getGreenAssetsViewport` / `getGreenAreasViewport`) a ogni pan/zoom assestato; cluster server ai livelli bassi, asset raw all'ultimo zoom.
+2. Chiama `loadGreenLayerViewport(fetcher, areasFetcher)`: l'adapter fetcha per bbox+zoom + **`date_from`/`date_to`** (`territoryApi.getGreenAssetsViewport` / `getGreenAreasViewport`) a ogni pan/zoom assestato; cluster **gold lakehouse** ai livelli bassi, asset raw all'ultimo zoom.
 3. `setTerritoryFillVisible(false)`.
 
 Disattivazione: `restoreGreenAreas({ skipFit: true })` (mantiene lo zoom utente) o `clearGreenLayer()`.

@@ -1,119 +1,78 @@
-# Seed database – popolamento dati
+# Seed — popolamento green → MinIO lakehouse
 
-Questa cartella contiene gli script per popolare il database con aree verdi e asset (alberi, aiuole, siepi, ecc.) a livello **regionale** o per un **singolo comune**.
+Gli script in questa cartella popolano **aree verdi e asset** su **MinIO** (Parquet silver + gold + catalog).  
+PostGIS resta solo per **confini admin** e cataloghi DBT (`attribute_types`, …) in lettura.
 
-**Requisiti:** lo stack Docker Compose deve essere avviato (contenitore `postgis` in esecuzione). Esegui gli script **dalla root del progetto**.
+**Design:** [docs/design/2026-09-04-green-lakehouse-only-pg-drop-design.md](../../../docs/design/2026-09-04-green-lakehouse-only-pg-drop-design.md)  
+**Layout:** [docs/infrastructure/lakehouse-parquet-layout.md](../../../docs/infrastructure/lakehouse-parquet-layout.md)
 
----
-
-## 1. Popolamento per regione – `run_populate_region_data.sh`
-
-Genera aree verdi e green asset per i comuni di una o più regioni italiane (logica “extreme”: Voronoi, bulk insert, partizioni per `region_id`).
-
-### Uso
-
-```bash
-# Dalla root del progetto
-
-# Popola tutte le 20 regioni (ordine alfabetico)
-./infrastructure/scripts/database/seed/run_populate_region_data.sh
-
-# Popola solo le regioni indicate (slug separati da spazio)
-./infrastructure/scripts/database/seed/run_populate_region_data.sh lazio lombardia veneto
-
-# Una sola regione
-./infrastructure/scripts/database/seed/run_populate_region_data.sh sicilia
-
-# Elenco regioni disponibili e sintassi
-./infrastructure/scripts/database/seed/run_populate_region_data.sh -h
-```
-
-### Regioni disponibili (slug)
-
-`abruzzo`, `basilicata`, `calabria`, `campania`, `emilia_romagna`, `friuli_venezia_giulia`, `lazio`, `liguria`, `lombardia`, `marche`, `molise`, `piemonte`, `puglia`, `sardegna`, `sicilia`, `toscana`, `trentino_alto_adige`, `umbria`, `valle_daosta`, `veneto`.
-
-### File coinvolti
-
-- `populate_region_data/seed_populate_region_data.sql` – script SQL per popolamento dati di regione (es. Lazio).
+**Requisiti:** stack Compose avviato (`postgis` + `minio`); eseguire **dalla root del progetto** `cadastre/`.
 
 ---
 
-## 2. Popolamento da GeoJSON (Lecce) – `run_populate_lecce.sh`
+## 1. Lecce da GeoJSON — `run_populate_lecce.sh`
 
-Carica **aree verdi** e **asset verdi** (hedges, shrubs, trees) da GeoJSON per un comune, associando gli asset alle aree tramite contenimento spaziale. Utile per dati reali (es. Lecce) in `infrastructure/data/municipality/<comune>/`.
-
-### Uso
+Carica aree/hedges/shrubs/trees da `infrastructure/data/municipality/lecce/` → lakehouse.
 
 ```bash
-# Dalla root del progetto (solo Lecce, dati in infrastructure/data/municipality/lecce/)
 ./infrastructure/scripts/database/seed/run_populate_lecce.sh
+INGEST_DATE=2025-06-01 ./infrastructure/scripts/database/seed/run_populate_lecce.sh
 ```
 
-### Ordine di caricamento
-
-1. **Aree** – `areas.geojson` → `cadastre.green_areas` (livello 1 = MANAGEMENT_UNIT).
-   - `tipologia2` → colonne tipizzate `area_classification` e `istat_classification` (enum ISTAT Ambiente urbano); non resta in `attributes`.
-   - `data_rilie` → `survey_date` (parse; valori invalidi/`NaT` → `NULL`); non resta in `attributes`.
-   - `attributes` JSONB: solo chiavi inglesi mappate (es. `location`, `surface_area_m2`, `maintenance_need`); property GeoJSON non mappate scartate.
-2. **Asset** – `hedges.geojson`, `shrubs.geojson`, `trees.geojson` → `cadastre.green_assets`, con `green_area_id` impostato per contenimento spaziale (geometria asset dentro un’area).
-   - `Famiglia`/`Genere`/`Specie` → colonne `family`/`genus`/`species` (non duplicate in JSONB).
-   - `attributes` JSONB: solo chiavi inglesi mappate (es. `location`, `plant_type_code`, `height_class`, `trunk_circumference_cm`, `length_m`).
-   - Autoctono/alloctono: colonna esistente `origin` (`NATIVE` / `EXOTIC`); sul seed Lecce resta `NULL` se assente nel GeoJSON.
-
-### File attesi (CRS EPSG:32633, convertiti in 4326 in scrittura)
-
-- `areas.geojson` – geometrie MultiPolygon (aree verdi).
-- `hedges.geojson` – geometrie MultiLineString (siepi) → `asset_type=hedge`, `geometry_type=L`.
-- `shrubs.geojson` – geometrie Point (arbusti) → `asset_type=other`, `geometry_type=P`.
-- `trees.geojson` – geometrie Point (alberi) → `asset_type=tree`, `geometry_type=P`.
-
-Il comune deve esistere in `public.municipalities`. Lo script elimina prima gli eventuali `green_areas` e `green_assets` del comune, poi inserisce i nuovi dati.
-
-### File coinvolti
-
-- `populate_lecce_data/load_lecce_green_data.py` – script Python (geopandas, psycopg).
-- `run_populate_lecce.sh` – runner che invoca lo script nel container `init`.
+Script: `populate_lecce_data/load_lecce_green_data.py`
 
 ---
 
-## 3. Boost singolo comune – `run_boost_municipality.sh`
+## 2. Boost singolo comune — `run_boost_municipality.sh`
 
-Esegue **pulizia** (eliminazione asset e aree esistenti per il comune) e **popolamento** (generazione di macro-aree, sub-aree e asset) per un solo comune. Utile per test o per “potenziare” un comune specifico (es. Roma) con molti più dati.
-
-### Uso
+Genera dati sintetici per un comune (geometria da `public.municipalities`) e scrive MinIO.
 
 ```bash
-# Dalla root del progetto
-
-# Comune senza apice nel nome
 ./infrastructure/scripts/database/seed/run_boost_municipality.sh Roma
-./infrastructure/scripts/database/seed/run_boost_municipality.sh Milano
-
-# Comune con apice (usare le virgolette)
-./infrastructure/scripts/database/seed/run_boost_municipality.sh "L'Aquila"
+AREAS=80 TREES=20000 HEDGES=2000 ./infrastructure/scripts/database/seed/run_boost_municipality.sh Milano
 ```
 
-Il nome deve coincidere con quello in `public.municipalities.name` (es. `Roma`, `Milano`, `L'Aquila`). Lo script esegue in sequenza:
-
-1. **Clean** – `boost_municipality/municipality_clean.sql`
-2. **Populate** – `boost_municipality/municipality_populate.sql`
-
-### File coinvolti
-
-- `boost_municipality/municipality_clean.sql` – elimina asset e aree per il comune target.
-- `boost_municipality/municipality_populate.sql` – crea partizioni (se serve), macro-aree, sub-aree e inserisce gli asset.
-
-Il comune viene passato da terminale; negli SQL si usa la variabile psql `target_municipality` impostata dallo script.
+Script: `boost_municipality/boost_municipality_to_lakehouse.py`  
+(SQL legacy `municipality_*.sql` non usati — green non esiste più in PostGIS.)
 
 ---
 
-## Riepilogo comandi
+## 3. Popolamento per regione — `run_populate_region_data.sh`
 
-| Obiettivo              | Comando |
-|------------------------|--------|
-| Popolare tutte le regioni | `./infrastructure/scripts/database/seed/run_populate_region_data.sh` |
-| Popolare alcune regioni   | `./infrastructure/scripts/database/seed/run_populate_region_data.sh lazio lombardia` |
-| Aiuto regioni              | `./infrastructure/scripts/database/seed/run_populate_region_data.sh -h` |
-| Dati Lecce da GeoJSON | `./infrastructure/scripts/database/seed/run_populate_lecce.sh` |
-| Boost comune (es. Roma)    | `./infrastructure/scripts/database/seed/run_boost_municipality.sh Roma` |
-| Boost comune con apice     | `./infrastructure/scripts/database/seed/run_boost_municipality.sh "L'Aquila"` |
+Seed sintetico: per ogni comune della regione riusa la stessa generazione del boost
+(griglia aree + alberi/siepi → MinIO). Non è il vecchio Voronoi SQL.
+
+```bash
+./infrastructure/scripts/database/seed/run_populate_region_data.sh --region "Valle d'Aosta"
+./infrastructure/scripts/database/seed/run_populate_region_data.sh --region 2 --limit 3 --areas 10 --trees 200
+./infrastructure/scripts/database/seed/run_populate_region_data.sh --region Puglia --dry-run
+# Multi-batch (MM-YYYY o YYYY-MM-DD):
+./infrastructure/scripts/database/seed/run_populate_region_data.sh \
+  --region Lazio \
+  --ingest-date 01-2024 --ingest-date 01-2025 --ingest-date 01-2026 \
+  --areas 8 --trees 150 --hedges 15
+```
+
+Default ridotti rispetto al boost singolo (`areas=10`, `trees=500`, `hedges=50`) perché × N comuni × N date.  
+Script: `populate_region_data/seed_populate_region_data.py`
+
+---
+
+## 4. Fixture smoke (senza GeoJSON)
+
+```bash
+./infrastructure/scripts/database/lakehouse/run_seed_fixture_lakehouse.sh
+```
+
+Writer condiviso: `lakehouse/lakehouse_writer.py` (`--fixture` o API `ingest_municipality_tables`).
+
+---
+
+## Env utili
+
+| Var | Note |
+|-----|------|
+| `LAKEHOUSE_S3_*` | Da compose `.env` (endpoint host tipicamente `http://localhost:9000`) |
+| `DATABASE_URL` | Lookup admin/DBT |
+| `LAKEHOUSE_CATALOG_INVALIDATE_URL` | Opzionale POST invalidate post-seed |
+| `INGEST_DATE` | Batch date `YYYY-MM-DD` |

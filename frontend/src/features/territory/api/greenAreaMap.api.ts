@@ -19,6 +19,9 @@ export type GreenAreasParams = {
   subMunicipalAreaId?: number
   /** When set, returns areas contained in or intersecting this green area (spatial expansion). */
   containedInAreaId?: number
+  /** Ingest window (ISO YYYY-MM-DD); required by BE (lakehouse-only). */
+  dateFrom?: string
+  dateTo?: string
 }
 
 export type GreenAreaViewportParams = {
@@ -33,6 +36,9 @@ export type GreenAreaViewportParams = {
   subMunicipalAreaId?: number
   /** Optional EPSG:4326 POLYGON/MULTIPOLYGON WKT (draw-on-map clip). */
   clipWkt?: string
+  /** Ingest window (ISO YYYY-MM-DD); required by BE (lakehouse-only). */
+  dateFrom?: string
+  dateTo?: string
 }
 
 export function buildGreenAreasViewportQuery(
@@ -49,6 +55,8 @@ export function buildGreenAreasViewportQuery(
   if (params.subMunicipalAreaId != null)
     search.set('sub_municipal_area_id', String(params.subMunicipalAreaId))
   if (params.clipWkt) search.set('clip_wkt', params.clipWkt)
+  if (params.dateFrom) search.set('date_from', params.dateFrom)
+  if (params.dateTo) search.set('date_to', params.dateTo)
   search.set('format', 'geobuf')
   return search.toString()
 }
@@ -64,6 +72,8 @@ export function buildGreenAreasQuery(params: GreenAreasParams): string {
     search.set('contained_in_area_id', String(params.containedInAreaId))
   if (params.subMunicipalAreaId != null)
     search.set('sub_municipal_area_id', String(params.subMunicipalAreaId))
+  if (params.dateFrom) search.set('date_from', params.dateFrom)
+  if (params.dateTo) search.set('date_to', params.dateTo)
   search.set('format', 'geobuf')
   return search.toString()
 }

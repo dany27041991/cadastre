@@ -2,6 +2,10 @@
 
 Raccolta dei vincoli logici che riguardano livelli gerarchici (AREA_LEVEL), stati/eventi delle aree e catalogo DBT/shapefile. Per contesto e tabelle si rimanda ai documenti di riferimento.
 
+> **Enforcement V1:** i vincoli sotto sono **di dominio** (validazione a ingest/seed e regole UI).  
+> Non sono CHECK/FK PostGIS su `cadastre.green_*` (schema vuoto). Cataloghi OBT restano in `public.*`.  
+> Storage green: [database-mapping-diagram.md](../design/database-mapping-diagram.md) · [lakehouse-parquet-layout.md](../../infrastructure/lakehouse-parquet-layout.md).
+
 ---
 
 ## 1. Gerarchia AREA_LEVEL

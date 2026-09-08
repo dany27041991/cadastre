@@ -2,6 +2,10 @@
 
 Documento di supporto ai workbook `Fabbisogno_SIV_Catasto_Arboreo.xlsx` e `dataiku_rsc_siv_catasto.xlsx`.
 
+> **Addendum 2026-09-04:** green viz SoR = MinIO Parquet + DuckDB (non PVC PostGIS green).  
+> Cache LRU e endpoint sotto restano utili come pattern; il footprint storage green va sul **object storage**.  
+> Vedi [../design/2026-09-04-green-lakehouse-only-pg-drop-design.md](../design/2026-09-04-green-lakehouse-only-pg-drop-design.md) e §3.3 in [k8s sizing](../design/2026-07-08-k8s-hw-resource-sizing.md).
+
 ## 1. Perimetro dati
 
 | Parametro | Valore | Note |

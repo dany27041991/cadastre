@@ -6,6 +6,9 @@
 # - Admin boundaries (regions, provinces, municipalities, sections, submunicipal):
 #   populated by init service after postgis is healthy (run-init.sh).
 # - Redis/ClickHouse/PgAdmin removed; add back if needed.
+# - Lakehouse: MinIO always-on for green assets/areas Parquet — see
+#   docs/infrastructure/minio-lakehouse.md and
+#   docs/design/2026-09-04-green-lakehouse-only-pg-drop-design.md
 # =============================================================================
 
 name: catasto-arboreo-platform
@@ -132,6 +135,13 @@ services:
       MASE_SECU_SSL_VERIFY: ${MASE_SECU_SSL_VERIFY:-true}
       # Debug: DEBUGPY_ENABLE=1 per attach IDE su porta 5678 (Python debugpy)
       DEBUGPY_ENABLE: ${DEBUGPY_ENABLE:-}
+      # Lakehouse (MinIO + DuckDB) — always-on SoR for green viz
+      LAKEHOUSE_S3_ENDPOINT: ${LAKEHOUSE_S3_ENDPOINT:-http://minio:9000}
+      LAKEHOUSE_S3_ACCESS_KEY: ${LAKEHOUSE_S3_ACCESS_KEY:-cadastre_lake}
+      LAKEHOUSE_S3_SECRET_KEY: ${LAKEHOUSE_S3_SECRET_KEY:-cadastre_lake_dev_change_me}
+      LAKEHOUSE_S3_BUCKET: ${LAKEHOUSE_S3_BUCKET:-cadastre-lake}
+      LAKEHOUSE_S3_REGION: ${LAKEHOUSE_S3_REGION:-us-east-1}
+      LAKEHOUSE_CATALOG_CACHE_TTL_SEC: ${LAKEHOUSE_CATALOG_CACHE_TTL_SEC:-60}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
       - "${BACKEND_DEBUG_PORT:-5678}:5678"
@@ -139,11 +149,23 @@ services:
       - ../../backend:/app
       - ../scripts:/scripts:ro
       - ../data:/data
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    # Bypass image entrypoint so local compose always bootstraps DuckDB (lakehouse).
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        python -c "import duckdb" 2>/dev/null || pip install --no-cache-dir "duckdb>=1.1.0"
+        if [ "$$DEBUGPY_ENABLE" = "1" ] || [ "$$DEBUGPY_ENABLE" = "true" ]; then
+          exec python -m debugpy --listen 0.0.0.0:5678 -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+        fi
+        exec uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       postgis:
         condition: service_healthy
       init:
+        condition: service_completed_successfully
+      minio:
+        condition: service_healthy
+      minio-init:
         condition: service_completed_successfully
     extra_hosts:
       - "nexus3-cdp.apps.dxccdp-svil.ocp.mase.priv:10.64.28.36"
@@ -157,8 +179,8 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 15s
       timeout: 5s
-      retries: 3
-      start_period: 30s
+      retries: 5
+      start_period: 90s
 
   # ---------------------------------------------------------------------------
   # 4. Frontend - React + Vite + Geoinsight (standalone)
@@ -208,12 +230,60 @@ services:
       retries: 3
       start_period: 20s
 
+  # ---------------------------------------------------------------------------
+  # 5. MinIO (lakehouse Parquet) — always-on
+  #    docs/infrastructure/minio-lakehouse.md
+  # ---------------------------------------------------------------------------
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: catasto-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${LAKEHOUSE_S3_ACCESS_KEY:-cadastre_lake}
+      MINIO_ROOT_PASSWORD: ${LAKEHOUSE_S3_SECRET_KEY:-cadastre_lake_dev_change_me}
+    ports:
+      - "${LAKEHOUSE_MINIO_API_PORT:-9000}:9000"
+      - "${LAKEHOUSE_MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - catasto-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    container_name: catasto-minio-init
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      LAKEHOUSE_S3_ACCESS_KEY: ${LAKEHOUSE_S3_ACCESS_KEY:-cadastre_lake}
+      LAKEHOUSE_S3_SECRET_KEY: ${LAKEHOUSE_S3_SECRET_KEY:-cadastre_lake_dev_change_me}
+      LAKEHOUSE_S3_BUCKET: ${LAKEHOUSE_S3_BUCKET:-cadastre-lake}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 \"$$LAKEHOUSE_S3_ACCESS_KEY\" \"$$LAKEHOUSE_S3_SECRET_KEY\" &&
+      mc mb --ignore-existing local/$$LAKEHOUSE_S3_BUCKET &&
+      mc anonymous set none local/$$LAKEHOUSE_S3_BUCKET &&
+      echo \"bucket ready: $$LAKEHOUSE_S3_BUCKET\"
+      "
+    networks:
+      - catasto-network
+
 # =============================================================================
 # Persistent volumes
 # =============================================================================
 volumes:
   postgis_data:
   frontend_node_modules:
+  minio_data:
 
 # =============================================================================
 # Network

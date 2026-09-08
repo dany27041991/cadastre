@@ -60,6 +60,8 @@ export type GreenDetailSelection = {
 
 export type UseGreenFeatureDetailArgs = {
   breadcrumb: BreadcrumbCrumb[]
+  dateFrom?: string | null
+  dateTo?: string | null
 }
 
 function kindFromLayer(layerKind: GreenMapLayerKind): GreenDetailKind {
@@ -127,10 +129,18 @@ async function probeAreaCanDrill(
   areaId: number,
   regionId: number,
   provinceId: number,
-  municipalityId?: number
+  municipalityId?: number,
+  dateFrom?: string | null,
+  dateTo?: string | null
 ): Promise<boolean> {
+  const fetchAreas = (params: Parameters<typeof territoryApi.getGreenAreas>[0]) =>
+    territoryApi.getGreenAreas({
+      ...params,
+      ...(dateFrom ? { dateFrom } : {}),
+      ...(dateTo ? { dateTo } : {}),
+    })
   return areaHasGreenChildren(
-    territoryApi.getGreenAreas,
+    fetchAreas,
     areaId,
     regionId,
     provinceId,
@@ -138,7 +148,11 @@ async function probeAreaCanDrill(
   )
 }
 
-export function useGreenFeatureDetail({ breadcrumb }: UseGreenFeatureDetailArgs) {
+export function useGreenFeatureDetail({
+  breadcrumb,
+  dateFrom = null,
+  dateTo = null,
+}: UseGreenFeatureDetailArgs) {
   const [status, setStatus] = useState<GreenDetailStatus>(GREEN_DETAIL_STATUS_IDLE)
   const [selection, setSelection] = useState<GreenDetailSelection | null>(null)
   const [detail, setDetail] = useState<GreenDetailDto | null>(null)
@@ -239,7 +253,7 @@ export function useGreenFeatureDetail({ breadcrumb }: UseGreenFeatureDetailArgs)
       abortRef.current = ac
 
       if (kind === GREEN_DETAIL_KIND_AREA) {
-        void probeAreaCanDrill(id, regionId, provinceId, municipalityId).then((canDrill) => {
+        void probeAreaCanDrill(id, regionId, provinceId, municipalityId, dateFrom, dateTo).then((canDrill) => {
           if (activeKeyRef.current !== key) return
           setSelection((prev) =>
             prev && prev.id === id && prev.kind === GREEN_DETAIL_KIND_AREA
@@ -249,7 +263,17 @@ export function useGreenFeatureDetail({ breadcrumb }: UseGreenFeatureDetailArgs)
         })
       }
 
-      void fetchGreenDetail(kind, { id, regionId, provinceId }, ac.signal)
+      void fetchGreenDetail(
+        kind,
+        {
+          id,
+          regionId,
+          provinceId,
+          ...(dateFrom ? { dateFrom } : {}),
+          ...(dateTo ? { dateTo } : {}),
+        },
+        ac.signal
+      )
         .then((dto) => {
           if (activeKeyRef.current !== key) return
           setDetail(dto)
@@ -289,7 +313,7 @@ export function useGreenFeatureDetail({ breadcrumb }: UseGreenFeatureDetailArgs)
           setStatus(GREEN_DETAIL_STATUS_ERROR)
         })
     },
-    [breadcrumb]
+    [breadcrumb, dateFrom, dateTo]
   )
 
   return {

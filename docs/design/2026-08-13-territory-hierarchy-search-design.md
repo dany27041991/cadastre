@@ -6,6 +6,10 @@
 **Vincolo UI:** solo dxc-webkit (`SearchInput`, `Text`, `Toggle` esistenti).  
 **Obiettivo correlato:** step wizard `layers` (“Aree gestite e Assets verdi”).
 
+> **Addendum cutover 2026-09-04:** la typeahead BE cerca **solo** livelli admin in `public.*` (regions → … → sub_municipal_area).  
+> **Non** interroga più `cadastre.green_areas` (tabella rimossa). Il livello UI `green_areas` / `sub_areas` resta nel drill mappa e nei jump FE, ma **non** come hit search SQL.  
+> Vedi [2026-09-04-green-lakehouse-only-pg-drop-design.md](./2026-09-04-green-lakehouse-only-pg-drop-design.md).
+
 ## Obiettivo
 
 Introdurre **prima dei toggle** un filtro di ricerca testuale che permette di raggiungere un’area amministrativa o una green/sub-area con **la stessa navigazione** del click sulla mappa (breadcrumb, loader, fit), senza regressioni sul flusso attuale (toggle, viewport verde, filtri tabella, detail).
@@ -82,13 +86,14 @@ flowchart LR
 | `id` | Id del nodo selezionato |
 | `*_id` parent | Catena per ricostruire breadcrumb / chiamare loader |
 
-**Match SQL (v1):** `ILIKE '%q%'` su `name` di:
+**Match SQL (v1, post-cutover):** `ILIKE '%q%'` su `name` di:
 
 - `public.regions`
 - `public.provinces` (label path con suffisso provincia allineato a i18n breadcrumb)
 - `public.municipalities`
 - `public.sub_municipal_area`
-- `cadastre.green_areas` (name; parent via region/province/municipality FK già in tabella)
+
+~~`cadastre.green_areas`~~ — **rimosso** (nessuna tabella green in PG; search non emette hit `green_areas` / `sub_areas`).
 
 Path costruito server-side con JOIN sulla gerarchia. Ordine risultati: per livello (regione → … → sub-area) poi nome, oppure rilevanza prefix-match prima di contains.
 

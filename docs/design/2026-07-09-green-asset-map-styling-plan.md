@@ -3,6 +3,8 @@
 **Data:** 2026-07-09  
 **Obiettivo:** differenziare visivamente cluster, alberi (punti), linee (filari/siepi) e superfici (prati) rispetto alle **aree verdi gestite** (`GA_*`), senza regressioni su drill-down, cluster e toggle Assets Verdi.
 
+> **Nota cutover:** rendering FE invariato; i cluster arrivano da gold lakehouse (`GC_*`), non da matview PostGIS.
+
 ---
 
 ## Richiesta funzionale

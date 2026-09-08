@@ -131,6 +131,9 @@ export interface UseTerritoryNavigationOptions {
    * Defaults to true when omitted — preserves prior behaviour.
    */
   isAreasLayerActive?: () => boolean
+  /** Ingest window ISO dates for green catalog GET (lakehouse-required). */
+  dateFromIso?: string
+  dateToIso?: string
 }
 
 export interface TerritoryNavigationState {

@@ -40,7 +40,7 @@ LAST_ZOOM_RAW_HARD_CAP = 800
 # raw threshold takes over anyway.
 CLUSTER_GRID_MAX_REFINE_ZOOM = 18
 
-# Zoom bands for pre-aggregated administrative clusters (materialized view).
+# Zoom bands for pre-aggregated administrative clusters (gold Parquet).
 # Below these zooms a live grid aggregation would scan every asset row in the
 # bbox (unbounded at national scale); admin aggregates are O(#admin units).
 ADMIN_LEVEL_REGION_MAX_ZOOM = 7
@@ -84,12 +84,12 @@ def cluster_distance_px(zoom: float) -> float:
     return round(CLUSTER_DISTANCE_AT_16 + t * (CLUSTER_DISTANCE_AT_10 - CLUSTER_DISTANCE_AT_16))
 
 
-def grid_matview_zoom_level(zoom: float) -> int | None:
-    """Matview zoom level for grid clusters, or None when outside the band.
+def grid_gold_zoom_level(zoom: float) -> int | None:
+    """Gold Parquet grid zoom level, or None when outside the precomputed band.
 
-    The materialized view (08-matview-green-asset-grid-clusters.sql) covers
-    integer levels CLUSTER_MAX_ZOOM_THRESHOLD..CLUSTER_GRID_MAX_REFINE_ZOOM;
-    deeper zooms reuse the last level (same cell size as grid_cell_size_m).
+    Gold `grid_{z}` covers integer levels
+    CLUSTER_MAX_ZOOM_THRESHOLD..CLUSTER_GRID_MAX_REFINE_ZOOM; deeper zooms reuse
+    the last level (same cell size as grid_cell_size_m).
     """
     z = math.floor(zoom)
     if z < CLUSTER_MAX_ZOOM_THRESHOLD:

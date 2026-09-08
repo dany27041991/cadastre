@@ -4,14 +4,27 @@
  */
 import Pbf from 'pbf'
 import * as geobuf from 'geobuf'
+import { toast } from 'react-toastify'
 import type { GeoJSONFeatureCollection } from '@/shared/types'
 import { normalizeApiError } from '@/shared/lib/errors'
+import { i18n } from '@/shared/i18n'
 
 export type { GeoJSONFeatureCollection } from '@/shared/types'
 
 export const EMPTY_GEOJSON: GeoJSONFeatureCollection = {
   type: 'FeatureCollection',
   features: [],
+}
+
+const CLUSTER_OVER_CAP_HEADER = 'x-cadastre-cluster-over-cap'
+let lastOverCapToastAt = 0
+
+function maybeToastClusterOverCap(res: Response): void {
+  if (res.headers.get(CLUSTER_OVER_CAP_HEADER) !== '1') return
+  const now = Date.now()
+  if (now - lastOverCapToastAt < 8_000) return
+  lastOverCapToastAt = now
+  toast.info(i18n.t('territory.panel.draw.clusterOverCap'))
 }
 
 export type Fetcher = {
@@ -49,6 +62,7 @@ export function createFetcher(
       const res = await fetchFn(fullUrl(path))
       if (res.status === 404) return EMPTY_GEOJSON
       if (!res.ok) throw new Error(normalizeApiError(res).message)
+      maybeToastClusterOverCap(res)
       const buf = await res.arrayBuffer()
       if (buf.byteLength === 0) return EMPTY_GEOJSON
       try {

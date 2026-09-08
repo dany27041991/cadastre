@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any, Literal
-
-from sqlalchemy.orm import Session
 
 from core.exceptions.base import NotFoundError
 from core.logger import log_invocation
 from territory.common.infrastructure.dto.green_detail_out import GreenDetailOut, build_asset_detail
-from territory.common.infrastructure.green_table_fk_labels import enrich_green_asset_table_rows
 from territory.common.infrastructure.green_metadata_projection import merge_asset_table_row
 from territory.common.infrastructure.green_table_page_out import GreenTablePageOut
 from territory.geo.domain.entities import GeoJSONFeatureCollection
-from territory.assets.infrastructure.repository.green_assets_repository import GreenAssetsRepository
+from territory.assets.infrastructure.repository.green_assets_lakehouse_repository import (
+    GreenAssetsLakehouseRepository,
+)
 from territory.assets.application.usecases.query.cache import (
     get_cached_green_assets,
     invalidate_cache,
@@ -25,9 +23,11 @@ from territory.assets.application.usecases.query.viewport_grid import (
     RAW_MIN_ZOOM,
     admin_level_for_zoom,
     grid_cell_size_m,
-    grid_matview_zoom_level,
+    grid_gold_zoom_level,
     mercator_to_lon_lat,
 )
+
+GreenAssetsRepositoryPort = GreenAssetsLakehouseRepository
 
 __all__ = [
     "CatalogGreenAsset",
@@ -39,11 +39,9 @@ __all__ = [
 class CatalogGreenAsset:
     def __init__(
         self,
-        repository: GreenAssetsRepository,
-        session_factory: Callable[[], Session],
+        repository: GreenAssetsRepositoryPort,
     ) -> None:
         self._repository = repository
-        self._session_factory = session_factory
 
     @log_invocation(log_args=True, log_result=False)
     def catalog_green_assets(
@@ -56,6 +54,7 @@ class CatalogGreenAsset:
         sub_municipal_area_id: int | None = None,
     ) -> GeoJSONFeatureCollection:
         return get_cached_green_assets(
+            self._repository,
             region_id,
             province_id,
             municipality_id,
@@ -79,20 +78,20 @@ class CatalogGreenAsset:
         """Viewport-sized green assets response (national-scale map rendering).
 
         Returns raw assets at the vendor's last zoom level (>= RAW_MIN_ZOOM),
-        otherwise grid-cell cluster points aggregated in PostGIS. Cluster features
-        carry cluster_count, cluster_key (stable grid cell) and cluster_bbox so the
-        frontend can drill without a second request.
+        otherwise grid-cell cluster points from gold Parquet (or live gold-band
+        fallback). Cluster features carry cluster_count, cluster_key (stable
+        grid cell) and cluster_bbox so the frontend can drill without a second
+        request.
 
         The raw/clusters decision is zoom-only: count-based hysteresis kept
         clusters on screen at the last level right after a drill, hiding the
         assets the user drilled for.
 
-        At low zooms clusters come from the pre-aggregated admin materialized
-        view instead of a live grid scan: a nationwide grid aggregation
-        measured 12s on 5.5M rows and grows with the dataset, while admin
-        aggregates are O(#admin units).
+        At low zooms clusters come from pre-aggregated admin gold instead of a
+        live grid scan: a nationwide grid aggregation measured 12s on 5.5M rows
+        and grows with the dataset, while admin aggregates are O(#admin units).
         """
-        # Admin matview (with optional clip on unit extent) for low zooms.
+        # Admin gold (with optional clip on unit extent) for low zooms.
         # A green-area scope has no pre-aggregated admin rows; grid/raw only.
         if green_area_id is None:
             admin = self._admin_clusters_response(
@@ -102,36 +101,6 @@ class CatalogGreenAsset:
                 clip_wkt=clip_wkt,
             )
             if admin is not None:
-                # #region agent log
-                try:
-                    import json as _json
-                    with open(
-                        "/Users/danilogiovannico/Desktop/LAVORO/MASE/SIV/Sviluppo/LINFA/.cursor/debug-4fe799.log",
-                        "a",
-                        encoding="utf-8",
-                    ) as _f:
-                        _f.write(
-                            _json.dumps(
-                                {
-                                    "sessionId": "4fe799",
-                                    "hypothesisId": "A-B",
-                                    "location": "catalog_green_asset.py:admin",
-                                    "message": "viewport admin path",
-                                    "data": {
-                                        "zoom": zoom,
-                                        "bbox": list(bbox),
-                                        "hasClip": bool(clip_wkt),
-                                        "path": "admin",
-                                        "featureCount": len(admin.get("features") or []),
-                                    },
-                                    "timestamp": __import__("time").time() * 1000,
-                                }
-                            )
-                            + "\n"
-                        )
-                except Exception:
-                    pass
-                # #endregion
                 return admin
 
         scope = {
@@ -147,64 +116,30 @@ class CatalogGreenAsset:
         # clusters visible at the last level right after a drill.
         if zoom >= RAW_MIN_ZOOM:
             raw = self._repository.get_raw_in_bbox(bbox, LAST_ZOOM_RAW_HARD_CAP, **scope)
-            # #region agent log
-            try:
-                import json as _json
-                with open(
-                    "/Users/danilogiovannico/Desktop/LAVORO/MASE/SIV/Sviluppo/LINFA/.cursor/debug-4fe799.log",
-                    "a",
-                    encoding="utf-8",
-                ) as _f:
-                    _f.write(
-                        _json.dumps(
-                            {
-                                "sessionId": "4fe799",
-                                "hypothesisId": "A",
-                                "location": "catalog_green_asset.py:raw",
-                                "message": "viewport raw path",
-                                "data": {
-                                    "zoom": zoom,
-                                    "bbox": list(bbox),
-                                    "hasClip": bool(clip_wkt),
-                                    "clipLen": len(clip_wkt) if clip_wkt else 0,
-                                    "path": "raw",
-                                    "featureCount": len(raw.get("features") or []),
-                                    "rawMinZoom": RAW_MIN_ZOOM,
-                                },
-                                "timestamp": __import__("time").time() * 1000,
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             return raw
 
-        # Pre-aggregated matview covers the grid zoom band. Clip filters cells via
-        # extent ∩ polygon (CTE parses WKT once). Live grid is reserved for
-        # sub-area / green-area scopes that need per-asset intersects.
-        matview_level = grid_matview_zoom_level(zoom)
-        use_matview = (
-            matview_level is not None
+        # Pre-aggregated gold covers the grid zoom band. Clip filters cells via
+        # extent ∩ polygon. Live grid is reserved for sub-area / green-area
+        # scopes that need per-asset intersects.
+        gold_level = grid_gold_zoom_level(zoom)
+        use_gold = (
+            gold_level is not None
             and sub_municipal_area_id is None
             and green_area_id is None
         )
-        if use_matview:
-            clusters = self._repository.get_grid_clusters_from_matview(
-                matview_level,
+        if use_gold:
+            clusters = self._repository.get_grid_clusters_from_gold(
+                gold_level,
                 bbox,
                 region_id=region_id,
                 province_id=province_id,
                 municipality_id=municipality_id,
                 clip_wkt=clip_wkt,
             )
-            path = "matview"
         else:
             clusters = self._repository.get_clusters_in_bbox(
                 bbox, grid_cell_size_m(zoom), **scope
             )
-            path = "live_grid"
 
         features = []
         for cluster in clusters:
@@ -223,40 +158,6 @@ class CatalogGreenAsset:
                     "geometry": {"type": "Point", "coordinates": [lon, lat]},
                 }
             )
-        # #region agent log
-        try:
-            import json as _json
-            with open(
-                "/Users/danilogiovannico/Desktop/LAVORO/MASE/SIV/Sviluppo/LINFA/.cursor/debug-4fe799.log",
-                "a",
-                encoding="utf-8",
-            ) as _f:
-                _f.write(
-                    _json.dumps(
-                        {
-                            "sessionId": "4fe799",
-                            "runId": "post-fix",
-                            "hypothesisId": "B",
-                            "location": "catalog_green_asset.py:grid",
-                            "message": "viewport grid/cluster path",
-                            "data": {
-                                "zoom": zoom,
-                                "bbox": list(bbox),
-                                "hasClip": bool(clip_wkt),
-                                "clipLen": len(clip_wkt) if clip_wkt else 0,
-                                "path": path,
-                                "matviewLevel": matview_level,
-                                "useMatview": use_matview,
-                                "featureCount": len(features),
-                            },
-                            "timestamp": __import__("time").time() * 1000,
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
         return {"type": "FeatureCollection", "features": features}
 
     def _admin_clusters_response(
@@ -316,7 +217,7 @@ class CatalogGreenAsset:
         if scope_floor is not None:
             if _ADMIN_RANK[level] < _ADMIN_RANK[scope_floor]:
                 # Zoom coarser than the selected unit: show that unit as one
-                # cluster (matview rows for coarser levels null out child ids,
+                # cluster (gold rows for coarser levels null out child ids,
                 # so the scope filter would otherwise return empty).
                 level = scope_floor
             elif _ADMIN_RANK[level] == _ADMIN_RANK[scope_floor]:
@@ -378,9 +279,7 @@ class CatalogGreenAsset:
             raise NotFoundError()
         bbox = self._repository.get_bbox_by_pk(asset_id, region_id, province_id)
         geometry = self._repository.get_geometry_by_pk(asset_id, region_id, province_id)
-        with self._session_factory() as session:
-            enriched = enrich_green_asset_table_rows(session, [row])[0]
-        return build_asset_detail(enriched, bbox=bbox, geometry=geometry)
+        return build_asset_detail(row, bbox=bbox, geometry=geometry)
 
     def list_green_assets_table_paged(
         self,
@@ -410,9 +309,5 @@ class CatalogGreenAsset:
             sort_dir=sort_dir,
             filters=filters,
         )
-        enriched = raw
-        if raw:
-            with self._session_factory() as session:
-                enriched = enrich_green_asset_table_rows(session, raw)
-            enriched = [merge_asset_table_row(r) for r in enriched]
+        enriched = [merge_asset_table_row(r) for r in raw] if raw else raw
         return GreenTablePageOut.build(data=enriched, total=total, page=page, page_size=page_size)

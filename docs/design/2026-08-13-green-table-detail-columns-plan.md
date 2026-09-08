@@ -2,7 +2,9 @@
 
 **Spec:** [2026-08-13-green-table-detail-columns-design.md](./2026-08-13-green-table-detail-columns-design.md)  
 **Data:** 2026-08-13  
-**Stato:** done
+**Stato:** done  
+
+> **Addendum cutover:** `list_table_rows_paged` / detail load = `*LakehouseRepository` (DuckDB/MinIO), non repo PostGIS `green_*_repository.py`.
 
 ## Goal
 
@@ -23,7 +25,7 @@ API table emette le stesse key del detail (`"NaN"` incluso); FE mostra default 5
 
 ### 2. BE — table list carica dati necessari + proietta
 
-**File:** `green_areas_repository.list_table_rows_paged`, `green_assets_repository.list_table_rows_paged`
+**File:** `green_areas_lakehouse_repository.list_table_rows_paged`, `green_assets_lakehouse_repository.list_table_rows_paged`
 
 - Includere `attributes` nella load table (oggi escluso) **oppure** select dedicata per list che aggiunge:
   - Area: `attributes`, `ST_Area(geometry::geography)` AS `surface_area_m2_computed`, colonne scalar del subset

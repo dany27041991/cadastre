@@ -128,7 +128,7 @@ map.loadGreenLayer(areasGeoJson)
 
 ### `loadGreenLayerViewport(fetcher, areasFetcher?)`
 
-Modalità viewport server-side (default per gli asset verdi): il layer è alimentato per bbox+zoom dal backend (`GET /green-assets/viewport`), che restituisce asset raw all'ultimo livello di zoom e cluster PostGIS (griglia o amministrativi pre-aggregati) agli altri livelli. Ogni pan/zoom assestato rifetcha tramite la pipeline di debounce standard; il client non detiene mai l'intero dataset (scala al territorio nazionale).
+Modalità viewport server-side (default per gli asset verdi): il layer è alimentato per bbox+zoom dal backend (`GET /green-assets/viewport` + **`date_from`/`date_to`**), che restituisce asset raw all'ultimo livello di zoom e cluster lakehouse (gold: griglia o amministrativi pre-aggregati) agli altri livelli. Ogni pan/zoom assestato rifetcha tramite la pipeline di debounce standard; il client non detiene mai l'intero dataset (scala al territorio nazionale). Il `fetcher` deve includere le date nel query string (tipicamente da `GreenTablePanelContext`).
 
 | Parametro | Tipo | Descrizione |
 |-----------|------|-------------|

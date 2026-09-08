@@ -12,7 +12,7 @@ import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from territory import router as territory_router
+from territory.router import router as territory_router
 from core.api import core_router
 from core.config import settings
 from core.logger import setup_logging
@@ -77,6 +77,7 @@ if settings.auth_middleware_active:
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
+            expose_headers=["X-Cadastre-Cluster-Over-Cap"],
         )
     except httpx.ConnectError as e:
         logging.getLogger(__name__).warning(
@@ -89,6 +90,7 @@ if settings.auth_middleware_active:
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
+            expose_headers=["X-Cadastre-Cluster-Over-Cap"],
         )
 else:
     app.add_middleware(
@@ -97,6 +99,7 @@ else:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Cadastre-Cluster-Over-Cap"],
     )
 
 app.include_router(core_router)

@@ -39,7 +39,22 @@ export function useTerritoryNavigation(
   mapBridge: MapBridge,
   options: UseTerritoryNavigationOptions
 ): UseTerritoryNavigationResult {
-  const api = options.api
+  const apiRaw = options.api
+  const dateFromIso = options.dateFromIso
+  const dateToIso = options.dateToIso
+  const api = useMemo(() => {
+    if (!apiRaw) return undefined
+    if (!dateFromIso || !dateToIso) return apiRaw
+    return {
+      ...apiRaw,
+      getGreenAreas: (params: Parameters<NonNullable<typeof apiRaw>['getGreenAreas']>[0]) =>
+        apiRaw.getGreenAreas({
+          ...params,
+          dateFrom: params.dateFrom ?? dateFromIso,
+          dateTo: params.dateTo ?? dateToIso,
+        }),
+    }
+  }, [apiRaw, dateFromIso, dateToIso])
   const t = options.t
   const isAssetsLayerActive = options.isAssetsLayerActive
   const isAreasLayerActive = options.isAreasLayerActive

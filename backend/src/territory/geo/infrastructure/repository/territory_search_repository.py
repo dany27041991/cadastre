@@ -1,14 +1,16 @@
-"""Repository: typeahead search across admin + green hierarchy."""
+"""Repository: typeahead search across admin hierarchy (regions → sub-municipal).
+
+Green areas live in the MinIO lakehouse; they are not searched via PostGIS.
+"""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
 
-from sqlalchemy import BigInteger, Integer, String, case, cast, func, literal, select, union_all
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy import BigInteger, Integer, String, cast, func, literal, select, union_all
+from sqlalchemy.orm import Session
 
-from territory.areas.domain.entities.green_area_model import GreenAreaModel
 from territory.geo.domain.entities import (
     MunicipalityModel,
     ProvinceModel,
@@ -59,8 +61,6 @@ class TerritorySearchRepository:
         p = ProvinceModel
         m = MunicipalityModel
         s = SubMunicipalAreaModel
-        ga = GreenAreaModel
-        parent_ga = aliased(GreenAreaModel)
 
         region_path = literal(ITALY_LABEL) + literal(" - ") + r.name
         province_path = (
@@ -73,17 +73,6 @@ class TerritorySearchRepository:
         )
         municipality_path = province_path + literal(" - ") + m.name
         sub_municipal_path = municipality_path + literal(" - ") + s.name
-        green_path = case(
-            (
-                ga.parent_id.is_(None),
-                municipality_path + literal(" - ") + ga.name,
-            ),
-            else_=municipality_path
-            + literal(" - ")
-            + parent_ga.name
-            + literal(" - ")
-            + ga.name,
-        )
 
         regions = (
             select(
@@ -161,50 +150,7 @@ class TerritorySearchRepository:
             .where(s.name.ilike(pattern))
         )
 
-        # Root green areas (parent_id IS NULL) → green_areas; children → sub_areas.
-        green_level = case(
-            (ga.parent_id.is_(None), literal("green_areas")),
-            else_=literal("sub_areas"),
-        )
-        green_value_prefix = case(
-            (ga.parent_id.is_(None), literal("green_areas:")),
-            else_=literal("sub_areas:"),
-        )
-        green_sort = case(
-            (ga.parent_id.is_(None), literal(5)),
-            else_=literal(6),
-        )
-
-        green_areas = (
-            select(
-                (green_value_prefix + func.cast(ga.id, String)).label("value"),
-                green_path.label("label"),
-                green_level.label("level"),
-                ga.id.label("id"),
-                ga.region_id.label("region_id"),
-                ga.province_id.label("province_id"),
-                ga.municipality_id.label("municipality_id"),
-                _NULL_BIGINT.label("sub_municipal_area_id"),
-                ga.id.label("green_area_id"),
-                green_sort.label("sort_level"),
-                ga.name.label("sort_name"),
-            )
-            .select_from(ga)
-            .join(m, m.id == ga.municipality_id)
-            .join(p, p.id == ga.province_id)
-            .join(r, r.id == ga.region_id)
-            .outerjoin(
-                parent_ga,
-                (parent_ga.id == ga.parent_id)
-                & (parent_ga.region_id == ga.region_id)
-                & (parent_ga.province_id == ga.province_id),
-            )
-            .where(ga.deleted_at.is_(None), ga.name.ilike(pattern))
-        )
-
-        combined = union_all(
-            regions, provinces, municipalities, sub_municipals, green_areas
-        ).subquery()
+        combined = union_all(regions, provinces, municipalities, sub_municipals).subquery()
         return (
             select(
                 combined.c.value,

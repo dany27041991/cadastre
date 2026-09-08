@@ -31,7 +31,7 @@ export function readCurrentGreenClusterZoom(): number {
 }
 
 /**
- * Server viewport mode: fetch bbox+zoom-sized data (raw assets or PostGIS grid
+ * Server viewport mode: fetch bbox+zoom-sized data (raw assets or lakehouse gold
  * clusters) and mount it through the standard diff-mount pipeline. The client
  * never holds the full dataset, so this scales to the national territory.
  */

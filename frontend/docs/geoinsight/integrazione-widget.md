@@ -2,6 +2,8 @@
 
 Come i componenti React collegano mappa, navigazione, breadcrumb e palette verde nel flusso completo SIV.
 
+> **Green viz:** viewport/table/detail → lakehouse (MinIO+DuckDB). I fetcher devono passare **`date_from` / `date_to`**. Cluster = gold Parquet (non PostGIS).
+
 ---
 
 ## Architettura widget
@@ -114,7 +116,7 @@ Il toggle è attivo solo quando il breadcrumb fornisce un contesto verde (`getGr
 1. Utente attiva il toggle asset verdi.
 2. `onBeforeLoadingAssets()` — se una sola area verde, salva in `storedLeafRef`.
 3. `loadGreenLayerViewport(fetcher, areasFetcher)` con scope amministrativo completo (`regionId`, `provinceId`, `municipalityId`, `subMunicipalAreaId`, `greenAreaId`): ogni richiesta resta circoscritta all'area selezionata.
-4. L'adapter fetcha per bbox+zoom (`territoryApi.getGreenAssetsViewport` / `getGreenAreasViewport`) a ogni pan/zoom assestato: cluster server fino all'ultimo livello di zoom, asset raw all'ultimo.
+4. L'adapter fetcha per bbox+zoom + range date (`territoryApi.getGreenAssetsViewport` / `getGreenAreasViewport`) a ogni pan/zoom assestato: cluster **gold lakehouse** fino all'ultimo livello di zoom, asset raw all'ultimo.
 5. `setTerritoryFillVisible(false)`.
 
 ### Disattivazione
