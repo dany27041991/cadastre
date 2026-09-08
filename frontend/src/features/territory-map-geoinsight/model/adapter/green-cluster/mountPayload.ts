@@ -107,18 +107,38 @@ export function mountGreenPayload(
     toRemove = []
     mountedGeometries = [...prevGeometries, ...payload.geometries]
   } else if (!replaceAssets && meta.reason === APPLY_REASON.panViewport) {
-    // Additive pan mount: keep exiting features mounted, prune later in
-    // small idle batches (see PAN_STALE_PRUNE_IDLE_MS rationale).
-    const dropCount = panStaleInlineDropCount(stale.length)
-    const dropped = dropCount > 0 ? stale.slice(0, dropCount) : []
-    const keptStale = dropCount > 0 ? stale.slice(dropCount) : stale
-    toRemove = dropped.map((geometry) => geometry.geom_id)
-    for (const id of toRemove) {
-      host.registry.removeByGeomId(id)
+    if (!payloadHasAreas) {
+      // Areas intentionally omitted on pan — keep GA_, only diff assets/clusters.
+      const isArea = (geometry: { geom_id: string }) =>
+        geometry.geom_id.startsWith(GEOM_PREFIX.greenArea)
+      const prevAreas = prevGeometries.filter(isArea)
+      const prevAssets = prevGeometries.filter((geometry) => !isArea(geometry))
+      const assetNextIds = new Set(payload.geometries.map((geometry) => geometry.geom_id))
+      const assetStale = prevAssets.filter((geometry) => !assetNextIds.has(geometry.geom_id))
+      const dropCount = panStaleInlineDropCount(assetStale.length)
+      const dropped = dropCount > 0 ? assetStale.slice(0, dropCount) : []
+      const keptAssetStale = dropCount > 0 ? assetStale.slice(dropCount) : assetStale
+      toRemove = dropped.map((geometry) => geometry.geom_id)
+      for (const id of toRemove) {
+        host.registry.removeByGeomId(id)
+      }
+      toAdd = payload.geometries.filter((geometry) => !prevIdSet.has(geometry.geom_id))
+      mountedGeometries = [...prevAreas, ...keptAssetStale, ...payload.geometries]
+      if (keptAssetStale.length > 0) schedulePanStalePrune(host)
+    } else {
+      // Additive pan mount: keep exiting features mounted, prune later in
+      // small idle batches (see PAN_STALE_PRUNE_IDLE_MS rationale).
+      const dropCount = panStaleInlineDropCount(stale.length)
+      const dropped = dropCount > 0 ? stale.slice(0, dropCount) : []
+      const keptStale = dropCount > 0 ? stale.slice(dropCount) : stale
+      toRemove = dropped.map((geometry) => geometry.geom_id)
+      for (const id of toRemove) {
+        host.registry.removeByGeomId(id)
+      }
+      mountedGeometries =
+        keptStale.length > 0 ? [...keptStale, ...payload.geometries] : payload.geometries
+      if (keptStale.length > 0) schedulePanStalePrune(host)
     }
-    mountedGeometries =
-      keptStale.length > 0 ? [...keptStale, ...payload.geometries] : payload.geometries
-    if (keptStale.length > 0) schedulePanStalePrune(host)
   } else {
     toRemove = stale.map((geometry) => geometry.geom_id)
     for (const id of toRemove) {

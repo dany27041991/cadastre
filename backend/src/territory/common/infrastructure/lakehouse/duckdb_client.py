@@ -2,32 +2,41 @@
 
 from __future__ import annotations
 
+import os
+import queue
 import threading
+import time
 from urllib.parse import urlparse
 
 from core.config import settings
 
-_thread_local = threading.local()
-_init_lock = threading.Lock()
+# Concurrent viewport requests run on different worker threads; a per-thread
+# connection still paid INSTALL httpfs per thread (measured cold init 1–10 s).
+_POOL_SIZE = max(1, int(os.environ.get("LAKEHOUSE_DUCKDB_POOL_SIZE", "4")))
+_pool: queue.Queue | None = None
+_pool_lock = threading.Lock()
+_pool_created = 0
+_pool_in_use = 0
+_pool_stats_lock = threading.Lock()
 
 
-class _ReusableConnection:
-    """Wraps a DuckDB connection so callers' ``close()`` does not tear it down.
+class _PooledConnection:
+    """Exclusive checkout from the process pool; ``close()`` returns the conn."""
 
-    Lakehouse serving opens many short-lived connections per viewport request;
-    reinstalling httpfs on every ``duckdb.connect()`` dominated measured latency.
-    """
-
-    __slots__ = ("_con",)
+    __slots__ = ("_con", "_checked_in")
 
     def __init__(self, con) -> None:
         self._con = con
+        self._checked_in = False
 
     def execute(self, *args, **kwargs):
         return self._con.execute(*args, **kwargs)
 
     def close(self) -> None:
-        return None
+        if self._checked_in:
+            return
+        self._checked_in = True
+        _checkin(self._con)
 
     def __getattr__(self, name: str):
         return getattr(self._con, name)
@@ -48,12 +57,13 @@ def _configure_httpfs(con) -> None:
     con.execute(f"SET s3_use_ssl={'true' if use_ssl else 'false'};")
 
 
-def connect_lakehouse():
-    """Return a per-thread DuckDB connection with httpfs pointed at MinIO.
+def _ensure_pool() -> queue.Queue:
+    """Lazily create a process-wide pool of httpfs-ready DuckDB connections."""
+    global _pool, _pool_created
 
-    The underlying connection is reused for the lifetime of the worker thread.
-    ``close()`` on the returned wrapper is a no-op so existing call sites stay safe.
-    """
+    if _pool is not None:
+        return _pool
+
     try:
         import duckdb
     except ImportError as exc:  # pragma: no cover
@@ -61,18 +71,47 @@ def connect_lakehouse():
             "duckdb is required for green lakehouse serving (pip install duckdb)"
         ) from exc
 
-    existing = getattr(_thread_local, "con", None)
-    if existing is not None:
-        return _ReusableConnection(existing)
+    with _pool_lock:
+        if _pool is not None:
+            return _pool
+        q: queue.Queue = queue.Queue(maxsize=_POOL_SIZE)
+        for _ in range(_POOL_SIZE):
+            con = duckdb.connect()
+            _configure_httpfs(con)
+            q.put(con)
+        _pool_created = _POOL_SIZE
+        _pool = q
+        return _pool
 
-    with _init_lock:
-        existing = getattr(_thread_local, "con", None)
-        if existing is not None:
-            return _ReusableConnection(existing)
-        con = duckdb.connect()
-        _configure_httpfs(con)
-        _thread_local.con = con
-        return _ReusableConnection(con)
+
+def _checkin(con) -> None:
+    global _pool_in_use
+    assert _pool is not None
+    with _pool_stats_lock:
+        _pool_in_use = max(0, _pool_in_use - 1)
+    _pool.put(con)
+
+
+def connect_lakehouse():
+    """Checkout a pooled DuckDB connection with httpfs pointed at MinIO.
+
+    Callers must ``close()`` (typically in ``finally``) to return the connection.
+    Connections are exclusive while checked out — safe under concurrent requests.
+    """
+    global _pool_in_use
+
+    pool = _ensure_pool()
+    t0 = time.perf_counter()
+    try:
+        con = pool.get(timeout=30.0)
+    except queue.Empty as exc:
+        wait_ms = (time.perf_counter() - t0) * 1000
+        raise RuntimeError(
+            f"DuckDB lakehouse pool exhausted (size={_POOL_SIZE}, wait={wait_ms:.0f}ms)"
+        ) from exc
+    with _pool_stats_lock:
+        _pool_in_use += 1
+    return _PooledConnection(con)
 
 
 def catalog_uri() -> str:

@@ -184,7 +184,11 @@ class GreenAreasLakehouseRepository:
             if clip_geom.is_empty:
                 return _EMPTY_FC
         rows = silver_read.read_areas_in_bbox(
-            resolutions, bbox, limit, clip_geom=clip_geom
+            resolutions,
+            bbox,
+            limit,
+            clip_geom=clip_geom,
+            simplify_tolerance_deg=simplify_tolerance_deg,
         )
         return build_green_area_feature_collection(rows)
 

@@ -73,7 +73,12 @@ def read_assets_in_bbox(
     green_area_id: int | None = None,
     clip_geom=None,
 ) -> list[tuple]:
-    """Return rows (id, geometry_dict, asset_type, geometry_type, species, region_id, province_id)."""
+    """Return rows (id, geometry_dict, asset_type, geometry_type, species, region_id, province_id).
+
+    Viewport markers use lon/lat Points only (no geom_wkb decode): detail views
+    still load full WKB via read_asset_by_pk. Skipping WKB cut measured pan
+    latency at raw zoom (800 rows).
+    """
     if not resolutions or limit <= 0:
         return []
     minx, miny, maxx, maxy = bbox
@@ -100,7 +105,7 @@ def read_assets_in_bbox(
         ):
             rows = con.execute(
                 f"""
-                SELECT id, geom_wkb, lon, lat, asset_type, geometry_type, species, region_id, province_id
+                SELECT id, lon, lat, asset_type, geometry_type, species, region_id, province_id
                 FROM read_parquet([{files_sql}], union_by_name=true)
                 WHERE lon BETWEEN {minx} AND {maxx}
                   AND lat BETWEEN {miny} AND {maxy}
@@ -113,25 +118,28 @@ def read_assets_in_bbox(
 
     out: list[tuple] = []
     if clip_geom is not None:
-        from shapely import wkb as shapely_wkb
         from shapely.geometry import Point
 
+        clip_prep = None
+        try:
+            from shapely.prepared import prep
+
+            clip_prep = prep(clip_geom)
+        except Exception:
+            clip_prep = None
+
     for r in rows:
+        lon, lat = r[1], r[2]
+        if lon is None or lat is None:
+            continue
+        lon_f, lat_f = float(lon), float(lat)
         if clip_geom is not None:
-            hit = False
-            if r[1] is not None:
-                try:
-                    hit = shapely_wkb.loads(bytes(r[1])).intersects(clip_geom)
-                except Exception:
-                    hit = False
-            if not hit and r[2] is not None and r[3] is not None:
-                hit = clip_geom.intersects(Point(float(r[2]), float(r[3])))
+            pt = Point(lon_f, lat_f)
+            hit = clip_prep.intersects(pt) if clip_prep is not None else clip_geom.intersects(pt)
             if not hit:
                 continue
-        geom = _wkb_to_geojson(r[1], r[2], r[3])
-        if geom is None:
-            continue
-        out.append((int(r[0]), geom, r[4], r[5], r[6], int(r[7]), int(r[8])))
+        geom = {"type": "Point", "coordinates": [lon_f, lat_f]}
+        out.append((int(r[0]), geom, r[3], r[4], r[5], int(r[6]), int(r[7])))
         if len(out) >= limit:
             break
     return out
@@ -333,6 +341,7 @@ def read_areas_in_bbox(
     limit: int,
     *,
     clip_geom=None,
+    simplify_tolerance_deg: float = 0.0,
 ) -> list[tuple]:
     """Rows (id, geometry_dict, name, region_id, province_id, municipality_id, level)."""
     if not resolutions or limit <= 0:
@@ -360,25 +369,44 @@ def read_areas_in_bbox(
     finally:
         con.close()
     out: list[tuple] = []
-    from shapely import wkb as shapely_wkb
+    from shapely import to_geojson, wkb as shapely_wkb
 
+    tol = float(simplify_tolerance_deg or 0.0)
     for r in rows:
+        if r[1] is None and (r[2] is None or r[3] is None):
+            continue
+        try:
+            geom = shapely_wkb.loads(bytes(r[1])) if r[1] is not None else None
+        except Exception:
+            geom = None
         if clip_geom is not None:
-            if r[1] is None:
+            if geom is None:
                 continue
             try:
-                if not shapely_wkb.loads(bytes(r[1])).intersects(clip_geom):
+                if not geom.intersects(clip_geom):
                     continue
             except Exception:
                 continue
-        geom = _wkb_to_geojson(r[1], r[2], r[3])
-        if geom is None:
+        if geom is not None and tol > 0:
+            try:
+                # preserve_topology=False is faster and fine for map silhouettes.
+                geom = geom.simplify(tol, preserve_topology=False)
+            except Exception:
+                pass
+        if geom is not None:
+            try:
+                geojson = json.loads(to_geojson(geom))
+            except Exception:
+                geojson = _wkb_to_geojson(r[1], r[2], r[3])
+        else:
+            geojson = _wkb_to_geojson(None, r[2], r[3])
+        if geojson is None:
             continue
         # id, geometry, name, level, parent_id, region_id, province_id, municipality_id
         out.append(
             (
                 int(r[0]),
-                geom,
+                geojson,
                 r[4],
                 int(r[5]),
                 int(r[6]) if r[6] is not None else None,

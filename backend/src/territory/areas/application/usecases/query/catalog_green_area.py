@@ -37,9 +37,12 @@ _METERS_PER_DEGREE = 111_320.0
 
 
 def viewport_simplify_tolerance_deg(zoom: float) -> float:
-    """Simplification tolerance ≈ 1 screen pixel at the given zoom, in degrees."""
+    """Simplification tolerance ≈ 3 screen pixels at the given zoom, in degrees.
+
+    Keeps silhouettes readable while cutting vertices / GeoJSON size versus 1px.
+    """
     meters_per_px = _MERCATOR_RESOLUTION_Z0_M_PER_PX / (2.0**zoom)
-    return meters_per_px / _METERS_PER_DEGREE
+    return (3.0 * meters_per_px) / _METERS_PER_DEGREE
 
 
 class CatalogGreenArea:

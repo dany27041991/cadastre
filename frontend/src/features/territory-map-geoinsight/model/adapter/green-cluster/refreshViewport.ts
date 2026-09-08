@@ -48,14 +48,16 @@ export async function refreshGreenViewport(
 
   const seq = ++host.greenViewportRequestSeq
   const areasFetcher = host.greenViewportAreasFetcher
-  // Zoom-only: keep already-mounted GA_ polygons. Refetching top-500 areas every
-  // zoom step caused ~10s waits + toAdd/toRemove thrash of hundreds of polygons.
+  // Keep already-mounted GA_ polygons across zoom/pan. Refetching top-500 areas
+  // every step caused multi-hundred-ms waits + toAdd/toRemove thrash.
   const hasMountedAreas = host.lastGreenGeometries.some((g) =>
     g.geom_id.startsWith(GEOM_PREFIX.greenArea)
   )
-  const skipAreasOnZoom = reason === APPLY_REASON.rawZoomChange && hasMountedAreas
+  const skipAreasReuse =
+    hasMountedAreas &&
+    (reason === APPLY_REASON.rawZoomChange || reason === APPLY_REASON.panViewport)
   const fetchAreas =
-    areasFetcher != null && zoom >= GREEN_AREAS_VIEWPORT_MIN_ZOOM && !skipAreasOnZoom
+    areasFetcher != null && zoom >= GREEN_AREAS_VIEWPORT_MIN_ZOOM && !skipAreasReuse
   let collection: GeoJSONFeatureCollection
   let areasCollection: GeoJSONFeatureCollection
   useGeoinsightStore.getState().beginGreenViewportLoad()
