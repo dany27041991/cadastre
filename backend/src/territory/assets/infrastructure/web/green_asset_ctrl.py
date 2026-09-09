@@ -134,8 +134,9 @@ def get_green_assets_viewport(
     if not result.get("features"):
         return _empty_response(output_format, headers=over_headers)
     if output_format == "geobuf":
+        _payload = geobuf.encode(result)
         return Response(
-            content=geobuf.encode(result),
+            content=_payload,
             media_type=GEOBUF_MEDIA_TYPE,
             headers=over_headers,
         )
@@ -146,7 +147,6 @@ def get_green_assets_viewport(
             headers=over_headers,
         )
     return GreenAssetsOutput.model_validate(result)
-
 
 @router.get("/green-assets/table", response_model=GreenTablePageOut)
 def get_green_assets_table(
@@ -234,6 +234,15 @@ def get_green_assets_table(
         }.items()
         if v is not None
     }
+    # Unscoped national table scans saturate DuckDB/MinIO (debug 4fe799).
+    if (
+        municipality_id is None
+        and region_id is None
+        and province_id is None
+        and green_area_id is None
+        and not clip_wkt
+    ):
+        return GreenTablePageOut.build(data=[], total=0, page=page, page_size=page_size)
     return _uc(date_from, date_to).list_green_assets_table_paged(
         region_id,
         municipality_id,
@@ -255,6 +264,9 @@ def get_green_asset_detail(
     asset_id: int,
     region_id: int = Query(..., description="Partition key region_id"),
     province_id: int = Query(..., description="Partition key province_id"),
+    municipality_id: int | None = Query(
+        None, description="Optional municipality prune for lakehouse read"
+    ),
     date_from: date = _DATE_FROM,
     date_to: date = _DATE_TO,
 ) -> GreenDetailOut:
@@ -263,4 +275,5 @@ def get_green_asset_detail(
         asset_id,
         region_id=region_id,
         province_id=province_id,
+        municipality_id=municipality_id,
     )

@@ -31,18 +31,20 @@ VIEWPORT_AREAS_MAX_FEATURES = 500
 _EMPTY_COLLECTION: GeoJSONFeatureCollection = {"type": "FeatureCollection", "features": []}
 
 
-# Web Mercator ground resolution at equator (m/px) for zoom 0, 256px tiles.
+# Web Mercator helpers kept for potential future LOD; areas keep full geometry.
 _MERCATOR_RESOLUTION_Z0_M_PER_PX = 156543.03392804097
 _METERS_PER_DEGREE = 111_320.0
 
 
 def viewport_simplify_tolerance_deg(zoom: float) -> float:
-    """Simplification tolerance ≈ 3 screen pixels at the given zoom, in degrees.
+    """Tolerance for viewport area polygons (degrees).
 
-    Keeps silhouettes readable while cutting vertices / GeoJSON size versus 1px.
+    Always 0: managed areas must keep the true lakehouse silhouette at every
+    zoom. Zoom-dependent simplify (≈3px) made Garibaldi look different after
+    zoom-in until the areas toggle remounted a denser WKT.
     """
-    meters_per_px = _MERCATOR_RESOLUTION_Z0_M_PER_PX / (2.0**zoom)
-    return (3.0 * meters_per_px) / _METERS_PER_DEGREE
+    _ = zoom
+    return 0.0
 
 
 class CatalogGreenArea:
@@ -87,7 +89,7 @@ class CatalogGreenArea:
         sub_municipal_area_id: int | None = None,
         clip_wkt: str | None = None,
     ) -> GeoJSONFeatureCollection:
-        """Root green areas intersecting the viewport bbox, simplified for the zoom.
+        """Root green areas intersecting the viewport bbox (full geometry).
 
         Below VIEWPORT_AREAS_MIN_ZOOM areas are not rendered (admin/grid
         clusters cover those bands), so return an empty collection cheaply.
@@ -113,13 +115,24 @@ class CatalogGreenArea:
         *,
         region_id: int,
         province_id: int,
+        municipality_id: int | None = None,
     ) -> GreenDetailOut:
-        row = self._repository.get_detail_by_pk(area_id, region_id, province_id)
+        import time
+
+        row = self._repository.get_detail_by_pk(
+            area_id,
+            region_id,
+            province_id,
+            municipality_id=municipality_id,
+        )
         if row is None:
             raise NotFoundError()
-        bbox = self._repository.get_bbox_by_pk(area_id, region_id, province_id)
-        geometry = self._repository.get_geometry_by_pk(area_id, region_id, province_id)
-        return build_area_detail(row, bbox=bbox, geometry=geometry)
+        from territory.common.infrastructure.lakehouse import silver_read
+
+        bbox = silver_read.read_asset_bbox(row)
+        geometry = silver_read.read_asset_geometry(row)
+        out = build_area_detail(row, bbox=bbox, geometry=geometry)
+        return out
 
     def list_green_areas_table_paged(
         self,

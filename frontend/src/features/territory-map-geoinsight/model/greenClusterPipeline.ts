@@ -10,6 +10,10 @@ import {
   type ClusterInputFeature,
 } from '@/features/territory/lib/greenAssetClusterCore'
 import {
+  buildGreenAssetGeomId,
+  municipalityIdFromProperties,
+} from '@/features/territory/lib/greenAreaGeomId'
+import {
   buildGreenAssetGeometryClip,
   buildClusterCountLabelClip,
   prepareAssetGeometryForDisplay,
@@ -32,13 +36,21 @@ function displayItemToGeomId(
   index: number
 ): string {
   if (item.isCluster) {
-    // Grid-cell key + count keep ids stable across pans (diff mount skips unchanged
-    // clusters) while edge cells whose membership changed get remounted.
+    // Admin keys (R*/P*/M*): stable id without count — count in the suffix made
+    // pan-additive keep duplicates when the viewport briefly changed the total.
+    // Grid keys still include count so membership changes remount.
+    const adminKey = item.clusterKey
+    if (adminKey != null && /^[RPM]\d/.test(adminKey)) {
+      return `${GEOM_PREFIX.cluster}${zoomLevel}_${adminKey}`
+    }
     const suffix =
       item.clusterKey != null ? `${item.clusterKey}_${item.memberCount}` : String(index)
     return `${GEOM_PREFIX.cluster}${zoomLevel}_${suffix}`
   }
-  return `${GEOM_PREFIX.greenAsset}${item.id}`
+  return buildGreenAssetGeomId(
+    item.id,
+    municipalityIdFromProperties(item.properties)
+  )
 }
 
 /**
@@ -69,11 +81,14 @@ export function buildGreenClusterLayerPayload(
   const showClusterCountLabels = shouldShowClusterCountLabels(displayItems)
   const geometries: GeoinsightGeometryClip[] = []
   const registryEntries: GeometryRegistryEntry[] = []
+  const seenGeomIds = new Set<string>()
 
   displayItems.forEach((item, index) => {
     const wkt = wktForDisplayItem(item, mapZoom)
     if (!wkt) return
     const geomId = displayItemToGeomId(item, zoomLevel, index)
+    if (seenGeomIds.has(geomId)) return
+    seenGeomIds.add(geomId)
     geometries.push(buildGreenAssetGeometryClip(geomId, wkt, item))
     if (showClusterCountLabels && item.isCluster && (item.memberCount ?? 0) >= 1) {
       const labelWkt = geometryToWkt(item.geometry)
@@ -96,6 +111,7 @@ export function buildGreenClusterLayerPayload(
       members: item.members,
     })
   })
+
 
   return { geometries, registryEntries, showClusterCountLabels }
 }
@@ -122,12 +138,18 @@ export function serverViewportCollectionToDisplayItems(
       Array.isArray(props.cluster_bbox) && props.cluster_bbox.length === 4
         ? (props.cluster_bbox.map(Number) as [number, number, number, number])
         : null
-    // TODO: single-member server cells still render as 1-count clusters; the
-    // viewport endpoint only returns the cell centroid, not the raw geometry.
+    const sampleIdRaw = feature.id ?? props.id
+    const sampleId = typeof sampleIdRaw === 'number' ? sampleIdRaw : Number(sampleIdRaw)
+    const hasSampleId = Number.isFinite(sampleId) && sampleId > 0
     clusterItems.push({
-      id: -(clusterItems.length + 1),
+      // Keep lakehouse sample_id so singleton drill / detail can resolve the asset.
+      id: hasSampleId ? sampleId : -(clusterItems.length + 1),
       label: String(memberCount),
-      properties: { cluster_count: memberCount },
+      properties: {
+        ...props,
+        cluster_count: memberCount,
+        ...(hasSampleId ? { id: sampleId } : {}),
+      },
       geometry: feature.geometry,
       isCluster: true,
       memberCount,

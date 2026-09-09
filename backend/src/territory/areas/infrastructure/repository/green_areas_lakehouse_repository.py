@@ -109,9 +109,14 @@ class GreenAreasLakehouseRepository:
         area_id: int,
         region_id: int,
         province_id: int,
+        municipality_id: int | None = None,
     ) -> dict[str, Any] | None:
         return silver_read.read_area_by_pk(
-            self._resolutions(region_id=region_id, province_id=province_id),
+            self._resolutions(
+                region_id=region_id,
+                province_id=province_id,
+                municipality_id=municipality_id,
+            ),
             area_id,
             region_id,
             province_id,
@@ -122,8 +127,11 @@ class GreenAreasLakehouseRepository:
         area_id: int,
         region_id: int,
         province_id: int,
+        municipality_id: int | None = None,
     ) -> dict[str, Any] | None:
-        return self.get_by_pk(area_id, region_id, province_id)
+        return self.get_by_pk(
+            area_id, region_id, province_id, municipality_id=municipality_id
+        )
 
     def get_bbox_by_pk(
         self,
@@ -192,12 +200,26 @@ class GreenAreasLakehouseRepository:
         )
         return build_green_area_feature_collection(rows)
 
-    def get_by_parent(self, parent_id: int, region_id: int) -> GeoJSONFeatureCollection:
-        resolutions = self._resolutions(region_id=region_id)
+    def get_by_parent(
+        self,
+        parent_id: int,
+        region_id: int,
+        province_id: int | None = None,
+        municipality_id: int | None = None,
+    ) -> GeoJSONFeatureCollection:
+        resolutions = self._resolutions(
+            region_id=region_id,
+            province_id=province_id,
+            municipality_id=municipality_id,
+        )
         if not resolutions:
             return _EMPTY_FC
         rows = silver_read.read_areas_by_parent(
-            resolutions, parent_id=parent_id, region_id=region_id
+            resolutions,
+            parent_id=parent_id,
+            region_id=region_id,
+            province_id=province_id,
+            municipality_id=municipality_id,
         )
         return build_green_area_feature_collection(rows)
 

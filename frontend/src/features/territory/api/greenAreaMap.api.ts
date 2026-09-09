@@ -99,19 +99,21 @@ export function createGreenAreasApi(
   return {
     getGreenAreas: async (params: GreenAreasParams) => {
       try {
-        return await fetchGeobufOrEmpty(
+        const collection = await fetchGeobufOrEmpty(
           `/api/territory/green-areas?${buildGreenAreasQuery(params)}`
         )
-      } catch {
+        return collection
+      } catch (err) {
         return EMPTY_GEOJSON
       }
     },
     getGreenAreasViewport: async (params: GreenAreaViewportParams) => {
       try {
-        return await fetchGeobufOrEmpty(
+        const collection = await fetchGeobufOrEmpty(
           `/api/territory/green-areas/viewport?${buildGreenAreasViewportQuery(params)}`
         )
-      } catch {
+        return collection
+      } catch (err) {
         return EMPTY_GEOJSON
       }
     },

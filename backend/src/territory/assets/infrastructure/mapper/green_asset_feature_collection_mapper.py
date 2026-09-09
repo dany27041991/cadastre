@@ -10,6 +10,7 @@ _GREEN_ASSET_PROPERTIES = [
     "species",
     "region_id",
     "province_id",
+    "municipality_id",
 ]
 
 

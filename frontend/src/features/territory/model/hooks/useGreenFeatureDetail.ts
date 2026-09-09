@@ -121,7 +121,9 @@ function resolveScopeIds(
     toPositiveInt(breadcrumb.find((c) => c.provinceId != null)?.provinceId)
   if (regionId == null || provinceId == null) return null
   const municipalityId =
-    toPositiveInt(ctx.municipalityId) ?? toPositiveInt(props.municipality_id) ?? undefined
+    toPositiveInt(props.municipality_id) ??
+    toPositiveInt(ctx.municipalityId) ??
+    undefined
   return { regionId, provinceId, municipalityId }
 }
 
@@ -269,6 +271,7 @@ export function useGreenFeatureDetail({
           id,
           regionId,
           provinceId,
+          ...(municipalityId != null ? { municipalityId } : {}),
           ...(dateFrom ? { dateFrom } : {}),
           ...(dateTo ? { dateTo } : {}),
         },

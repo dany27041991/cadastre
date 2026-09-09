@@ -92,6 +92,11 @@ export function zoomGeoinsightToLonLatAtScreenFraction(
         // Point / unknown extent: nudge in so the object is readable.
         targetZoom = Math.min(VIEW_MAX_ZOOM, currentZoom + DRILL_MIN_ZOOM_STEP)
       }
+      // Already at/near target (area fit zoom-out, or asset already at raw):
+      // pan only — avoids a full cluster refetch for Δzoom ≈ 0.
+      if (targetZoom <= currentZoom + 0.15) {
+        targetZoom = currentZoom
+      }
     }
     const epsg = GEOINSIGHT_EPSG_WGS84
     const { width, height } = readMapViewportPx()

@@ -10,9 +10,10 @@ from urllib.parse import urlparse
 
 from core.config import settings
 
-# Concurrent viewport requests run on different worker threads; a per-thread
-# connection still paid INSTALL httpfs per thread (measured cold init 1–10 s).
-_POOL_SIZE = max(1, int(os.environ.get("LAKEHOUSE_DUCKDB_POOL_SIZE", "4")))
+# Concurrent viewport + table requests share this pool. size=4 exhausted under
+# national seed (debug 4fe799: 30s waits → 500 "pool exhausted"; map never loads).
+_POOL_SIZE = max(1, int(os.environ.get("LAKEHOUSE_DUCKDB_POOL_SIZE", "8")))
+_POOL_WAIT_SEC = float(os.environ.get("LAKEHOUSE_DUCKDB_POOL_WAIT_SEC", "8"))
 _pool: queue.Queue | None = None
 _pool_lock = threading.Lock()
 _pool_created = 0
@@ -103,11 +104,13 @@ def connect_lakehouse():
     pool = _ensure_pool()
     t0 = time.perf_counter()
     try:
-        con = pool.get(timeout=30.0)
+        con = pool.get(timeout=_POOL_WAIT_SEC)
     except queue.Empty as exc:
         wait_ms = (time.perf_counter() - t0) * 1000
+        with _pool_stats_lock:
+            in_use = _pool_in_use
         raise RuntimeError(
-            f"DuckDB lakehouse pool exhausted (size={_POOL_SIZE}, wait={wait_ms:.0f}ms)"
+            f"DuckDB lakehouse pool exhausted (size={_POOL_SIZE}, in_use={in_use}, wait={wait_ms:.0f}ms)"
         ) from exc
     with _pool_stats_lock:
         _pool_in_use += 1

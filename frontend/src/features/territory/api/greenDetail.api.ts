@@ -47,6 +47,7 @@ export type GreenDetailParams = {
   id: number
   regionId: number
   provinceId: number
+  municipalityId?: number
   dateFrom?: string
   dateTo?: string
 }
@@ -60,6 +61,9 @@ function buildDetailUrl(kind: GreenDetailKind, params: GreenDetailParams): strin
     region_id: String(params.regionId),
     province_id: String(params.provinceId),
   })
+  if (params.municipalityId != null && params.municipalityId > 0) {
+    q.set('municipality_id', String(params.municipalityId))
+  }
   if (params.dateFrom) q.set('date_from', params.dateFrom)
   if (params.dateTo) q.set('date_to', params.dateTo)
   return `${base}?${q.toString()}`

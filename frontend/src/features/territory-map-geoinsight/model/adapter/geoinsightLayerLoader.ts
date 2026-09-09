@@ -1,6 +1,10 @@
 import type { GeoJSONFeatureCollection } from '@/shared/types'
 import { resolveFeatureId } from '@/features/territory/lib/featureIdentity'
 import {
+  buildGreenAreaGeomId,
+  municipalityIdFromProperties,
+} from '@/features/territory/lib/greenAreaGeomId'
+import {
   geoJsonToGeoinsightGeometries,
   type GeoinsightGeometryClip,
 } from '@/features/territory/lib/geoJsonToGeoinsight'
@@ -20,11 +24,25 @@ export function loadLayerFromGeoJson(
     host.removeGeomIds(removed)
   }
 
-  const { geometries, metas } = geoJsonToGeoinsightGeometries(geojson, prefix, { color })
+  const { geometries, metas } = geoJsonToGeoinsightGeometries(geojson, prefix, {
+    color,
+    ...(layerKind === 'green_area'
+      ? {
+          geomIdForFeature: (properties: Record<string, unknown>, id: number) =>
+            buildGreenAreaGeomId(id, municipalityIdFromProperties(properties)),
+        }
+      : {}),
+  })
   for (const meta of metas) {
-    const source = geojson.features?.find(
-      (f) => resolveFeatureId(f.properties ?? {}, f.id) === meta.id
-    )
+    const source = geojson.features?.find((f) => {
+      const props = (f.properties ?? {}) as Record<string, unknown>
+      const fid = resolveFeatureId(props, f.id)
+      if (layerKind !== 'green_area') return fid === meta.id
+      return (
+        fid === meta.id &&
+        buildGreenAreaGeomId(fid, municipalityIdFromProperties(props)) === meta.geomId
+      )
+    })
     host.registry.register({
       id: meta.id,
       label: meta.label,

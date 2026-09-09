@@ -8,7 +8,6 @@ import {
   viewportClusterZoom,
 } from '../../greenClusterPipeline'
 import { parseZoomFromCenterScale } from '../../parseMapZoom'
-import { GEOM_PREFIX } from '../../constants'
 import {
   getGeoinsightMapId,
   getGeoinsightRef,
@@ -48,28 +47,26 @@ export async function refreshGreenViewport(
 
   const seq = ++host.greenViewportRequestSeq
   const areasFetcher = host.greenViewportAreasFetcher
-  // Keep already-mounted GA_ polygons across zoom/pan. Refetching top-500 areas
-  // every step caused multi-hundred-ms waits + toAdd/toRemove thrash.
-  const hasMountedAreas = host.lastGreenGeometries.some((g) =>
-    g.geom_id.startsWith(GEOM_PREFIX.greenArea)
-  )
-  const skipAreasReuse =
-    hasMountedAreas &&
-    (reason === APPLY_REASON.rawZoomChange || reason === APPLY_REASON.panViewport)
+  // Always refetch areas with the viewport: pan-reuse kept stale GA_ and missed
+  // parks that entered the bbox (centroid-filter survivors from the previous
+  // centre never updated). Zoom≥min is the only gate.
   const fetchAreas =
-    areasFetcher != null && zoom >= GREEN_AREAS_VIEWPORT_MIN_ZOOM && !skipAreasReuse
+    areasFetcher != null && zoom >= GREEN_AREAS_VIEWPORT_MIN_ZOOM
+  const belowMinZoom = zoom < GREEN_AREAS_VIEWPORT_MIN_ZOOM
   let collection: GeoJSONFeatureCollection
   let areasCollection: GeoJSONFeatureCollection
+  const t0 = performance.now()
   useGeoinsightStore.getState().beginGreenViewportLoad()
   try {
     ;[collection, areasCollection] = await Promise.all([
       fetcher(bbox, zoom),
       fetchAreas ? areasFetcher(bbox, zoom) : Promise.resolve(EMPTY_FEATURE_COLLECTION),
     ])
-  } catch {
+  } catch (err) {
     useGeoinsightStore.getState().endGreenViewportLoad()
     return
   }
+  const fetchMs = performance.now() - t0
   // Drop stale responses: a newer pan/zoom refresh is already in flight.
   if (seq !== host.greenViewportRequestSeq || host.greenViewportFetcher !== fetcher) {
     useGeoinsightStore.getState().endGreenViewportLoad()
@@ -78,7 +75,17 @@ export async function refreshGreenViewport(
 
   const displayItems = serverViewportCollectionToDisplayItems(collection)
   const payload = buildGreenClusterLayerPayload(displayItems, viewportClusterZoom(zoom), zoom)
-  appendGreenAreaViewportFeatures(payload, areasCollection)
+  const appendedAreas = appendGreenAreaViewportFeatures(payload, areasCollection)
+  const nAssets = collection.features?.length ?? 0
+  const nAreas = areasCollection.features?.length ?? 0
+  const areaNames = (areasCollection.features ?? [])
+    .slice(0, 8)
+    .map((f) => String((f.properties as { name?: string } | null)?.name ?? ''))
+  const hasGaribaldi = (areasCollection.features ?? []).some((f) =>
+    String((f.properties as { name?: string } | null)?.name ?? '').includes('Garibaldi')
+  )
+  const nGeoms = payload.geometries.length
+  const mountT0 = performance.now()
 
   mountGreenPayload(host, payload, zoom, {
     rawMode: true,
@@ -86,9 +93,9 @@ export async function refreshGreenViewport(
     reason,
   })
   host.lastAppliedViewportBbox = bbox
-  // The heavy phase is not the fetch but the vendor processing of the queued
-  // mount ops (and the GC it triggers): keep the loading indicator up until
-  // the vendor op queue has drained.
+  const afterMountedAreas = host.lastGreenGeometries.filter((g) =>
+    g.geom_id.startsWith('GA_')
+  ).length
   runAfterGeoinsightVendorOps(host, () => {
     useGeoinsightStore.getState().endGreenViewportLoad()
   })

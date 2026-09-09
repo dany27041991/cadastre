@@ -387,7 +387,9 @@ export function TerritoryMapWidget() {
         mapRef.current.clearTerritoryLayer()
         return
       }
-      void loadRegionsRef.current({ fit: false })
+      // Drain pre-ready queued ops, then mount + frame Italy on first Area Italia enter.
+      mapRef.current.flushAdapterPending()
+      void loadRegionsRef.current({ fit: true })
     }
   }, [layersPanelOpen])
 
@@ -534,10 +536,9 @@ export function TerritoryMapWidget() {
     mapRef.current.clearDrawClip()
     resetPanelState()
     layersPanelOpenRef.current = false
-    // Reset breadcrumb/level to Italy, then hide admin polygons (Monitoraggio).
-    void loadRegionsRef.current().then(() => {
-      mapRef.current.clearTerritoryLayer()
-    })
+    // Reset breadcrumb/level to Italy and fit without mounting T_* (Monitoraggio).
+    // Avoid load-then-clear: the deferred clearTerritoryLayer raced with Area Italia.
+    void loadRegionsRef.current({ fit: true, mountTerritory: false })
   }, [resetPanelState])
 
   useEffect(() => {

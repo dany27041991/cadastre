@@ -101,6 +101,16 @@ green_assets_clusters/
 
 Il catalog silver (`_catalog/municipality_ingests.parquet`) resta la fonte di resolve temporale; i path gold si derivano da `(region,province,municipality,ingest_date)` risolti.
 
+## Gold admin consolidato (rollup)
+
+Dopo gli ingest (o a fine seed nazionale), `rollup_admin_gold.py` scrive:
+
+```text
+green_assets_admin_clusters/region_id={R}/part-municipality-bands.parquet
+```
+
+Schema = bande `municipality` + colonna `ingest_at`. Serving nazionale apre O(#regioni) file. Design: [../design/2026-09-08-gold-admin-region-rollup-design.md](../design/2026-09-08-gold-admin-region-rollup-design.md).
+
 ## Smoke / seed
 
 ```bash
@@ -112,4 +122,13 @@ Il catalog silver (`_catalog/municipality_ingests.parquet`) resta la fonte di re
 
 # Boost sintetico un comune
 ./infrastructure/scripts/database/seed/run_boost_municipality.sh Roma
+
+# Una regione
+./infrastructure/scripts/database/seed/run_populate_region_data.sh --region Lazio
+
+# Nazionale (~10M asset): wipe + parallel + checkpoint + rollup
+# Design: ../design/2026-09-09-national-mock-lakehouse-seed-design.md
+./infrastructure/scripts/database/seed/run_populate_national_data.sh --dry-run
+./infrastructure/scripts/database/seed/run_populate_national_data.sh \
+  --wipe --workers 4 --trees 1200 --hedges 80 --areas 8
 ```

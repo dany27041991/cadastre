@@ -75,9 +75,9 @@ def read_assets_in_bbox(
 ) -> list[tuple]:
     """Return rows (id, geometry_dict, asset_type, geometry_type, species, region_id, province_id).
 
-    Viewport markers use lon/lat Points only (no geom_wkb decode): detail views
-    still load full WKB via read_asset_by_pk. Skipping WKB cut measured pan
-    latency at raw zoom (800 rows).
+    Point assets (P) stay lon/lat markers for pan latency. Line/surface assets
+    (L/S) keep full geom_wkb so hedges/flowerbeds show their true silhouette
+    (same product rule as managed areas).
     """
     if not resolutions or limit <= 0:
         return []
@@ -105,7 +105,8 @@ def read_assets_in_bbox(
         ):
             rows = con.execute(
                 f"""
-                SELECT id, lon, lat, asset_type, geometry_type, species, region_id, province_id
+                SELECT id, lon, lat, asset_type, geometry_type, species,
+                       region_id, province_id, municipality_id, geom_wkb
                 FROM read_parquet([{files_sql}], union_by_name=true)
                 WHERE lon BETWEEN {minx} AND {maxx}
                   AND lat BETWEEN {miny} AND {maxy}
@@ -117,10 +118,10 @@ def read_assets_in_bbox(
         con.close()
 
     out: list[tuple] = []
+    clip_prep = None
     if clip_geom is not None:
         from shapely.geometry import Point
 
-        clip_prep = None
         try:
             from shapely.prepared import prep
 
@@ -134,12 +135,35 @@ def read_assets_in_bbox(
             continue
         lon_f, lat_f = float(lon), float(lat)
         if clip_geom is not None:
+            from shapely.geometry import Point
+
             pt = Point(lon_f, lat_f)
             hit = clip_prep.intersects(pt) if clip_prep is not None else clip_geom.intersects(pt)
             if not hit:
                 continue
-        geom = {"type": "Point", "coordinates": [lon_f, lat_f]}
-        out.append((int(r[0]), geom, r[3], r[4], r[5], int(r[6]), int(r[7])))
+        geom_type_raw = r[4]
+        geom_type = str(geom_type_raw or "").strip().upper()
+        geom_wkb = r[9]
+        use_full = geom_type in ("L", "S") and geom_wkb is not None
+        if use_full:
+            geom = _wkb_to_geojson(geom_wkb, lon_f, lat_f)
+            if geom is None:
+                geom = {"type": "Point", "coordinates": [lon_f, lat_f]}
+                use_full = False
+        else:
+            geom = {"type": "Point", "coordinates": [lon_f, lat_f]}
+        out.append(
+            (
+                int(r[0]),
+                geom,
+                r[3],
+                r[4],
+                r[5],
+                int(r[6]),
+                int(r[7]),
+                int(r[8]) if r[8] is not None else None,
+            )
+        )
         if len(out) >= limit:
             break
     return out
@@ -343,7 +367,13 @@ def read_areas_in_bbox(
     clip_geom=None,
     simplify_tolerance_deg: float = 0.0,
 ) -> list[tuple]:
-    """Rows (id, geometry_dict, name, region_id, province_id, municipality_id, level)."""
+    """Rows (id, geometry_dict, name, region_id, province_id, municipality_id, level).
+
+    Candidate rows are selected by a *padded* lon/lat window, then kept only if
+    the polygon (or point) intersects the real viewport. Centroid-only filters
+    drop large parks when the map shows an edge but the centroid is outside
+    (e.g. Villa comunale Giardino Garibaldi at high zoom).
+    """
     if not resolutions or limit <= 0:
         return []
     minx, miny, maxx, maxy = bbox
@@ -353,6 +383,14 @@ def read_areas_in_bbox(
         maxx, maxy = min(maxx, cx1), min(maxy, cy1)
         if minx > maxx or miny > maxy:
             return []
+    # ~2 km floor + half viewport: catch centroids of parks that still
+    # intersect the visible envelope.
+    pad_x = max(0.02, (maxx - minx) * 0.5)
+    pad_y = max(0.02, (maxy - miny) * 0.5)
+    qminx, qminy = minx - pad_x, miny - pad_y
+    qmaxx, qmaxy = maxx + pad_x, maxy + pad_y
+    # Over-fetch candidates; geom.intersects prunes to `limit`.
+    cand_limit = max(int(limit) * 8, 2000)
     globs = [parquet_glob(r.object_prefix) for r in resolutions]
     files_sql = ", ".join(f"'{g}'" for g in globs)
     con = connect_lakehouse()
@@ -361,17 +399,27 @@ def read_areas_in_bbox(
             f"""
             SELECT id, geom_wkb, lon, lat, name, level, parent_id, region_id, province_id, municipality_id
             FROM read_parquet([{files_sql}], union_by_name=true)
-            WHERE lon BETWEEN {minx} AND {maxx}
-              AND lat BETWEEN {miny} AND {maxy}
-            LIMIT {int(limit) if clip_geom is None else int(limit) * 4}
+            WHERE lon BETWEEN {qminx} AND {qmaxx}
+              AND lat BETWEEN {qminy} AND {qmaxy}
+            LIMIT {cand_limit}
             """
         ).fetchall()
     finally:
         con.close()
-    out: list[tuple] = []
     from shapely import to_geojson, wkb as shapely_wkb
+    from shapely.geometry import box as shapely_box
+    from shapely.geometry import Point
 
+    view = shapely_box(minx, miny, maxx, maxy)
+    if clip_geom is not None:
+        try:
+            view = view.intersection(clip_geom)
+        except Exception:
+            pass
+        if view.is_empty:
+            return []
     tol = float(simplify_tolerance_deg or 0.0)
+    scored: list[tuple[float, tuple, object]] = []
     for r in rows:
         if r[1] is None and (r[2] is None or r[3] is None):
             continue
@@ -379,15 +427,25 @@ def read_areas_in_bbox(
             geom = shapely_wkb.loads(bytes(r[1])) if r[1] is not None else None
         except Exception:
             geom = None
-        if clip_geom is not None:
-            if geom is None:
+        if geom is None and r[2] is not None and r[3] is not None:
+            geom = Point(float(r[2]), float(r[3]))
+        try:
+            if geom is None or not geom.intersects(view):
                 continue
-            try:
-                if not geom.intersects(clip_geom):
-                    continue
-            except Exception:
-                continue
-        if geom is not None and tol > 0:
+        except Exception:
+            continue
+        try:
+            score = float(geom.area) if geom is not None else 0.0
+        except Exception:
+            score = 0.0
+        scored.append((score, r, geom))
+
+    # Prefer larger polygons so parks beat tiny mock "Area boost" under the cap.
+    scored.sort(key=lambda item: item[0], reverse=True)
+
+    out: list[tuple] = []
+    for _score, r, geom in scored:
+        if tol > 0 and geom is not None and geom.geom_type != "Point":
             try:
                 # preserve_topology=False is faster and fine for map silhouettes.
                 geom = geom.simplify(tol, preserve_topology=False)
@@ -654,10 +712,21 @@ def read_areas_by_parent(
     *,
     parent_id: int,
     region_id: int,
+    province_id: int | None = None,
+    municipality_id: int | None = None,
     limit: int = _CATALOG_FEATURE_LIMIT,
 ) -> list[tuple]:
-    """Direct children of parent_id → FC row tuples."""
+    """Direct children of parent_id → FC row tuples.
+
+    Prefer province/municipality filters so DuckDB does not scan every
+    municipality parquet under the region (region-wide parent probes were
+    multi-second and could 500 when MinIO was under load).
+    """
     where = f"parent_id = {int(parent_id)} AND region_id = {int(region_id)}"
+    if province_id is not None:
+        where += f" AND province_id = {int(province_id)}"
+    if municipality_id is not None:
+        where += f" AND municipality_id = {int(municipality_id)}"
     out: list[tuple] = []
     for r in _fetch_area_raw_rows(resolutions, where, limit):
         t = _raw_area_to_fc_tuple(r)

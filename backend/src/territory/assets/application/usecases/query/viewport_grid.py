@@ -36,6 +36,22 @@ RAW_MIN_ZOOM = 19.0
 # (13k points in the Lecce test zone) cannot be drawn fluidly feature-by-feature.
 LAST_ZOOM_RAW_HARD_CAP = 800
 
+# Grid gold can explode on wide viewports after national seed (measured on a
+# ~558-muni NW Italy bbox: z15≈104k feats/12s, z16≈286k/40s, z18 timeout).
+# Cap what we return to the map; above this fall back / coarsen.
+GRID_CLUSTER_HARD_CAP = 1500
+# If more municipalities intersect the bbox, keep municipality admin markers
+# instead of opening fine grid_{z} Parquet (avoids multi-minute DuckDB reads).
+GRID_ADMIN_HANDOFF_MAX_MUNICIPALITIES = 80
+
+# Raw silver scan opens one Parquet per municipality (measured: 3 muni≈29ms,
+# 558≈3.5–4s, 7895≈41–56s). Above this count keep clusters instead of points.
+RAW_MAX_MUNICIPALITIES = 40
+
+# National municipality admin at z12+ returns ~7.9k markers / ~1MB / 0.5–1.2s.
+# Roll up to province when the payload would flood the map.
+ADMIN_MUNICIPALITY_HARD_CAP = 1500
+
 # Deepest zoom whose resolution still refines the cluster grid; past this the
 # raw threshold takes over anyway.
 CLUSTER_GRID_MAX_REFINE_ZOOM = 18
@@ -43,8 +59,10 @@ CLUSTER_GRID_MAX_REFINE_ZOOM = 18
 # Zoom bands for pre-aggregated administrative clusters (gold Parquet).
 # Below these zooms a live grid aggregation would scan every asset row in the
 # bbox (unbounded at national scale); admin aggregates are O(#admin units).
-ADMIN_LEVEL_REGION_MAX_ZOOM = 7
-ADMIN_LEVEL_PROVINCE_MAX_ZOOM = 9
+# Tuned for national ~8k municipalities: keep province through z11 so a
+# mid-zoom provincial strip does not flood the map with overlapping M* markers.
+ADMIN_LEVEL_REGION_MAX_ZOOM = 8
+ADMIN_LEVEL_PROVINCE_MAX_ZOOM = 12
 
 
 def admin_level_for_zoom(zoom: float) -> str | None:

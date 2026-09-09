@@ -11,11 +11,11 @@ export const MUNICIPALITY_FRAME_ZOOM_OFFSET = -1.5
 
 /**
  * Server aggregation thresholds (mirror backend viewport_grid.py):
- * region <7, province <9, municipality <13, grid <19, raw ≥19.
+ * region <8, province <12, municipality <13, grid <19, raw ≥19.
  * Cluster click must land past the next threshold or the viewport refetch
  * returns the same aggregation level (clusters appear "not exploded").
  */
-export const CLUSTER_DRILL_ZOOM_THRESHOLDS = [7, 9, 13, 19] as const
+export const CLUSTER_DRILL_ZOOM_THRESHOLDS = [8, 12, 13, 19] as const
 
 /** Next zoom that changes cluster aggregation; nudge past threshold for vendor snap. */
 export function nextClusterDrillZoom(currentZoom: number): number {

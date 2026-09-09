@@ -1,7 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
 import { GeometryRegistry } from '../geometryRegistry'
-import { selectByGeomId } from './geoinsightMapSelection'
 import type { GeoinsightAdapterHost } from './geoinsightAdapterHost'
+
+const { zoomGeoinsightForClusterDrill } = vi.hoisted(() => ({
+  zoomGeoinsightForClusterDrill: vi.fn(),
+}))
+
+vi.mock('./geoinsightMapViewport', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./geoinsightMapViewport')>()
+  return {
+    ...actual,
+    zoomGeoinsightForClusterDrill,
+  }
+})
+
+import { selectByGeomId } from './geoinsightMapSelection'
 
 function makeHost(overrides: Partial<GeoinsightAdapterHost> = {}): GeoinsightAdapterHost {
   const registry = new GeometryRegistry()
@@ -122,6 +135,27 @@ describe('selectByGeomId', () => {
     selectByGeomId(host, 'T_1')
 
     expect(host.onFeatureSelectRef.current).not.toHaveBeenCalled()
+    expect(host.onGreenDetailSelectRef.current).not.toHaveBeenCalled()
+  })
+
+  it('drills singleton clusters (count=1) instead of ignoring them', () => {
+    zoomGeoinsightForClusterDrill.mockClear()
+    const host = makeHost()
+    host.registry.register({
+      id: 99,
+      label: '1',
+      geomId: 'GC_99',
+      layerKind: 'cluster',
+      bbox: [9.1, 45.4, 9.1, 45.4],
+      properties: { cluster_count: 1 },
+      geometry: { type: 'Point', coordinates: [9.1, 45.4] },
+      isCluster: true,
+      memberCount: 1,
+    })
+
+    selectByGeomId(host, 'GC_99')
+
+    expect(zoomGeoinsightForClusterDrill).toHaveBeenCalledWith(host, [9.1, 45.4, 9.1, 45.4])
     expect(host.onGreenDetailSelectRef.current).not.toHaveBeenCalled()
   })
 })

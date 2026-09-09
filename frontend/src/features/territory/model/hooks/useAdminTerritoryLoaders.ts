@@ -4,6 +4,8 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { filterSubMunicipalByDrill } from '../../lib/subMunicipalDrill'
 import { hasGeoJsonFeatures } from '../../lib/geoJsonHelpers'
+import { geoJsonToGeoinsightGeometries, unionBboxes } from '../../lib/geoJsonToGeoinsight'
+import { GEOM_PREFIX } from '@/features/territory-map-geoinsight/model/constants'
 import type { TerritoryMapFeature } from '../../types/mapFeature'
 import type {
   BreadcrumbCrumb,
@@ -57,16 +59,25 @@ export function useAdminTerritoryLoaders(args: UseAdminTerritoryLoadersArgs) {
     setBreadcrumb,
   } = args
 
-  const loadRegions = useCallback(async (options?: { fit?: boolean }) => {
+  const loadRegions = useCallback(async (options?: { fit?: boolean; mountTerritory?: boolean }) => {
     if (!api) return
     const fit = options?.fit !== false
+    const mountTerritory = options?.mountTerritory !== false
     clearTerritoryState()
     setLevel(LEVEL_REGIONS)
     setBreadcrumb([])
     await withLoading(async () => {
       const geojson = await api.getRegions()
-      bridgeRef.current.loadGeoJson(geojson)
-      if (fit) bridgeRef.current.fitToCurrentExtent()
+      if (mountTerritory) {
+        bridgeRef.current.loadGeoJson(geojson)
+        if (fit) bridgeRef.current.fitToCurrentExtent()
+        return
+      }
+      if (fit) {
+        const { metas } = geoJsonToGeoinsightGeometries(geojson, GEOM_PREFIX.territory)
+        const bbox = unionBboxes(metas.map((m) => m.bbox))
+        if (bbox) bridgeRef.current.zoomToWgs84Bbox(bbox)
+      }
     })
   }, [api, withLoading, clearTerritoryState, bridgeRef, setLevel, setBreadcrumb])
 

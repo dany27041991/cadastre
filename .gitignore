@@ -74,3 +74,6 @@ htmlcov/
 # --- Cursor / browser (se in repo) ---
 .cursor/
 browser-logs/
+
+# National lakehouse seed checkpoint
+infrastructure/scripts/database/seed/.national_seed_checkpoint.jsonl

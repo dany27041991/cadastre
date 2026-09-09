@@ -3,17 +3,17 @@ import { nextClusterDrillZoom } from './mapZoomUtils'
 
 describe('nextClusterDrillZoom', () => {
   it('jumps past region → province threshold', () => {
-    expect(nextClusterDrillZoom(5)).toBeCloseTo(7.15)
-    expect(nextClusterDrillZoom(6.9)).toBeCloseTo(7.15)
+    expect(nextClusterDrillZoom(5)).toBeCloseTo(8.15)
+    expect(nextClusterDrillZoom(7.9)).toBeCloseTo(8.15)
   })
 
   it('jumps past province → municipality threshold', () => {
-    expect(nextClusterDrillZoom(7)).toBeCloseTo(9.15)
-    expect(nextClusterDrillZoom(8.5)).toBeCloseTo(9.15)
+    expect(nextClusterDrillZoom(8)).toBeCloseTo(12.15)
+    expect(nextClusterDrillZoom(11.5)).toBeCloseTo(12.15)
   })
 
   it('jumps past municipality → grid threshold', () => {
-    expect(nextClusterDrillZoom(9)).toBeCloseTo(13.15)
+    expect(nextClusterDrillZoom(12)).toBeCloseTo(13.15)
     expect(nextClusterDrillZoom(12.5)).toBeCloseTo(13.15)
   })
 

@@ -33,9 +33,34 @@ describe('serverViewportCollectionToDisplayItems', () => {
     expect(cluster?.memberCount).toBe(42)
     expect(cluster?.clusterKey).toBe('123,456')
     expect(cluster?.bbox).toEqual([12.0, 42.0, 12.1, 42.1])
+    expect(cluster?.id).toBe(10)
     const single = items.find((item) => !item.isCluster)
     expect(single?.id).toBe(7)
     expect(single?.bbox).toEqual([12.2, 42.2, 12.2, 42.2])
+  })
+
+  it('keeps sample_id on singleton server clusters', () => {
+    const items = serverViewportCollectionToDisplayItems({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          id: 99,
+          properties: {
+            id: 99,
+            cluster: true,
+            cluster_count: 1,
+            cluster_key: '1,2',
+            cluster_bbox: [9.1, 45.4, 9.1, 45.4],
+          },
+          geometry: { type: 'Point', coordinates: [9.1, 45.4] },
+        },
+      ],
+    })
+    expect(items).toHaveLength(1)
+    expect(items[0]?.isCluster).toBe(true)
+    expect(items[0]?.memberCount).toBe(1)
+    expect(items[0]?.id).toBe(99)
   })
 
   it('returns empty for an empty collection', () => {

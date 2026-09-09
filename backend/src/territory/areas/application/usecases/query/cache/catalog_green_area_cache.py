@@ -40,7 +40,15 @@ def get_cached_green_areas(
             contained_in_area_id, region_id, province_id, municipality_id
         )
     if parent_id is not None:
-        return repository.get_by_parent(parent_id, region_id)
+        # Scope to province (+ municipality when known). Region-only parent
+        # scans hit every comune parquet and overload MinIO under concurrent map load.
+        result = repository.get_by_parent(
+            parent_id,
+            region_id,
+            province_id=province_id,
+            municipality_id=municipality_id,
+        )
+        return result
     if municipality_id is None:
         return _EMPTY
     dates = _date_key(repository)

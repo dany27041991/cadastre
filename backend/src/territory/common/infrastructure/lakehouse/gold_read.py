@@ -24,6 +24,7 @@ CLUSTER_GRID_MAX_REFINE_ZOOM = 18
 
 logger = logging.getLogger(__name__)
 
+
 _WEB_MERCATOR_HALF = 20037508.34
 
 # Batch globs per DuckDB read (sequential per-file was multi-second at national scale).
@@ -32,6 +33,12 @@ _GOLD_READ_CHUNK = 100
 _GOLD_CACHE_TTL_SEC = 120.0
 _gold_cache_lock = threading.Lock()
 _gold_cache: dict[tuple[str, tuple], tuple[float, list[tuple]]] = {}
+
+
+def invalidate_gold_cache() -> None:
+    """Drop in-process gold Parquet cache (call after municipality re-ingest)."""
+    with _gold_cache_lock:
+        _gold_cache.clear()
 
 _GOLD_SELECT = """
 SELECT level, region_id, province_id, municipality_id,
@@ -153,10 +160,11 @@ def _read_gold_rows(resolutions: list[IngestResolution], zoom_band: str) -> list
     finally:
         con.close()
 
+
     with _gold_cache_lock:
         _gold_cache[key] = (time.monotonic(), rows)
-        if len(_gold_cache) > 32:
-            oldest = sorted(_gold_cache.items(), key=lambda kv: kv[1][0])[:8]
+        if len(_gold_cache) > 96:
+            oldest = sorted(_gold_cache.items(), key=lambda kv: kv[1][0])[:16]
             for old_key, _ in oldest:
                 _gold_cache.pop(old_key, None)
     return list(rows)
@@ -255,14 +263,22 @@ def _read_admin_municipality_band_rows(
     if legacy_resolutions:
         rows.extend(_read_gold_rows(legacy_resolutions, "municipality"))
 
+
     key = _cache_key(resolutions, "municipality")
     with _gold_cache_lock:
         _gold_cache[key] = (time.monotonic(), rows)
-        if len(_gold_cache) > 32:
-            oldest = sorted(_gold_cache.items(), key=lambda kv: kv[1][0])[:8]
+        if len(_gold_cache) > 96:
+            oldest = sorted(_gold_cache.items(), key=lambda kv: kv[1][0])[:16]
             for old_key, _ in oldest:
                 _gold_cache.pop(old_key, None)
     return list(rows)
+
+
+def _bbox_intersects(
+    a: tuple[float, float, float, float],
+    b: tuple[float, float, float, float],
+) -> bool:
+    return a[0] <= b[2] and a[2] >= b[0] and a[1] <= b[3] and a[3] >= b[1]
 
 
 def read_admin_clusters(
@@ -270,21 +286,27 @@ def read_admin_clusters(
     level: AdminLevel,
     bbox: tuple[float, float, float, float],
 ) -> list[ViewportCluster]:
-    """Roll up municipality gold bands to region/province/municipality."""
+    """Roll up municipality gold bands to region/province/municipality.
+
+    Region/province counts are always the full unit total (all member rows in
+    ``resolutions``). Visibility still follows the viewport: emit the unit when
+    its aggregated extent intersects ``bbox``. Municipality markers stay
+    bbox-filtered per row.
+    """
     rows = _read_admin_municipality_band_rows(resolutions)
     if not rows:
         return []
 
     buckets: dict[tuple, list[tuple]] = {}
     for r in rows:
-        if not _intersects_bbox(r, bbox):
-            continue
         region_id, province_id, municipality_id = int(r[1]), int(r[2]), int(r[3])
         if level == "region":
             key = ("region", region_id, None, None)
         elif level == "province":
             key = ("province", region_id, province_id, None)
         elif level == "municipality":
+            if not _intersects_bbox(r, bbox):
+                continue
             key = ("municipality", region_id, province_id, municipality_id)
         else:
             continue
@@ -303,6 +325,10 @@ def read_admin_clusters(
             max(float(m[12]) for m in members),
             max(float(m[13]) for m in members),
         )
+        if level in {"region", "province"} and not _bbox_intersects(bbox_out, bbox):
+            # Unit extent outside the view — skip (count stays full when shown).
+            if not any(_intersects_bbox(m, bbox) for m in members):
+                continue
         key_parts = [str(p) for p in (region_id, province_id, municipality_id) if p is not None]
         clusters.append(
             ViewportCluster(

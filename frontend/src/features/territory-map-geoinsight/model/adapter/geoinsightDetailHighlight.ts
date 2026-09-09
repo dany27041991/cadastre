@@ -9,6 +9,11 @@ import WKT from 'terraformer-wkt-parser'
 import type { TerritoryMapFeature } from '@/features/territory/types/mapFeature'
 import type { GeoinsightGeometryClip } from '@/features/territory/lib/geoJsonToGeoinsight'
 import {
+  buildGreenAreaGeomId,
+  buildGreenAssetGeomId,
+  municipalityIdFromProperties,
+} from '@/features/territory/lib/greenAreaGeomId'
+import {
   GEOM_PREFIX,
   GEOINSIGHT_EPSG_WGS84,
   GREEN_AREA_GEOMETRY_COLOR,
@@ -54,13 +59,30 @@ function geometryToWkt(geometry: object): string | null {
 
 function findMountedGreenClip(
   host: GreenDetailHighlightHost,
-  featureId: number
+  featureId: number,
+  feature?: TerritoryMapFeature | null
 ): GeoinsightGeometryClip | null {
   const geometries = host.lastGreenGeometries
   if (!geometries?.length) return null
-  const areaId = `${GEOM_PREFIX.greenArea}${featureId}`
-  const assetId = `${GEOM_PREFIX.greenAsset}${featureId}`
-  return geometries.find((g) => g.geom_id === areaId || g.geom_id === assetId) ?? null
+  const muni = municipalityIdFromProperties(
+    (feature?.properties ?? null) as Record<string, unknown> | null
+  )
+  const areaId = buildGreenAreaGeomId(featureId, muni)
+  const assetId = buildGreenAssetGeomId(featureId, muni)
+  const exact =
+    geometries.find((g) => g.geom_id === areaId || g.geom_id === assetId) ?? null
+  if (exact) return exact
+  // Legacy GA_/GS_<id> or any GA_/GS_<muni>_<id> for this feature id.
+  return (
+    geometries.find(
+      (g) =>
+        g.geom_id === `${GEOM_PREFIX.greenArea}${featureId}` ||
+        g.geom_id === `${GEOM_PREFIX.greenAsset}${featureId}` ||
+        ((g.geom_id.startsWith(GEOM_PREFIX.greenArea) ||
+          g.geom_id.startsWith(GEOM_PREFIX.greenAsset)) &&
+          g.geom_id.endsWith(`_${featureId}`))
+    ) ?? null
+  )
 }
 
 function withRedSelection(clip: GeoinsightGeometryClip): GeoinsightGeometryClip {
@@ -80,11 +102,16 @@ function fallbackClipFromFeature(
 ): GeoinsightGeometryClip | null {
   const wkt = geometryToWkt(feature.geometry)
   if (!wkt || !Number.isFinite(feature.id)) return null
-  const prefix = preferAsset ? GEOM_PREFIX.greenAsset : GEOM_PREFIX.greenArea
+  const muni = municipalityIdFromProperties(
+    feature.properties as Record<string, unknown>
+  )
+  const geom_id = preferAsset
+    ? buildGreenAssetGeomId(feature.id, muni)
+    : buildGreenAreaGeomId(feature.id, muni)
   return {
     type: 'WKT',
     data: wkt,
-    geom_id: `${prefix}${feature.id}`,
+    geom_id,
     epsg: GEOINSIGHT_EPSG_WGS84,
     color: GREEN_DETAIL_HIGHLIGHT_COLOR,
     stroke_width: 5,
@@ -110,7 +137,7 @@ function applySelectionRecolor(
   feature: TerritoryMapFeature,
   preferAsset = false
 ): { geomId: string; usedMounted: boolean; wktLen: number } | null {
-  const mounted = findMountedGreenClip(host, feature.id)
+  const mounted = findMountedGreenClip(host, feature.id, feature)
   const redClip = mounted
     ? withRedSelection(mounted)
     : fallbackClipFromFeature(feature, preferAsset)

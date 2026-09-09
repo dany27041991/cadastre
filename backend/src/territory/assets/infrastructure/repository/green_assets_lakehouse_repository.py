@@ -192,9 +192,14 @@ class GreenAssetsLakehouseRepository:
         asset_id: int,
         region_id: int,
         province_id: int,
+        municipality_id: int | None = None,
     ) -> dict[str, Any] | None:
         return silver_read.read_asset_by_pk(
-            self._resolutions(region_id=region_id, province_id=province_id),
+            self._resolutions(
+                region_id=region_id,
+                province_id=province_id,
+                municipality_id=municipality_id,
+            ),
             asset_id,
             region_id,
             province_id,
@@ -205,8 +210,11 @@ class GreenAssetsLakehouseRepository:
         asset_id: int,
         region_id: int,
         province_id: int,
+        municipality_id: int | None = None,
     ) -> dict[str, Any] | None:
-        return self.get_by_pk(asset_id, region_id, province_id)
+        return self.get_by_pk(
+            asset_id, region_id, province_id, municipality_id=municipality_id
+        )
 
     def get_bbox_by_pk(
         self,
@@ -397,12 +405,24 @@ class GreenAssetsLakehouseRepository:
         )
         if municipality_id is None and view_muni_ids is not None and not view_muni_ids:
             return []
-        resolutions = self._resolutions(
-            region_id=region_id,
-            province_id=province_id,
-            municipality_id=municipality_id,
-            municipality_ids=view_muni_ids,
-        )
+        # Region/province markers must keep the full admin total. Filtering
+        # resolutions to the viewport made the count shrink on pan (e.g. P16_75
+        # 128392 → 36254) and FE pan-additive kept both GC_* ids (count is in
+        # the geom_id suffix).
+        if level in {"region", "province"}:
+            resolutions = self._resolutions(
+                region_id=region_id,
+                province_id=province_id,
+                municipality_id=municipality_id,
+                municipality_ids=None,
+            )
+        else:
+            resolutions = self._resolutions(
+                region_id=region_id,
+                province_id=province_id,
+                municipality_id=municipality_id,
+                municipality_ids=view_muni_ids,
+            )
         if not resolutions:
             return []
         clusters = gold_read.read_admin_clusters(resolutions, level, bbox)  # type: ignore[arg-type]

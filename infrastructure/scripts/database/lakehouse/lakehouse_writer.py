@@ -19,6 +19,7 @@ import hashlib
 import io
 import os
 import sys
+import threading
 from datetime import date, datetime, timezone
 from typing import Any
 
@@ -38,6 +39,7 @@ from gold_clusters import (
 )
 
 CATALOG_KEY = "_catalog/municipality_ingests.parquet"
+_catalog_lock = threading.Lock()
 
 
 def _env(name: str, default: str | None = None) -> str:
@@ -139,32 +141,34 @@ def upsert_catalog(
     row_count: int,
     checksum: str,
 ) -> None:
-    existing = load_catalog_table(client)
-    rows: list[dict[str, Any]] = existing.to_pylist()
-    rows = [
-        r
-        for r in rows
-        if not (
-            r["municipality_id"] == municipality_id
-            and r["dataset"] == dataset
-            and r["ingest_at"] == ingest_at
+    """Read-modify-write catalog under a process lock (safe for parallel national seed)."""
+    with _catalog_lock:
+        existing = load_catalog_table(client)
+        rows: list[dict[str, Any]] = existing.to_pylist()
+        rows = [
+            r
+            for r in rows
+            if not (
+                r["municipality_id"] == municipality_id
+                and r["dataset"] == dataset
+                and r["ingest_at"] == ingest_at
+            )
+        ]
+        rows.append(
+            {
+                "municipality_id": municipality_id,
+                "region_id": region_id,
+                "province_id": province_id,
+                "dataset": dataset,
+                "ingest_at": ingest_at,
+                "object_prefix": object_prefix,
+                "row_count": row_count,
+                "checksum": checksum,
+                "written_at": datetime.now(timezone.utc),
+            }
         )
-    ]
-    rows.append(
-        {
-            "municipality_id": municipality_id,
-            "region_id": region_id,
-            "province_id": province_id,
-            "dataset": dataset,
-            "ingest_at": ingest_at,
-            "object_prefix": object_prefix,
-            "row_count": row_count,
-            "checksum": checksum,
-            "written_at": datetime.now(timezone.utc),
-        }
-    )
-    table = pa.Table.from_pylist(rows, schema=catalog_schema())
-    put_bytes(client, CATALOG_KEY, table_to_parquet_bytes(table))
+        table = pa.Table.from_pylist(rows, schema=catalog_schema())
+        put_bytes(client, CATALOG_KEY, table_to_parquet_bytes(table))
 
 
 def write_dataset_part(

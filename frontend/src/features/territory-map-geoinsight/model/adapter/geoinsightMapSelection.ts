@@ -56,10 +56,10 @@ export function selectByGeomId(host: GeoinsightAdapterHost, geomId: string): voi
   const entry = host.registry.resolveGeomId(geomId)
   if (!entry) return
 
-  if (entry.isCluster && (entry.memberCount ?? 0) > 1) {
+  if (entry.isCluster && (entry.memberCount ?? 0) >= 1) {
     // Jump past the next aggregation threshold (region→province→municipality→grid→raw).
-    // A plain +1.5 / fit on large admin bboxes often stayed in the same zoom band,
-    // so the viewport refetch returned identical clusters (no visible explode).
+    // Includes singleton (count=1) cells: previously `> 1` left them inert (no zoom,
+    // layerKind stayed "cluster" so detail never opened either).
     zoomGeoinsightForClusterDrill(host, entry.bbox)
     return
   }
