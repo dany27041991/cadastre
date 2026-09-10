@@ -25,9 +25,7 @@
         "description": "From this screen you can select the visualization type to apply to the map",
         "areaItalia": "Italy area",
         "drawOnMap": "Draw on map",
-        "uploadFile": "Upload from file",
-        "searchManagedAreas": "Search managed areas",
-        "searchGreenAssets": "Search green assets"
+        "uploadFile": "Upload from file"
       },
       "draw": {
         "title": "Draw on map",

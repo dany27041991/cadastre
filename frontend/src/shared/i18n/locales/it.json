@@ -25,9 +25,7 @@
         "description": "Da questa schermata potrai selezionare il tipo di visualizzazione da applicare alla mappa",
         "areaItalia": "Area Italia",
         "drawOnMap": "Disegna su mappa",
-        "uploadFile": "Carica da file",
-        "searchManagedAreas": "Cerca aree gestite",
-        "searchGreenAssets": "Cerca asset verdi"
+        "uploadFile": "Carica da file"
       },
       "draw": {
         "title": "Disegna su mappa",

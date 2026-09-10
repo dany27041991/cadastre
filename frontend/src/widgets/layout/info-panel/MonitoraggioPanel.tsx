@@ -9,8 +9,6 @@ export type MonitoraggioActionId =
   | 'area-italia'
   | 'draw-on-map'
   | 'upload-file'
-  | 'search-managed-areas'
-  | 'search-green-assets'
 
 type IconComponent = (typeof icons)[keyof typeof icons]
 
@@ -50,16 +48,6 @@ const ACTIONS: ActionDef[] = [
     id: 'upload-file',
     Icon: icons.DocumentTextIcon,
     labelKey: 'territory.panel.monitoraggio.uploadFile',
-  },
-  {
-    id: 'search-managed-areas',
-    Icon: icons.GlobalSearchIcon,
-    labelKey: 'territory.panel.monitoraggio.searchManagedAreas',
-  },
-  {
-    id: 'search-green-assets',
-    Icon: icons.ScanningIcon,
-    labelKey: 'territory.panel.monitoraggio.searchGreenAssets',
   },
 ]
 

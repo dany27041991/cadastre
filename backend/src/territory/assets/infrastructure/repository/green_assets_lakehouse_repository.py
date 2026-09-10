@@ -535,6 +535,29 @@ class GreenAssetsLakehouseRepository:
         clip_wkt: str | None = None,
     ) -> list[ViewportCluster]:
         # Live-grid scopes: gold band + geometric clip/sub-municipal filter.
+        clip_geom = self._resolve_clip_geom(
+            municipality_id=municipality_id,
+            sub_municipal_area_id=sub_municipal_area_id,
+            clip_wkt=clip_wkt,
+        )
+        if sub_municipal_area_id is not None and clip_geom is None:
+            return []
+
+        # Sub-municipal (and draw∩sub) must use exact silver∩clip: pre-aggregated
+        # gold cells filtered by sample-point leak markers outside the quartiere.
+        if sub_municipal_area_id is not None and clip_geom is not None:
+            exact = self._exact_clusters_for_clip(
+                clip_wkt=clip_geom.wkt,
+                mode="grid",
+                bbox=bbox,
+                cell_size_m=cell_size_m,
+                region_id=region_id,
+                province_id=province_id,
+                municipality_id=municipality_id,
+            )
+            if exact is not None:
+                return exact
+
         if clip_wkt and sub_municipal_area_id is None and green_area_id is None:
             exact = self._exact_clusters_for_clip(
                 clip_wkt=clip_wkt,
@@ -559,13 +582,6 @@ class GreenAssetsLakehouseRepository:
             _zoom_level_for_cell_size(cell_size_m),
             bbox,
         )
-        clip_geom = self._resolve_clip_geom(
-            municipality_id=municipality_id,
-            sub_municipal_area_id=sub_municipal_area_id,
-            clip_wkt=clip_wkt,
-        )
-        if sub_municipal_area_id is not None and clip_geom is None:
-            return []
         # green_area_id not applied on gold aggregates (no per-asset join in V1).
         _ = green_area_id
         return self._filter_clusters_by_clip(clusters, clip_geom)

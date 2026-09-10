@@ -109,7 +109,7 @@ export function Sidebar({ collapsed = false, toggleCollapse = () => {} }: Sideba
         collapsed={collapsed}
         toggleCollapse={toggleCollapse}
         headerConfig={{
-          label: 'CU 8.0',
+          label: 'SINEU',
           logoConfig1: SIDEBAR_HEADER_LOGO,
           toggleCollapse,
           color: 'primary',

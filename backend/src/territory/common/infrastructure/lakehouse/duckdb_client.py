@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 from core.config import settings
 
 # Concurrent viewport + table requests share this pool. size=4 exhausted under
-# national seed (debug 4fe799: 30s waits → 500 "pool exhausted"; map never loads).
+# national seed (30s waits → 500 "pool exhausted"; map never loads).
 _POOL_SIZE = max(1, int(os.environ.get("LAKEHOUSE_DUCKDB_POOL_SIZE", "8")))
 _POOL_WAIT_SEC = float(os.environ.get("LAKEHOUSE_DUCKDB_POOL_WAIT_SEC", "8"))
 _pool: queue.Queue | None = None

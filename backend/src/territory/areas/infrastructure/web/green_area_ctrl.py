@@ -182,7 +182,7 @@ def get_green_areas_table(
         if v is not None
     }
     # Unscoped national table scans every municipality Parquet and saturates the
-    # DuckDB/MinIO pool (debug 4fe799: concurrent /table + viewport → 500).
+    # DuckDB/MinIO pool (concurrent /table + viewport → 500).
     if (
         municipality_id is None
         and region_id is None

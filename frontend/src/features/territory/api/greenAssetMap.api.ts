@@ -72,8 +72,7 @@ export function createGreenAssetsApi(
     ): Promise<GeoJSONFeatureCollection> => {
       try {
         const path = `/api/territory/green-assets/viewport?${buildGreenAssetViewportQuery(params)}`
-        const collection = await fetchGeobufOrEmpty(path)
-        return collection
+        return await fetchGeobufOrEmpty(path)
       } catch (err) {
         // 500 / pool exhausted: keep map usable; next settle refresh retries.
         return EMPTY_GEOJSON

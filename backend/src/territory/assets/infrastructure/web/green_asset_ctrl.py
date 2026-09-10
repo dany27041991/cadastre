@@ -234,7 +234,7 @@ def get_green_assets_table(
         }.items()
         if v is not None
     }
-    # Unscoped national table scans saturate DuckDB/MinIO (debug 4fe799).
+    # Unscoped national table scans saturate DuckDB/MinIO.
     if (
         municipality_id is None
         and region_id is None

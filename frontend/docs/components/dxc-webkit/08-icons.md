@@ -17,8 +17,6 @@ Esempi usati in Monitoraggio:
 | Area Italia | `UnitaAmministrativeIcon` | ![UnitaAmministrativeIcon](./icons/UnitaAmministrativeIcon.png) |
 | Disegna su mappa | `PenToolIcon` | ![PenToolIcon](./icons/PenToolIcon.png) |
 | Carica da file | `DocumentTextIcon` | ![DocumentTextIcon](./icons/DocumentTextIcon.png) |
-| Cerca aree gestite | `GlobalSearchIcon` | ![GlobalSearchIcon](./icons/GlobalSearchIcon.png) |
-| Cerca asset verdi | `ScanningIcon` | ![ScanningIcon](./icons/ScanningIcon.png) |
 
 ---
 

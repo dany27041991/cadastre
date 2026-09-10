@@ -163,7 +163,7 @@ class CatalogGreenAsset:
         if use_gold:
             assert gold_level is not None
             # Wide-viewport guard: municipality admin is O(#munis) and cheap;
-            # fine grid_{z} over hundreds of munis hangs the map (debug 4fe799).
+            # fine grid_{z} over hundreds of munis hangs the map.
             # Single-municipality scope (e.g. Lecce breadcrumb) never needs the
             # handoff scan — skip the extra admin gold round-trip.
             if municipality_id is not None:
