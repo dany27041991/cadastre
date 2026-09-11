@@ -279,10 +279,9 @@ export function useTerritoryNavigation(
       layerKind?: MapLayerKind
     ) => {
       if (layerKind === LAYER_KIND_GREEN_ASSET || layerKind === LAYER_KIND_GREEN_AREA) return
-      const overlaysActive =
-        (assetsActiveRef.current?.() ?? false) || (areasActiveRef.current?.() ?? false)
-      if (overlaysActive) return
-
+      // Allow admin drill while green overlays are on so breadcrumb (and thus the
+      // green data table) can gain municipality scope. Green clicks are ignored
+      // above; green viewport reloads via useGreenAssetsLayer contextKey.
       const regionIdFromCrumb = breadcrumb[0]?.id
       const municipalityId = breadcrumb[breadcrumb.length - 1]?.id
       const loadSubAreasFromFeature = () => {

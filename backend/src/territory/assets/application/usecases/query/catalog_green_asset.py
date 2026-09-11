@@ -352,7 +352,10 @@ class CatalogGreenAsset:
                 sub_municipal_area_id=sub_municipal_area_id,
                 clip_wkt=clip_wkt,
             )
-        if not clusters and (clip_wkt or level == "sub_municipal"):
+        # Empty admin must not short-circuit the viewport: callers treat any
+        # FeatureCollection (including empty) as final. Fall through to grid/raw
+        # when gold has no rows for the resolved ingest window (multi-snapshot).
+        if not clusters:
             return None
         features = []
         for cluster in clusters:

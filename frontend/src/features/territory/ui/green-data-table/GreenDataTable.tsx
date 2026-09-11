@@ -248,6 +248,9 @@ export function GreenDataTable({
   const [sort, setSort] = useState<[string, 'asc' | 'desc'] | null>(null)
   /** Local value for "go to page" input (CustomTable has no native number field for this). */
   const [pageInput, setPageInput] = useState('1')
+  /** Bumps when BE finishes a background national COUNT so pager totals refresh. */
+  const [exactTotalNonce, setExactTotalNonce] = useState(0)
+  const approxRetriesRef = useRef(0)
 
   // Debounced multi-field filters: avoids a fetch on every keystroke.
   const [debouncedFilters, setDebouncedFilters] = useState<Record<string, string>>(
@@ -282,6 +285,8 @@ export function GreenDataTable({
     setPage(1)
     setPageData(null)
     panelInitialized.current = false
+    approxRetriesRef.current = 0
+    setExactTotalNonce(0)
   }, [baseQuery])
 
   // Reset page to 1 when filter / sort / dataset changes.
@@ -322,6 +327,7 @@ export function GreenDataTable({
     }
 
     let cancelled = false
+    let approxTimer: ReturnType<typeof setTimeout> | null = null
     setLoading(true)
 
     const params: Record<string, string | number> = { page, page_size: pageSize }
@@ -340,6 +346,10 @@ export function GreenDataTable({
     fetchFn(baseQuery, params)
       .then((data) => {
         if (cancelled) return
+        const rowsN = data.data?.length ?? 0
+        const approx =
+          rowsN === pageSize &&
+          data.total === (page - 1) * pageSize + rowsN + 1
         setPageData(data)
         setLoading(false)
         // Fire panel callbacks only once per territory scope to avoid redundant
@@ -347,6 +357,15 @@ export function GreenDataTable({
         if (!panelInitialized.current) {
           panelInitialized.current = true
           setTablePanelActive(data.total > 0)
+        }
+        // National wide totals may arrive as has_more; refetch when background COUNT lands.
+        if (approx && approxRetriesRef.current < 12) {
+          approxRetriesRef.current += 1
+          approxTimer = setTimeout(() => {
+            setExactTotalNonce((n) => n + 1)
+          }, 4000)
+        } else if (!approx) {
+          approxRetriesRef.current = 0
         }
       })
       .catch(() => {
@@ -357,6 +376,7 @@ export function GreenDataTable({
 
     return () => {
       cancelled = true
+      if (approxTimer) clearTimeout(approxTimer)
     }
   }, [
     baseQuery,
@@ -367,6 +387,7 @@ export function GreenDataTable({
     debouncedFilters,
     debouncedFiltersKey,
     setTablePanelActive,
+    exactTotalNonce,
   ])
 
   // Derive column metadata from the curated catalog (not from sparse page keys).

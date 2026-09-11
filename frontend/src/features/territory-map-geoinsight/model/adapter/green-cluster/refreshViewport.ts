@@ -68,7 +68,9 @@ export async function refreshGreenViewport(
   }
   const fetchMs = performance.now() - t0
   // Drop stale responses: a newer pan/zoom refresh is already in flight.
-  if (seq !== host.greenViewportRequestSeq || host.greenViewportFetcher !== fetcher) {
+  const staleDrop =
+    seq !== host.greenViewportRequestSeq || host.greenViewportFetcher !== fetcher
+  if (staleDrop) {
     useGeoinsightStore.getState().endGreenViewportLoad()
     return
   }

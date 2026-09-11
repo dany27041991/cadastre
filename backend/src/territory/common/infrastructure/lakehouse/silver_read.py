@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 from datetime import date
 from typing import Any, Literal
 
@@ -17,7 +19,6 @@ from territory.common.infrastructure.lakehouse.duckdb_client import (
 from territory.common.infrastructure.lakehouse.metrics import timed_op
 
 DatasetName = Literal["assets", "areas"]
-
 
 def resolve_prefixes(
     *,
@@ -50,7 +51,6 @@ def resolve_prefixes(
         resolved = [r for r in resolved if r.province_id == province_id]
     return resolved
 
-
 def _wkb_to_geojson(geom_wkb: bytes | memoryview | None, lon: float | None, lat: float | None) -> dict | None:
     if geom_wkb is not None:
         try:
@@ -63,7 +63,6 @@ def _wkb_to_geojson(geom_wkb: bytes | memoryview | None, lon: float | None, lat:
     if lon is not None and lat is not None:
         return {"type": "Point", "coordinates": [float(lon), float(lat)]}
     return None
-
 
 def read_assets_in_bbox(
     resolutions: list[IngestResolution],
@@ -168,7 +167,6 @@ def read_assets_in_bbox(
             break
     return out
 
-
 def read_asset_by_pk(
     resolutions: list[IngestResolution],
     asset_id: int,
@@ -218,10 +216,8 @@ def read_asset_by_pk(
         "survey_date": row[16],
     }
 
-
 def read_asset_geometry(row: dict[str, Any]) -> dict[str, Any] | None:
     return _wkb_to_geojson(row.get("geom_wkb"), row.get("lon"), row.get("lat"))
-
 
 def read_asset_bbox(row: dict[str, Any]) -> list[float] | None:
     geom = read_asset_geometry(row)
@@ -238,7 +234,6 @@ def read_asset_bbox(row: dict[str, Any]) -> list[float] | None:
             return None
         return [float(lon), float(lat), float(lon), float(lat)]
 
-
 def _parse_clip_geom(clip_wkt: str | None):
     """Parse validated POLYGON/MULTIPOLYGON WKT to shapely geometry, or None."""
     if not clip_wkt:
@@ -252,13 +247,194 @@ def _parse_clip_geom(clip_wkt: str | None):
         return None
     return shapely_wkt.loads(text)
 
-
 def _id_in_sql(ids: list[int]) -> str | None:
     """Return ``id IN (...)`` or None when the allow-list is empty (caller should short-circuit)."""
     if not ids:
         return None
     return "id IN (" + ",".join(str(int(i)) for i in ids) + ")"
 
+# One DuckDB read_parquet() with thousands of national globs + COUNT(*) hangs
+# (measured: /green-areas/table Italy >60s curl timeout). Below this size keep
+# the exact single-shot path; above it, walk municipality chunks for rows.
+# Exact totals: cache/gold when ready; otherwise has_more + background COUNT
+# (sync national COUNT caused NetworkError / empty table in the browser).
+_TABLE_SINGLE_SHOT_MAX = 40
+_TABLE_WIDE_CHUNK = 40
+_TABLE_COUNT_CHUNK = 80
+_TABLE_COUNT_TTL_SEC = 120.0
+_table_count_lock = threading.Lock()
+_table_count_cache: dict[tuple[str, str], tuple[float, int]] = {}
+_table_count_inflight: set[tuple[str, str]] = set()
+
+def _files_sql_for(resolutions: list[IngestResolution]) -> str:
+    globs = [parquet_glob(r.object_prefix) for r in resolutions]
+    return ", ".join(f"'{g}'" for g in globs)
+
+def _resolutions_fingerprint(resolutions: list[IngestResolution]) -> str:
+    import hashlib
+
+    parts = sorted(
+        f"{int(r.municipality_id)}:{r.ingest_at.isoformat()}" for r in resolutions
+    )
+    return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()
+
+def _has_more_total(offset: int, row_count: int, page_size: int) -> int:
+    """Pager total without a full national COUNT (*+1 signals another page)."""
+    total = offset + row_count
+    if row_count >= page_size:
+        total += 1
+    return total
+
+def _count_cache_get(where_sql: str, fingerprint: str) -> int | None:
+    now = time.monotonic()
+    with _table_count_lock:
+        hit = _table_count_cache.get((where_sql, fingerprint))
+        if hit is not None and (now - hit[0]) <= _TABLE_COUNT_TTL_SEC:
+            return hit[1]
+    return None
+
+def _wide_count(
+    resolutions: list[IngestResolution],
+    where_sql: str,
+) -> int:
+    """Exact COUNT(*) by summing municipality chunks (avoids one mega-query)."""
+    fingerprint = _resolutions_fingerprint(resolutions)
+    cached = _count_cache_get(where_sql, fingerprint)
+    if cached is not None:
+        return cached
+
+    ordered = sorted(
+        resolutions,
+        key=lambda r: (int(r.municipality_id), int(r.region_id), int(r.province_id)),
+    )
+    total = 0
+    con = connect_lakehouse()
+    try:
+        for i in range(0, len(ordered), _TABLE_COUNT_CHUNK):
+            chunk = ordered[i : i + _TABLE_COUNT_CHUNK]
+            files_sql = _files_sql_for(chunk)
+            n = con.execute(
+                f"""
+                SELECT count(*) FROM read_parquet([{files_sql}], union_by_name=true)
+                WHERE {where_sql}
+                """
+            ).fetchone()[0]
+            total += int(n)
+    finally:
+        con.close()
+
+    with _table_count_lock:
+        _table_count_cache[(where_sql, fingerprint)] = (time.monotonic(), total)
+    return total
+
+def _schedule_wide_count(
+    resolutions: list[IngestResolution],
+    where_sql: str,
+) -> None:
+    """Fill exact total cache without blocking the HTTP response."""
+    fingerprint = _resolutions_fingerprint(resolutions)
+    key = (where_sql, fingerprint)
+    if _count_cache_get(where_sql, fingerprint) is not None:
+        return
+    with _table_count_lock:
+        if key in _table_count_inflight:
+            return
+        _table_count_inflight.add(key)
+
+    def _run() -> None:
+        try:
+            _wide_count(resolutions, where_sql)
+        except Exception:
+            pass
+        finally:
+            with _table_count_lock:
+                _table_count_inflight.discard(key)
+
+    threading.Thread(target=_run, daemon=True, name="lakehouse-table-count").start()
+
+def _asset_total_from_gold(resolutions: list[IngestResolution]) -> int | None:
+    """Unfiltered asset total from municipality gold (same ingest set as silver)."""
+    try:
+        from territory.common.infrastructure.lakehouse import gold_read
+
+        rows = gold_read._read_admin_municipality_band_rows(resolutions)
+    except Exception:
+        return None
+    if not rows:
+        return None
+    return sum(int(r[6] or 0) for r in rows)
+
+def _resolve_wide_total(
+    resolutions: list[IngestResolution],
+    *,
+    where_sql: str,
+    offset: int,
+    row_count: int,
+    page_size: int,
+    prefer_gold: bool,
+) -> tuple[int, str]:
+    """Return (total, source) without blocking on a cold national COUNT."""
+    fingerprint = _resolutions_fingerprint(resolutions)
+    cached = _count_cache_get(where_sql, fingerprint)
+    if cached is not None:
+        return cached, "cache"
+    if prefer_gold and where_sql == "1=1":
+        gold_total = _asset_total_from_gold(resolutions)
+        if gold_total is not None:
+            with _table_count_lock:
+                _table_count_cache[(where_sql, fingerprint)] = (
+                    time.monotonic(),
+                    gold_total,
+                )
+            return gold_total, "gold"
+    _schedule_wide_count(resolutions, where_sql)
+    return _has_more_total(offset, row_count, page_size), "approx"
+
+def _wide_select_rows(
+    resolutions: list[IngestResolution],
+    *,
+    where_sql: str,
+    select_cols: str,
+    order_col: str,
+    order_dir: str,
+    offset: int,
+    page_size: int,
+) -> list[tuple]:
+    """Fetch one page by walking municipality chunks (no global OFFSET scan)."""
+    ordered = sorted(
+        resolutions,
+        key=lambda r: (int(r.municipality_id), int(r.region_id), int(r.province_id)),
+    )
+    remaining_skip = max(0, offset)
+    collected: list[tuple] = []
+    con = connect_lakehouse()
+    try:
+        for i in range(0, len(ordered), _TABLE_WIDE_CHUNK):
+            if len(collected) >= page_size:
+                break
+            chunk = ordered[i : i + _TABLE_WIDE_CHUNK]
+            files_sql = _files_sql_for(chunk)
+            need = remaining_skip + (page_size - len(collected))
+            rows = con.execute(
+                f"""
+                SELECT {select_cols}
+                FROM read_parquet([{files_sql}], union_by_name=true)
+                WHERE {where_sql}
+                ORDER BY municipality_id ASC, {order_col} {order_dir}
+                LIMIT {int(need)}
+                """
+            ).fetchall()
+            if not rows:
+                continue
+            if len(rows) <= remaining_skip:
+                remaining_skip -= len(rows)
+                continue
+            take = rows[remaining_skip : remaining_skip + (page_size - len(collected))]
+            remaining_skip = 0
+            collected.extend(take)
+    finally:
+        con.close()
+    return collected
 
 def list_assets_table(
     resolutions: list[IngestResolution],
@@ -273,8 +449,6 @@ def list_assets_table(
 ) -> tuple[list[dict[str, Any]], int]:
     if not resolutions:
         return [], 0
-    globs = [parquet_glob(r.object_prefix) for r in resolutions]
-    files_sql = ", ".join(f"'{g}'" for g in globs)
     where: list[str] = ["1=1"]
     if green_area_id is not None:
         where.append(f"green_area_id = {int(green_area_id)}")
@@ -311,29 +485,55 @@ def list_assets_table(
     order_col = sort_by if sort_by in allowed_sort else "id"
     order_dir = "DESC" if sort_dir.lower() == "desc" else "ASC"
     offset = max(0, (page - 1) * page_size)
+    select_cols = (
+        "id, green_area_id, region_id, province_id, municipality_id, "
+        "asset_type, geometry_type, lon, lat, "
+        "species, family, genus, variety, "
+        "health_status, asset_status, survey_date"
+    )
 
-    con = connect_lakehouse()
-    try:
-        total = con.execute(
-            f"""
-            SELECT count(*) FROM read_parquet([{files_sql}], union_by_name=true)
-            WHERE {where_sql}
-            """
-        ).fetchone()[0]
-        rows = con.execute(
-            f"""
-            SELECT id, green_area_id, region_id, province_id, municipality_id,
-                   asset_type, geometry_type, lon, lat,
-                   species, family, genus, variety,
-                   health_status, asset_status, survey_date
-            FROM read_parquet([{files_sql}], union_by_name=true)
-            WHERE {where_sql}
-            ORDER BY {order_col} {order_dir}
-            LIMIT {int(page_size)} OFFSET {int(offset)}
-            """
-        ).fetchall()
-    finally:
-        con.close()
+    wide = len(resolutions) > _TABLE_SINGLE_SHOT_MAX
+
+    if wide:
+        rows = _wide_select_rows(
+            resolutions,
+            where_sql=where_sql,
+            select_cols=select_cols,
+            order_col=order_col,
+            order_dir=order_dir,
+            offset=offset,
+            page_size=page_size,
+        )
+        total, _ = _resolve_wide_total(
+            resolutions,
+            where_sql=where_sql,
+            offset=offset,
+            row_count=len(rows),
+            page_size=page_size,
+            prefer_gold=True,
+        )
+    else:
+        files_sql = _files_sql_for(resolutions)
+        con = connect_lakehouse()
+        try:
+            total = con.execute(
+                f"""
+                SELECT count(*) FROM read_parquet([{files_sql}], union_by_name=true)
+                WHERE {where_sql}
+                """
+            ).fetchone()[0]
+            rows = con.execute(
+                f"""
+                SELECT {select_cols}
+                FROM read_parquet([{files_sql}], union_by_name=true)
+                WHERE {where_sql}
+                ORDER BY {order_col} {order_dir}
+                LIMIT {int(page_size)} OFFSET {int(offset)}
+                """
+            ).fetchall()
+        finally:
+            con.close()
+        total = int(total)
 
     data = [
         {
@@ -357,7 +557,6 @@ def list_assets_table(
         for r in rows
     ]
     return data, int(total)
-
 
 def read_areas_in_bbox(
     resolutions: list[IngestResolution],
@@ -477,7 +676,6 @@ def read_areas_in_bbox(
             break
     return out
 
-
 def read_area_by_pk(
     resolutions: list[IngestResolution],
     area_id: int,
@@ -521,7 +719,6 @@ def read_area_by_pk(
         "survey_date": row[12],
     }
 
-
 def list_areas_table(
     resolutions: list[IngestResolution],
     *,
@@ -549,8 +746,6 @@ def list_areas_table(
     """
     if not resolutions:
         return [], 0
-    globs = [parquet_glob(r.object_prefix) for r in resolutions]
-    files_sql = ", ".join(f"'{g}'" for g in globs)
     where: list[str] = ["1=1"]
     filters = filters or {}
     if area_id is not None:
@@ -587,23 +782,51 @@ def list_areas_table(
     order_col = sort_by if sort_by in {"id", "name", "level", "survey_date"} else "id"
     order_dir = "DESC" if sort_dir.lower() == "desc" else "ASC"
     offset = max(0, (page - 1) * page_size)
-    con = connect_lakehouse()
-    try:
-        total = con.execute(
-            f"SELECT count(*) FROM read_parquet([{files_sql}], union_by_name=true) WHERE {where_sql}"
-        ).fetchone()[0]
-        rows = con.execute(
-            f"""
-            SELECT id, region_id, province_id, municipality_id, parent_id, level, name,
-                   lon, lat, area_classification, administrative_status, survey_date
-            FROM read_parquet([{files_sql}], union_by_name=true)
-            WHERE {where_sql}
-            ORDER BY {order_col} {order_dir}
-            LIMIT {int(page_size)} OFFSET {int(offset)}
-            """
-        ).fetchall()
-    finally:
-        con.close()
+    select_cols = (
+        "id, region_id, province_id, municipality_id, parent_id, level, name, "
+        "lon, lat, area_classification, administrative_status, survey_date"
+    )
+
+    wide = len(resolutions) > _TABLE_SINGLE_SHOT_MAX
+
+    if wide:
+        rows = _wide_select_rows(
+            resolutions,
+            where_sql=where_sql,
+            select_cols=select_cols,
+            order_col=order_col,
+            order_dir=order_dir,
+            offset=offset,
+            page_size=page_size,
+        )
+        total, _ = _resolve_wide_total(
+            resolutions,
+            where_sql=where_sql,
+            offset=offset,
+            row_count=len(rows),
+            page_size=page_size,
+            prefer_gold=False,
+        )
+    else:
+        files_sql = _files_sql_for(resolutions)
+        con = connect_lakehouse()
+        try:
+            total = con.execute(
+                f"SELECT count(*) FROM read_parquet([{files_sql}], union_by_name=true) WHERE {where_sql}"
+            ).fetchone()[0]
+            rows = con.execute(
+                f"""
+                SELECT {select_cols}
+                FROM read_parquet([{files_sql}], union_by_name=true)
+                WHERE {where_sql}
+                ORDER BY {order_col} {order_dir}
+                LIMIT {int(page_size)} OFFSET {int(offset)}
+                """
+            ).fetchall()
+        finally:
+            con.close()
+        total = int(total)
+
     data = [
         {
             "id": int(r[0]),
@@ -623,18 +846,15 @@ def list_areas_table(
     ]
     return data, int(total)
 
-
 # Minimum geodesic overlap (m²) between candidate and selected area; excludes boundary-only adjacency.
 _MIN_GREEN_AREA_INTERSECTION_M2 = 1.0
 _METERS_PER_DEGREE = 111_320.0
 # Hard cap for municipality-wide catalog FeatureCollections (parity with previous PG unbounded loads).
 _CATALOG_FEATURE_LIMIT = 50_000
 
-
 def _files_sql(resolutions: list[IngestResolution]) -> str:
     globs = [parquet_glob(r.object_prefix) for r in resolutions]
     return ", ".join(f"'{g}'" for g in globs)
-
 
 def _raw_area_to_fc_tuple(r: tuple) -> tuple | None:
     """Map DuckDB area row → (id, geom, name, level, parent_id, region_id, province_id, municipality_id)."""
@@ -652,7 +872,6 @@ def _raw_area_to_fc_tuple(r: tuple) -> tuple | None:
         int(r[9]),
     )
 
-
 def _approx_intersection_m2(a, b) -> float:
     """Approximate geodesic intersection area from WGS84 geometries (degrees → m²)."""
     import math
@@ -664,7 +883,6 @@ def _approx_intersection_m2(a, b) -> float:
     m_lat = _METERS_PER_DEGREE
     m_lon = _METERS_PER_DEGREE * max(0.01, abs(math.cos(math.radians(lat))))
     return float(inter.area) * m_lat * m_lon
-
 
 def _fetch_area_raw_rows(resolutions: list[IngestResolution], where_sql: str, limit: int) -> list[tuple]:
     if not resolutions or limit <= 0:
@@ -682,7 +900,6 @@ def _fetch_area_raw_rows(resolutions: list[IngestResolution], where_sql: str, li
         ).fetchall()
     finally:
         con.close()
-
 
 def read_area_roots(
     resolutions: list[IngestResolution],
@@ -705,7 +922,6 @@ def read_area_roots(
         if t is not None:
             out.append(t)
     return out
-
 
 def read_areas_by_parent(
     resolutions: list[IngestResolution],
@@ -733,7 +949,6 @@ def read_areas_by_parent(
         if t is not None:
             out.append(t)
     return out
-
 
 def read_area_roots_intersecting_geom(
     resolutions: list[IngestResolution],
@@ -767,7 +982,6 @@ def read_area_roots_intersecting_geom(
         if t is not None:
             out.append(t)
     return out
-
 
 def read_areas_contained_or_intersecting(
     resolutions: list[IngestResolution],
@@ -818,7 +1032,6 @@ def read_areas_contained_or_intersecting(
             children.append(t)
     return [selected_tuple] + children
 
-
 def read_assets_catalog(
     resolutions: list[IngestResolution],
     *,
@@ -868,7 +1081,6 @@ def read_assets_catalog(
             )
         )
     return out
-
 
 def read_assets_intersecting_geom(
     resolutions: list[IngestResolution],
@@ -933,10 +1145,8 @@ def read_assets_intersecting_geom(
         )
     return out
 
-
 _WEB_MERCATOR_HALF = 20037508.34
 _CLIP_AGG_FETCH_CAP = 300_000
-
 
 def _lonlat_to_mercator(lon: float, lat: float) -> tuple[float, float]:
     import math
@@ -944,7 +1154,6 @@ def _lonlat_to_mercator(lon: float, lat: float) -> tuple[float, float]:
     x = lon * _WEB_MERCATOR_HALF / 180.0
     y = math.log(math.tan(math.radians(90.0 + lat) / 2.0)) * _WEB_MERCATOR_HALF / math.pi
     return x, y
-
 
 def aggregate_assets_in_clip(
     resolutions: list[IngestResolution],

@@ -3,7 +3,7 @@
  * Follows pan/zoom by reprojecting the geographic anchor to screen coords.
  */
 import type { CSSProperties, FC, ReactNode } from 'react'
-import { useEffect, useLayoutEffect, useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Box, Button, FloatingPanel, Text } from 'dxc-webkit'
 import { Spinner } from '@/shared/ui'
@@ -124,25 +124,6 @@ export const GreenDetailModal: FC<GreenDetailModalProps> = ({
     selection?.anchorLat,
     (clientX, clientY) => setScreen({ clientX, clientY })
   )
-
-  // Close when clicking anywhere outside the panel (map, sidebar, chrome).
-  useEffect(() => {
-    if (!isOpen) return
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target
-      if (!(target instanceof Element)) return
-      if (target.closest('[data-green-detail-panel]')) return
-      onClose()
-    }
-    // Skip the same gesture that opened the panel.
-    const timer = window.setTimeout(() => {
-      document.addEventListener('pointerdown', onPointerDown, true)
-    }, 0)
-    return () => {
-      window.clearTimeout(timer)
-      document.removeEventListener('pointerdown', onPointerDown, true)
-    }
-  }, [isOpen, onClose])
 
   if (!isOpen || !selection) return null
 

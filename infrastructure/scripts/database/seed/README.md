@@ -3,23 +3,35 @@
 Gli script in questa cartella popolano **aree verdi e asset** su **MinIO** (Parquet silver + gold + catalog).  
 PostGIS resta solo per **confini admin** e cataloghi DBT (`attribute_types`, …) in lettura.
 
-**Design:** [docs/design/2026-09-04-green-lakehouse-only-pg-drop-design.md](../../../docs/design/2026-09-04-green-lakehouse-only-pg-drop-design.md)  
+**Design:** [docs/design/2026-09-10-multi-snapshot-national-seed-design.md](../../../docs/design/2026-09-10-multi-snapshot-national-seed-design.md)  
 **Layout:** [docs/infrastructure/lakehouse-parquet-layout.md](../../../docs/infrastructure/lakehouse-parquet-layout.md)
 
 **Requisiti:** stack Compose avviato (`postgis` + `minio`); eseguire **dalla root del progetto** `cadastre/`.
+
+### Layout GeoJSON reali
+
+```text
+infrastructure/data/municipality/<slug>/<YYYY-MM-DD>/
+  areas.geojson, trees.geojson, hedges.geojson, shrubs.geojson, …
+```
+
+Esempio Lecce: `municipality/lecce/2024-01-01/`.  
+Per ogni `(comune, ingest_date)`: se la cartella ISO esiste → dati reali; altrimenti → mock.
+
+**Date di default:** `2021-01-01,2023-01-01,2024-01-01` (override con `--ingest-dates` / `INGEST_DATES`).  
+Cartelle ISO aggiuntive sotto un comune aggiungono snapshot **solo** per quel comune.
 
 ---
 
 ## 1. Lecce da GeoJSON — `run_populate_lecce.sh`
 
-Carica aree/hedges/shrubs/trees da `infrastructure/data/municipality/lecce/` → lakehouse.
-
 ```bash
 ./infrastructure/scripts/database/seed/run_populate_lecce.sh
-INGEST_DATE=2025-06-01 ./infrastructure/scripts/database/seed/run_populate_lecce.sh
+INGEST_DATES=2021-01-01,2024-01-01 ./infrastructure/scripts/database/seed/run_populate_lecce.sh
 ```
 
-Script: `populate_lecce_data/load_lecce_green_data.py`
+Script: `populate_lecce_data/load_lecce_green_data.py`  
+Helper condiviso: `common/seed_municipality_snapshot.py`
 
 ---
 
@@ -32,39 +44,48 @@ Genera dati sintetici per un comune (geometria da `public.municipalities`) e scr
 AREAS=80 TREES=20000 HEDGES=2000 ./infrastructure/scripts/database/seed/run_boost_municipality.sh Milano
 ```
 
-Script: `boost_municipality/boost_municipality_to_lakehouse.py`  
-(SQL legacy `municipality_*.sql` non usati — green non esiste più in PostGIS.)
+Script: `boost_municipality/boost_municipality_to_lakehouse.py`
 
 ---
 
 ## 3. Popolamento per regione — `run_populate_region_data.sh`
 
-Seed sintetico: per ogni comune della regione riusa la stessa generazione del boost
-(griglia aree + alberi/siepi → MinIO). Non è il vecchio Voronoi SQL.
-
 ```bash
 ./infrastructure/scripts/database/seed/run_populate_region_data.sh --region "Valle d'Aosta"
-./infrastructure/scripts/database/seed/run_populate_region_data.sh --region 2 --limit 3 --areas 10 --trees 200
 ./infrastructure/scripts/database/seed/run_populate_region_data.sh --region Puglia --dry-run
-# Multi-batch (MM-YYYY o YYYY-MM-DD):
 ./infrastructure/scripts/database/seed/run_populate_region_data.sh \
   --region Lazio \
-  --ingest-date 01-2024 --ingest-date 01-2025 --ingest-date 01-2026 \
+  --ingest-dates 2021-01-01,2023-01-01,2024-01-01 \
   --areas 8 --trees 150 --hedges 15
 ```
 
-Default ridotti rispetto al boost singolo (`areas=10`, `trees=500`, `hedges=50`) perché × N comuni × N date.  
+Default densità: `areas=10`, `trees=500`, `hedges=50`.  
 Script: `populate_region_data/seed_populate_region_data.py`
 
 ---
 
-## 4. Fixture smoke (senza GeoJSON)
+## 4. Seed nazionale — `run_populate_national_data.sh`
+
+```bash
+./infrastructure/scripts/database/seed/run_populate_national_data.sh --dry-run
+./infrastructure/scripts/database/seed/run_populate_national_data.sh \
+  --wipe --workers 4 --trees 1200 --hedges 80 --areas 8
+./infrastructure/scripts/database/seed/run_populate_national_data.sh \
+  --region "Puglia" --limit 5 --ingest-dates 2021-01-01,2024-01-01 --dry-run
+```
+
+Tre snapshot di default ≈ **3×** volume rispetto al seed single-date.  
+Script: `populate_national_data/seed_populate_national_data.py`
+
+---
+
+## 5. Fixture smoke (senza GeoJSON)
 
 ```bash
 ./infrastructure/scripts/database/lakehouse/run_seed_fixture_lakehouse.sh
 ```
 
-Writer condiviso: `lakehouse/lakehouse_writer.py` (`--fixture` o API `ingest_municipality_tables`).
+Writer: `lakehouse/lakehouse_writer.py`.
 
 ---
 
@@ -74,5 +95,7 @@ Writer condiviso: `lakehouse/lakehouse_writer.py` (`--fixture` o API `ingest_mun
 |-----|------|
 | `LAKEHOUSE_S3_*` | Da compose `.env` (endpoint host tipicamente `http://localhost:9000`) |
 | `DATABASE_URL` | Lookup admin/DBT |
+| `DATA_DIR` | Root dati (`…/infrastructure/data`) |
+| `INGEST_DATES` | Lista `YYYY-MM-DD` separate da virgola |
+| `INGEST_DATE` | Legacy: singola data |
 | `LAKEHOUSE_CATALOG_INVALIDATE_URL` | Opzionale POST invalidate post-seed |
-| `INGEST_DATE` | Batch date `YYYY-MM-DD` |

@@ -27,11 +27,11 @@ ESEMPI_DIR = Path(
 TEMPLATE_FABBISOGNO = ESEMPI_DIR / "Fabbisogno_SIM_Globale.xlsx"
 TEMPLATE_FABBISOGNO_FALLBACKS = (
     DESKTOP / "Fabbisogno_SIM_Globale.xlsx",
-    OUT_DIR / "Fabbisogno_SIV_Catasto_Arboreo.xlsx",
+    ROOT / "docs" / "Fabbisogno_SIV_Catasto_Arboreo.xlsx",
 )
 TEMPLATE_DATAIKU = DESKTOP / "dataiku_rsc_cu.xlsx"
 
-OUT_FABBISOGNO = OUT_DIR / "Fabbisogno_SIV_Catasto_Arboreo.xlsx"
+OUT_FABBISOGNO = ROOT / "docs" / "Fabbisogno_SIV_Catasto_Arboreo.xlsx"
 OUT_DATAIKU = OUT_DIR / "dataiku_rsc_siv_catasto.xlsx"
 
 SOC = "DXC"
@@ -40,18 +40,22 @@ DATA_COLL = datetime(2026, 6, 30)
 DATA_PROD = datetime(2026, 9, 30)
 
 # Container: PVC locale per replica (log, temp, export staging, headroom futuro).
-# Dati persistenti di dominio restano su PostGIS e MinIO.
+# Green SoR = MinIO Parquet; PostGIS = admin ISTAT + OBT only.
+# Design: docs/design/2026-09-10-fabbisogno-lakehouse-rebalance-design.md
 SIV_RESOURCES: list[dict] = [
     {
         "servizio": "Container",
         "desc": "SIV - Quota cluster OC DXAP (Backend FastAPI)",
         "os": "Debian/Linux",
         "sw": None,
-        "note": "HPA min 6 max 12 pod. PVC locale: log/temp/export staging.",
+        "note": (
+            "HPA min 6 max 12 pod, 1 worker/pod. DuckDB in-process (pool 8) su MinIO Parquet. "
+            "Viewport nazionale: gold admin/grid, non dump del dataset. PVC locale: log/temp."
+        ),
         "envs": {
-            "Sviluppo": {"inc": "SI", "qty": 1, "cpu": 2, "ram": 4, "disk": 10, "ril": "No", "date": DATA_COLL},
-            "Collaudo": {"inc": "SI", "qty": 2, "cpu": 2, "ram": 4, "disk": 20, "ril": "No", "date": DATA_COLL},
-            "Produzione": {"inc": "SI", "qty": 6, "cpu": 4, "ram": 8, "disk": 50, "ril": "No", "date": DATA_PROD},
+            "Sviluppo": {"inc": "SI", "qty": 1, "cpu": 2, "ram": 8, "disk": 10, "ril": "No", "date": DATA_COLL},
+            "Collaudo": {"inc": "SI", "qty": 2, "cpu": 2, "ram": 8, "disk": 20, "ril": "No", "date": DATA_COLL},
+            "Produzione": {"inc": "SI", "qty": 6, "cpu": 4, "ram": 12, "disk": 50, "ril": "No", "date": DATA_PROD},
         },
     },
     {
@@ -71,22 +75,28 @@ SIV_RESOURCES: list[dict] = [
         "desc": "SIV - PostgreSQL + PostGIS",
         "os": "Postgres release 16.x",
         "sw": "estensione postGIS",
-        "note": "Partizionamento ISTAT; ~36M asset nazionali, replica RO in produzione.",
+        "note": (
+            "Solo confini ISTAT + cataloghi OBT. Nessun dato green. "
+            "Disco admin ~20–50 GB utili; quota con margine. Niente replica RO per GET mappa."
+        ),
         "envs": {
-            "Sviluppo": {"inc": "SI", "qty": 1, "cpu": 4, "ram": 8, "disk": 10, "ril": "No", "date": DATA_COLL},
-            "Collaudo": {"inc": "SI", "qty": 1, "cpu": 8, "ram": 16, "disk": 100, "ril": "No", "date": DATA_COLL},
-            "Produzione": {"inc": "SI", "qty": 1, "cpu": 16, "ram": 64, "disk": 500, "ril": "No", "date": DATA_PROD},
+            "Sviluppo": {"inc": "SI", "qty": 1, "cpu": 2, "ram": 4, "disk": 20, "ril": "No", "date": DATA_COLL},
+            "Collaudo": {"inc": "SI", "qty": 1, "cpu": 4, "ram": 8, "disk": 50, "ril": "No", "date": DATA_COLL},
+            "Produzione": {"inc": "SI", "qty": 1, "cpu": 4, "ram": 16, "disk": 80, "ril": "No", "date": DATA_PROD},
         },
     },
     {
         "servizio": "Storage MinIO",
-        "desc": "SIV - Storage per MinIO",
+        "desc": "SIV - Object storage lakehouse (Parquet silver/gold)",
         "os": "PaaS MinIO",
         "sw": None,
-        "note": None,
+        "note": (
+            "SoR green (silver + gold + catalog). Serving via DuckDB. "
+            "Dati ~decine di GB a 36–70 M asset; quota per snapshot, ~70k oggetti, erasure. CPU/RAM PaaS NA."
+        ),
         "envs": {
-            "Sviluppo": {"inc": "SI", "qty": 1, "cpu": "NA", "ram": "NA", "disk": 10, "ril": "No", "date": DATA_COLL},
-            "Collaudo": {"inc": "SI", "qty": 1, "cpu": "NA", "ram": "NA", "disk": 100, "ril": "No", "date": DATA_COLL},
+            "Sviluppo": {"inc": "SI", "qty": 1, "cpu": "NA", "ram": "NA", "disk": 50, "ril": "No", "date": DATA_COLL},
+            "Collaudo": {"inc": "SI", "qty": 1, "cpu": "NA", "ram": "NA", "disk": 150, "ril": "No", "date": DATA_COLL},
             "Produzione": {"inc": "SI", "qty": 1, "cpu": "NA", "ram": "NA", "disk": 500, "ril": "No", "date": DATA_PROD},
         },
     },
@@ -189,7 +199,9 @@ def _resolve_fabbisogno_template() -> Path:
 
 def generate_fabbisogno() -> Path:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(_resolve_fabbisogno_template(), OUT_FABBISOGNO)
+    template = _resolve_fabbisogno_template()
+    if template.resolve() != OUT_FABBISOGNO.resolve():
+        shutil.copy2(template, OUT_FABBISOGNO)
 
     wb = load_workbook(OUT_FABBISOGNO)
 

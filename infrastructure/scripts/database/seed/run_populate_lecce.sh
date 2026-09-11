@@ -5,10 +5,11 @@
 # =============================================================================
 # Uso (dalla root progetto):
 #   ./infrastructure/scripts/database/seed/run_populate_lecce.sh
-#   INGEST_DATE=2025-06-01 ./infrastructure/scripts/database/seed/run_populate_lecce.sh
+#   INGEST_DATES=2021-01-01,2023-01-01,2024-01-01 ./…/run_populate_lecce.sh
 # =============================================================================
 # Requisiti: PostGIS + MinIO up; comune Lecce in public.municipalities;
-# GeoJSON in infrastructure/data/municipality/lecce/; pip deps lakehouse + geopandas.
+# GeoJSON in infrastructure/data/municipality/lecce/<YYYY-MM-DD>/;
+# pip deps lakehouse + geopandas.
 # =============================================================================
 
 set -euo pipefail
@@ -42,7 +43,9 @@ if ! "$PYTHON" -c "import pyarrow, boto3, geopandas, shapely, psycopg" 2>/dev/nu
 fi
 
 INGEST_ARGS=()
-if [[ -n "${INGEST_DATE:-}" ]]; then
+if [[ -n "${INGEST_DATES:-}" ]]; then
+  INGEST_ARGS=(--ingest-dates "$INGEST_DATES")
+elif [[ -n "${INGEST_DATE:-}" ]]; then
   INGEST_ARGS=(--ingest-date "$INGEST_DATE")
 fi
 
@@ -52,11 +55,10 @@ echo "=============================================="
 LAKEHOUSE_S3_ENDPOINT="$HOST_S3_ENDPOINT" \
   "$PYTHON" "$LECCE_PY" --municipality Lecce ${INGEST_ARGS[@]+"${INGEST_ARGS[@]}"}
 
-TODAY="${INGEST_DATE:-$(date +%F)}"
 echo ""
 echo "=== DuckDB smoke ==="
 LAKEHOUSE_S3_ENDPOINT="$HOST_S3_ENDPOINT" \
-  "$PYTHON" "$LAKEHOUSE_DIR/smoke_duckdb_catalog.py" --date-from "2000-01-01" --date-to "$TODAY" || true
+  "$PYTHON" "$LAKEHOUSE_DIR/smoke_duckdb_catalog.py" --date-from "2000-01-01" --date-to "2099-12-31" || true
 
 echo ""
 echo "=============================================="

@@ -72,11 +72,10 @@ Descrizione PostGIS invariata. Software/ext PostGIS: `estensione postGIS`.
 | File | Azione |
 |------|--------|
 | `cadastre/docs/sizing/generate_siv_sizing_workbooks.py` | Source of truth: `SIV_RESOURCES` |
-| `cadastre/docs/sizing/Fabbisogno_SIV_Catasto_Arboreo.xlsx` | Rigenerato dallo script |
-| `../docs/Fabbisogno_SIV_Catasto_Arboreo.xlsx` (directory LINFA, fuori git cadastre) | Copia identica del workbook |
+| `docs/Fabbisogno_SIV_Catasto_Arboreo.xlsx` | Unico workbook (LINFA/docs) |
 | `cadastre/docs/sizing/metodologia-siv.md` | §4 tabelle Sviluppo/Collaudo/Produzione + nota PostGIS vs MinIO |
 
-Lo script `main()` copia anche sul Desktop: in implementazione **non** usare quella copia come deliverable; il target è sizing + `LINFA/docs/`. Non rigenerare il workbook Dataiku.
+Niente copia in `cadastre/docs/sizing/`. Lo script `main()` può copiare sul Desktop: non è il deliverable. Non rigenerare il workbook Dataiku.
 
 **Non toccare:** `Foglio1` del workbook; `dataiku_rsc_siv_catasto.xlsx`; compose, HPA, codice runtime.
 

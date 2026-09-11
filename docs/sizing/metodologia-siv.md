@@ -1,6 +1,6 @@
 # Metodologia dimensionamento SIV – Catasto arboreo
 
-Documento di supporto ai workbook `Fabbisogno_SIV_Catasto_Arboreo.xlsx` e `dataiku_rsc_siv_catasto.xlsx`.
+Documento di supporto ai workbook `docs/Fabbisogno_SIV_Catasto_Arboreo.xlsx` e `dataiku_rsc_siv_catasto.xlsx`.
 
 > **Addendum 2026-09-04:** green viz SoR = MinIO Parquet + DuckDB (non PVC PostGIS green).  
 > Cache LRU e endpoint sotto restano utili come pattern; il footprint storage green va sul **object storage**.  
@@ -78,46 +78,45 @@ Configurazione benchmark: `work_mem = 256MB`, PostGIS 16, dataset sintetico mult
 
 ## 4. Risorse infrastrutturali stimate
 
-Baseline di dimensionamento: **catasto nazionale completo** con aree verdi e asset verdi su tutti i ~7.904 comuni ISTAT (~36 M asset, ~8,4 M alberi). I fogli Excel **Fabbisogno Corrente** e **Fine Progetto** riportano la stessa richiesta integrale di risorse.
+Baseline: **catasto nazionale completo** (~7.904 comuni ISTAT, **~36–70 M** asset green). I fogli Excel **Fabbisogno Corrente** e **Fine Progetto** riportano la stessa richiesta. Matrice: [2026-09-10-fabbisogno-lakehouse-rebalance-design.md](../design/2026-09-10-fabbisogno-lakehouse-rebalance-design.md).
 
-> **Nota storage:** PostGIS e MinIO coprono i dati di dominio. Backend e frontend includono un **PVC locale per replica** (log, file temporanei, headroom futuro). PostGIS PaaS include **vCPU e RAM** oltre al disco (query spatiali su ~36 M asset).
+> **Nota storage:** il verde (silver/gold/catalog) sta su **MinIO**. PostGIS è solo confini ISTAT + cataloghi OBT. Backend e frontend hanno un **PVC locale per replica** (log, temp). Il retrieval mappa è viewport + cluster gold (non dump del dataset). PostGIS PaaS include vCPU e RAM per query admin, non per scan green.
 
 ### Sviluppo
 
 | Servizio | vCPU | RAM | Disco locale/replica | Repliche |
 |----------|------|-----|----------------------|----------|
-| Backend FastAPI | 2 | 4 GB | 10 GB | 1 |
+| Backend FastAPI | 2 | 8 GB | 10 GB | 1 |
 | Frontend microfrontend | 1 | 2 GB | 5 GB | 1 |
-| PostGIS | 4 | 8 GB | 10 GB | 1 |
-| MinIO | — | — | 10 GB | 1 |
+| PostGIS | 2 | 4 GB | 20 GB | 1 |
+| MinIO | — | — | 50 GB | 1 |
 
 ### Collaudo
 
 | Servizio | vCPU | RAM | Disco locale/replica | Repliche |
 |----------|------|-----|----------------------|----------|
-| Backend | 2 | 4 GB | 20 GB | 2 |
+| Backend | 2 | 8 GB | 20 GB | 2 |
 | Frontend | 1 | 2 GB | 10 GB | 2 |
-| PostGIS | 8 | 16 GB | 100 GB | 1 |
-| MinIO | — | — | 100 GB | 1 |
+| PostGIS | 4 | 8 GB | 50 GB | 1 |
+| MinIO | — | — | 150 GB | 1 |
 
 ### Produzione
 
 | Servizio | vCPU | RAM | Disco locale/replica | Repliche |
 |----------|------|-----|----------------------|----------|
-| Backend | 4 | 8 GB | 50 GB | 6 (HPA → 12, CPU 65%) |
+| Backend | 4 | 12 GB | 50 GB | 6 (HPA → 12, CPU 65%) |
 | Frontend | 1 | 2 GB | 20 GB | 3 |
-| PostGIS | 16 | 64 GB | 500 GB | 1 (+ replica RO) |
+| PostGIS | 4 | 16 GB | 80 GB | 1 |
 | MinIO | — | — | 500 GB | 1 |
 
-### Storage PostGIS – breakdown (scenario nazionale ~36 M asset)
+### Storage – breakdown (scenario nazionale ~36–70 M asset)
 
-| Voce | Stima |
-|------|-------|
-| `green_assets` (tutti i tipi) | ~100–140 GB |
-| `green_areas` | ~30–50 GB |
-| Confini ISTAT + catalogo DBT | ~3 GB |
-| Indici GIST + B-tree | ~40–60 GB |
-| Storico + WAL + headroom 30% | **~250–350 GB** (500 GB con margine replica/backup) |
+| Voce | Dove | Stima |
+|------|------|-------|
+| Confini ISTAT + catalogo OBT/DBT | PostGIS | ~5 GB |
+| WAL / vacuum / headroom admin | PostGIS | quota **20 / 50 / 80 GB** (svil / coll / prod) |
+| Silver + gold Parquet + catalog (dati) | MinIO | decine di GB |
+| Snapshot ingest, ~70k oggetti, erasure | MinIO | quota **50 / 150 / 500 GB** |
 
 ## 5. Modelli AI / Dataiku — iTree
 
@@ -154,7 +153,7 @@ python3 cadastre/docs/sizing/generate_siv_sizing_workbooks.py
 
 Output:
 
-- `cadastre/docs/sizing/Fabbisogno_SIV_Catasto_Arboreo.xlsx`
+- `docs/Fabbisogno_SIV_Catasto_Arboreo.xlsx`
 - `cadastre/docs/sizing/dataiku_rsc_siv_catasto.xlsx`
 - Copia su Desktop accanto ai template SIM
 

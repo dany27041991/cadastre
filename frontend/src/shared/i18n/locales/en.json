@@ -40,6 +40,7 @@
       "dateFrom": "Date from",
       "dateTo": "Date to",
       "noDataInPeriod": "No data in the selected period",
+      "tableNeedsTerritoryScope": "Select a region, province, or municipality (or draw an area) to see table data. The national map does not require a selection; the table does.",
       "ingestPeriodHint": "Choose the period for which to view data. If multiple snapshots fall in the range, the most recent one is used.",
       "territorySearchLabel": "Search territory",
       "territorySearchPlaceholder": "Region, province, municipality, area…",

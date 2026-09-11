@@ -40,6 +40,7 @@
       "dateFrom": "Data da",
       "dateTo": "Data a",
       "noDataInPeriod": "Nessun dato nel periodo selezionato",
+      "tableNeedsTerritoryScope": "Seleziona una regione, provincia o comune (o disegna un'area) per vedere i dati in tabella. La mappa nazionale non richiede selezione; la tabella sì.",
       "ingestPeriodHint": "Scegli il periodo per cui visualizzare i dati. Se nel range ci sono più snapshot, viene usato il più recente.",
       "territorySearchLabel": "Cerca territorio",
       "territorySearchPlaceholder": "Regione, provincia, comune, area…",

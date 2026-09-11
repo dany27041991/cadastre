@@ -23,28 +23,23 @@ GEOBUF_MEDIA_TYPE = "application/x-geobuf"
 
 _EMPTY_GEOBUF = geobuf.encode({"type": "FeatureCollection", "features": []})
 
-
 def _clip_wkt_or_400(clip_wkt: str | None) -> str | None:
     try:
         return normalize_clip_wkt(clip_wkt)
     except ClipWktError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-
 def _empty_response(output_format: str | None) -> GreenAreasOutput | Response:
     if output_format == "geobuf":
         return Response(content=_EMPTY_GEOBUF, media_type=GEOBUF_MEDIA_TYPE)
     return GreenAreasOutput(features=[])
 
-
 _DATE_FROM = Query(..., description="Ingest range start inclusive (ISO date, required)")
 _DATE_TO = Query(..., description="Ingest range end inclusive (ISO date, required)")
-
 
 def _uc(date_from: date, date_to: date):
     df, dt = parse_lakehouse_date_range(date_from, date_to)
     return get_green_areas_uc(date_from=df, date_to=dt)
-
 
 @router.get("/green-areas", response_model=None)
 def get_green_areas(
@@ -86,7 +81,6 @@ def get_green_areas(
         return Response(content=geobuf.encode(result), media_type=GEOBUF_MEDIA_TYPE)
     return GreenAreasOutput.model_validate(result)
 
-
 @router.get("/green-areas/viewport", response_model=None)
 def get_green_areas_viewport(
     bbox: str = Query(..., description="minLon,minLat,maxLon,maxLat (EPSG:4326)"),
@@ -125,7 +119,6 @@ def get_green_areas_viewport(
     if output_format == "geobuf":
         return Response(content=geobuf.encode(result), media_type=GEOBUF_MEDIA_TYPE)
     return GreenAreasOutput.model_validate(result)
-
 
 @router.get("/green-areas/table", response_model=GreenTablePageOut)
 def get_green_areas_table(
@@ -181,18 +174,7 @@ def get_green_areas_table(
         }.items()
         if v is not None
     }
-    # Unscoped national table scans every municipality Parquet and saturates the
-    # DuckDB/MinIO pool (concurrent /table + viewport → 500).
-    if (
-        municipality_id is None
-        and region_id is None
-        and province_id is None
-        and area_id is None
-        and parent_id is None
-        and contained_in_area_id is None
-        and not clip_wkt
-    ):
-        return GreenTablePageOut.build(data=[], total=0, page=page, page_size=page_size)
+    # National (unscoped) table is allowed — same rationale as green-assets/table.
     return _uc(date_from, date_to).list_green_areas_table_paged(
         region_id,
         province_id,
@@ -208,7 +190,6 @@ def get_green_areas_table(
         sort_dir=sort_dir,
         filters=filters,
     )
-
 
 # After static paths (viewport/table): otherwise {area_id} steals those segments → 422.
 @router.get("/green-areas/{area_id}", response_model=GreenDetailOut)

@@ -42,7 +42,12 @@ EXTRA_ARGS=()
 [[ -n "${AREAS:-}" ]] && EXTRA_ARGS+=(--areas "$AREAS")
 [[ -n "${TREES:-}" ]] && EXTRA_ARGS+=(--trees "$TREES")
 [[ -n "${HEDGES:-}" ]] && EXTRA_ARGS+=(--hedges "$HEDGES")
-[[ -n "${INGEST_DATE:-}" ]] && EXTRA_ARGS+=(--ingest-date "$INGEST_DATE")
+if [[ -n "${INGEST_DATES:-}" ]]; then
+  EXTRA_ARGS+=(--ingest-dates "$INGEST_DATES")
+elif [[ -n "${INGEST_DATE:-}" ]]; then
+  EXTRA_ARGS+=(--ingest-date "$INGEST_DATE")
+fi
+[[ -n "${DATA_DIR:-}" ]] && EXTRA_ARGS+=(--data-dir "$DATA_DIR")
 
 echo "=============================================="
 echo "POPULATE REGION → MinIO lakehouse"

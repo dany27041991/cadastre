@@ -2,9 +2,8 @@
 
 **Date:** 2026-09-09  
 **Status:** accepted  
+**Note (2026-09-10):** the V1 non-goal “Multiple historical ingest dates” is superseded by [2026-09-10-multi-snapshot-national-seed-design.md](./2026-09-10-multi-snapshot-national-seed-design.md).  
 **Context:** Local/MinIO performance testing at Italy scale after admin gold rollup and viewport optimizations. Current catalog covers ~2 regions (~379 munis); need full territory with millions of synthetic assets.
-
-## Goals
 
 - Wipe existing **green** lakehouse objects and reseed **all Italian municipalities** from PostGIS admin geometries.
 - Target **≥ ~10M green assets** (trees + hedges) in silver + gold + catalog.

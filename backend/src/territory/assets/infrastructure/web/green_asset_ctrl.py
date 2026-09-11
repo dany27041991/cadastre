@@ -23,13 +23,11 @@ GEOBUF_MEDIA_TYPE = "application/x-geobuf"
 
 _EMPTY_GEOBUF = geobuf.encode({"type": "FeatureCollection", "features": []})
 
-
 def _clip_wkt_or_400(clip_wkt: str | None) -> str | None:
     try:
         return normalize_clip_wkt(clip_wkt)
     except ClipWktError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
 
 def _empty_response(
     output_format: str | None,
@@ -47,15 +45,12 @@ def _empty_response(
         )
     return GreenAssetsOutput(features=[])
 
-
 _DATE_FROM = Query(..., description="Ingest range start inclusive (ISO date, required)")
 _DATE_TO = Query(..., description="Ingest range end inclusive (ISO date, required)")
-
 
 def _uc(date_from: date, date_to: date):
     df, dt = parse_lakehouse_date_range(date_from, date_to)
     return get_green_assets_uc(date_from=df, date_to=dt)
-
 
 @router.get("/green-assets", response_model=None)
 def get_green_assets(
@@ -84,7 +79,6 @@ def get_green_assets(
     if output_format == "geobuf":
         return Response(content=geobuf.encode(result), media_type=GEOBUF_MEDIA_TYPE)
     return GreenAssetsOutput.model_validate(result)
-
 
 @router.get("/green-assets/viewport", response_model=None)
 def get_green_assets_viewport(
@@ -234,15 +228,9 @@ def get_green_assets_table(
         }.items()
         if v is not None
     }
-    # Unscoped national table scans saturate DuckDB/MinIO.
-    if (
-        municipality_id is None
-        and region_id is None
-        and province_id is None
-        and green_area_id is None
-        and not clip_wkt
-    ):
-        return GreenTablePageOut.build(data=[], total=0, page=page, page_size=page_size)
+    # National (unscoped) table is allowed: lakehouse resolves all ingest prefixes
+    # in the date window and DuckDB paginates. Concurrent viewport+table can be
+    # heavy at full Italy scale — callers use small page_size from the FE.
     return _uc(date_from, date_to).list_green_assets_table_paged(
         region_id,
         municipality_id,
@@ -256,7 +244,6 @@ def get_green_assets_table(
         sort_dir=sort_dir,
         filters=filters,
     )
-
 
 # After static paths (viewport/table): otherwise {asset_id} steals those segments → 422.
 @router.get("/green-assets/{asset_id}", response_model=GreenDetailOut)

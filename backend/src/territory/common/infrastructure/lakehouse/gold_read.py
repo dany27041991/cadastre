@@ -24,7 +24,6 @@ CLUSTER_GRID_MAX_REFINE_ZOOM = 18
 
 logger = logging.getLogger(__name__)
 
-
 _WEB_MERCATOR_HALF = 20037508.34
 
 # Batch globs per DuckDB read (sequential per-file was multi-second at national scale).
@@ -33,7 +32,6 @@ _GOLD_READ_CHUNK = 100
 _GOLD_CACHE_TTL_SEC = 120.0
 _gold_cache_lock = threading.Lock()
 _gold_cache: dict[tuple[str, tuple], tuple[float, list[tuple]]] = {}
-
 
 def invalidate_gold_cache() -> None:
     """Drop in-process gold Parquet cache (call after municipality re-ingest)."""
@@ -47,12 +45,10 @@ SELECT level, region_id, province_id, municipality_id,
 FROM read_parquet([{files}], union_by_name=true, hive_partitioning=false)
 """
 
-
 def _lonlat_to_mercator(lon: float, lat: float) -> tuple[float, float]:
     x = lon * _WEB_MERCATOR_HALF / 180.0
     y = math.log(math.tan(math.radians(90.0 + lat) / 2.0)) * _WEB_MERCATOR_HALF / math.pi
     return x, y
-
 
 def gold_prefix(resolution: IngestResolution, zoom_band: str) -> str:
     return (
@@ -62,7 +58,6 @@ def gold_prefix(resolution: IngestResolution, zoom_band: str) -> str:
         f"ingest_date={resolution.ingest_at.isoformat()}/"
         f"zoom_band={zoom_band}"
     )
-
 
 def _cache_key(
     resolutions: list[IngestResolution], zoom_band: str
@@ -74,7 +69,6 @@ def _cache_key(
     )
     return zoom_band, fingerprint
 
-
 def _filter_rows_for_municipalities(
     rows: list[tuple], municipality_ids: set[int]
 ) -> list[tuple]:
@@ -82,7 +76,6 @@ def _filter_rows_for_municipalities(
     if not municipality_ids:
         return []
     return [r for r in rows if int(r[3]) in municipality_ids]
-
 
 def _lookup_gold_cache(
     resolutions: list[IngestResolution], zoom_band: str, now: float
@@ -98,20 +91,25 @@ def _lookup_gold_cache(
         if hit is not None and (now - hit[0]) <= _GOLD_CACHE_TTL_SEC:
             return list(hit[1]), "exact"
 
-        wanted = {int(r.municipality_id) for r in resolutions}
+        # Subset hits must match (municipality_id, ingest_at), not municipality
+        # alone — otherwise a warm 2024 national cache is reused for a 2023
+        # date window (same comune ids, wrong snapshot counts / empty silver).
+        wanted_pairs = {
+            (int(r.municipality_id), r.ingest_at.isoformat()) for r in resolutions
+        }
+        wanted_ids = {mid for mid, _ingest in wanted_pairs}
         best: tuple[float, list[tuple], int] | None = None
         for (band, fingerprint), (ts, rows) in _gold_cache.items():
             if band != zoom_band or (now - ts) > _GOLD_CACHE_TTL_SEC:
                 continue
-            cached_ids = {int(mid) for mid, _ingest in fingerprint}
-            if not wanted <= cached_ids:
+            cached_pairs = {(int(mid), ingest) for mid, ingest in fingerprint}
+            if not wanted_pairs <= cached_pairs:
                 continue
-            if best is None or len(cached_ids) < best[2]:
-                best = (ts, rows, len(cached_ids))
+            if best is None or len(cached_pairs) < best[2]:
+                best = (ts, rows, len(cached_pairs))
         if best is not None:
-            return _filter_rows_for_municipalities(best[1], wanted), "subset"
+            return _filter_rows_for_municipalities(best[1], wanted_ids), "subset"
     return None, "miss"
-
 
 def _read_globs(con, globs: list[str]) -> list[tuple]:
     """Read gold parquet globs in chunks; fall back per-file if a chunk fails."""
@@ -132,7 +130,6 @@ def _read_globs(con, globs: list[str]) -> list[tuple]:
             except Exception as file_exc:
                 logger.debug("gold missing or unreadable %s: %s", glob, file_exc)
     return rows
-
 
 def _read_gold_rows(resolutions: list[IngestResolution], zoom_band: str) -> list[tuple]:
     """Read gold rows; skip municipalities whose gold part is missing."""
@@ -160,7 +157,6 @@ def _read_gold_rows(resolutions: list[IngestResolution], zoom_band: str) -> list
     finally:
         con.close()
 
-
     with _gold_cache_lock:
         _gold_cache[key] = (time.monotonic(), rows)
         if len(_gold_cache) > 96:
@@ -168,7 +164,6 @@ def _read_gold_rows(resolutions: list[IngestResolution], zoom_band: str) -> list
             for old_key, _ in oldest:
                 _gold_cache.pop(old_key, None)
     return list(rows)
-
 
 def _intersects_bbox(r: tuple, bbox: tuple[float, float, float, float]) -> bool:
     minx, miny, maxx, maxy = bbox
@@ -182,7 +177,6 @@ def _intersects_bbox(r: tuple, bbox: tuple[float, float, float, float]) -> bool:
         and float(r[13]) >= miny
     )
 
-
 def _admin_region_uri(region_id: int) -> str:
     from core.config import settings
 
@@ -192,14 +186,12 @@ def _admin_region_uri(region_id: int) -> str:
         f"part-municipality-bands.parquet"
     )
 
-
 def _parse_ingest_at(value):
     from datetime import date as date_cls
 
     if isinstance(value, date_cls):
         return value
     return date_cls.fromisoformat(str(value)[:10])
-
 
 def _read_admin_municipality_band_rows(
     resolutions: list[IngestResolution],
@@ -251,18 +243,24 @@ def _read_admin_municipality_band_rows(
                     )
                     legacy_resolutions.extend(region_res)
                     continue
+                matched = 0
                 for r in part:
                     mid = int(r[3])
                     ingest = _parse_ingest_at(r[14])
                     if (mid, ingest) not in wanted:
                         continue
                     rows.append(r[:14])
+                    matched += 1
+                # Consolidated rollup may only hold the latest national ingest.
+                # Older snapshot dates still live under per-municipality gold —
+                # fall back when the rollup has no row for this date window.
+                if matched == 0:
+                    legacy_resolutions.extend(region_res)
     finally:
         con.close()
 
     if legacy_resolutions:
         rows.extend(_read_gold_rows(legacy_resolutions, "municipality"))
-
 
     key = _cache_key(resolutions, "municipality")
     with _gold_cache_lock:
@@ -273,13 +271,11 @@ def _read_admin_municipality_band_rows(
                 _gold_cache.pop(old_key, None)
     return list(rows)
 
-
 def _bbox_intersects(
     a: tuple[float, float, float, float],
     b: tuple[float, float, float, float],
 ) -> bool:
     return a[0] <= b[2] and a[2] >= b[0] and a[1] <= b[3] and a[3] >= b[1]
-
 
 def read_admin_clusters(
     resolutions: list[IngestResolution],
@@ -345,7 +341,6 @@ def read_admin_clusters(
             )
         )
     return clusters
-
 
 def read_grid_clusters(
     resolutions: list[IngestResolution],

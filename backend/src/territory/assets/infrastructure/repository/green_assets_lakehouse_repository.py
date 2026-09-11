@@ -30,12 +30,10 @@ _WEB_MERCATOR_BASE = 156543.03392804097
 _GRID_REF_LAT = 41.9
 _CLUSTER_DISTANCE_AT_16 = 80.0
 
-
 def _grid_cell_size_m(zoom: float) -> float:
     z = min(max(int(zoom), CLUSTER_MAX_ZOOM_THRESHOLD), CLUSTER_GRID_MAX_REFINE_ZOOM)
     scale = _WEB_MERCATOR_BASE * math.cos(math.radians(_GRID_REF_LAT))
     return (scale / 2**z) * _CLUSTER_DISTANCE_AT_16
-
 
 def _zoom_level_for_cell_size(cell_size_m: float) -> int:
     """Best-effort map of live-grid cell size back to a gold zoom band."""
@@ -47,7 +45,6 @@ def _zoom_level_for_cell_size(cell_size_m: float) -> int:
             best_delta = delta
             best_z = z
     return best_z
-
 
 class GreenAssetsLakehouseRepository:
     """DuckDB/MinIO implementation for green assets serving."""
@@ -478,6 +475,8 @@ class GreenAssetsLakehouseRepository:
             green_area_id=green_area_id,
             clip_geom=clip_geom,
         )
+        if not rows:
+            return _EMPTY_FC
         return build_green_asset_feature_collection(rows)
 
     def get_grid_clusters_from_gold(

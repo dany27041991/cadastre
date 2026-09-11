@@ -268,6 +268,7 @@ def get_database_url() -> str | None:
 
 
 def get_data_dir(municipality_name: str) -> Path:
+    """Base dir ``…/municipality/<slug>`` (ISO snapshot folders live under this)."""
     if "DATA_DIR" in os.environ:
         base = Path(os.environ["DATA_DIR"])
     else:
@@ -277,6 +278,44 @@ def get_data_dir(municipality_name: str) -> Path:
             / "data"
         )
     return base / "municipality" / municipality_name.lower().replace(" ", "_")
+
+
+def get_snapshot_dir(municipality_name: str, ingest_date: date) -> Path:
+    return get_data_dir(municipality_name) / ingest_date.isoformat()
+
+
+def ingest_municipality_from_geojson(
+    data_dir: Path,
+    meta: dict,
+    ingest_date: date,
+    *,
+    s3=None,
+) -> tuple[int, int]:
+    """Load GeoJSON from an ISO snapshot folder and write lakehouse. Returns (n_areas, n_assets)."""
+    municipality_id = int(meta["municipality_id"])
+    province_id = int(meta["province_id"])
+    region_id = int(meta["region_id"])
+    areas_gdf, areas_table = load_areas_table(
+        data_dir, municipality_id, province_id, region_id, ingest_date
+    )
+    if areas_gdf.empty:
+        raise RuntimeError(f"no areas loaded from {data_dir}")
+    assets_table = load_assets_table(
+        data_dir, areas_gdf, municipality_id, province_id, region_id, ingest_date
+    )
+    ingest_municipality_tables(
+        s3 or s3_client(),
+        meta={
+            "municipality_id": municipality_id,
+            "province_id": province_id,
+            "region_id": region_id,
+            "name": meta.get("name", data_dir.parent.name),
+        },
+        assets=assets_table,
+        areas=areas_table,
+        ingest_date=ingest_date,
+    )
+    return areas_table.num_rows, assets_table.num_rows
 
 
 def get_municipality_ids(conn, municipality_name: str) -> tuple[int, int, int] | None:
@@ -546,43 +585,81 @@ def main() -> int:
         "--data-dir",
         type=Path,
         default=None,
-        help="Directory with areas.geojson, hedges.geojson, … Default: DATA_DIR/municipality/<name>",
+        help=(
+            "ISO snapshot directory with areas.geojson, hedges.geojson, … "
+            "Default: DATA_DIR/municipality/<slug>/<ingest-date>"
+        ),
     )
     parser.add_argument(
         "--ingest-date",
-        default=date.today().isoformat(),
-        help="Lakehouse batch date YYYY-MM-DD (default: today)",
+        default=None,
+        help="Lakehouse batch date YYYY-MM-DD (default: 2024-01-01 if folder exists, else today)",
+    )
+    parser.add_argument(
+        "--ingest-dates",
+        default=None,
+        help="Comma-separated ISO dates (seeds each; folder dates ∪ list). Overrides --ingest-date.",
     )
     args = parser.parse_args()
 
-    data_dir = args.data_dir or get_data_dir(args.municipality)
-    if not data_dir.is_dir():
-        print(f"Error: data directory not found: {data_dir}", file=sys.stderr)
-        return 1
+    _COMMON = Path(__file__).resolve().parents[1] / "common"
+    _BOOST = Path(__file__).resolve().parents[1] / "boost_municipality"
+    for _p in (_COMMON, _BOOST, _LAKEHOUSE_DIR):
+        if str(_p) not in sys.path:
+            sys.path.insert(0, str(_p))
+    from seed_municipality_snapshot import (  # noqa: E402
+        default_data_root,
+        municipality_slug,
+        parse_ingest_dates,
+        resolve_dates,
+        seed_municipality_snapshot,
+        snapshot_data_dir,
+    )
+    from boost_municipality_to_lakehouse import fetch_municipality  # noqa: E402
+    from lakehouse_writer import open_db  # noqa: E402
 
     url = get_database_url()
     if not url:
         print("Error: set DATABASE_URL or DATABASE_DIRECT_URL", file=sys.stderr)
         return 1
 
-    ingest_date = date.fromisoformat(args.ingest_date)
-    print(f"Data dir: {data_dir}")
-    print(f"Municipality: {args.municipality}")
-    print(f"Ingest date: {ingest_date}")
+    data_root = default_data_root()
+    slug = municipality_slug(args.municipality)
+
+    if args.data_dir is not None:
+        # Explicit single snapshot directory
+        data_dir = args.data_dir
+        if not data_dir.is_dir():
+            print(f"Error: data directory not found: {data_dir}", file=sys.stderr)
+            return 1
+        try:
+            ingest_date = date.fromisoformat(data_dir.name)
+        except ValueError:
+            ingest_date = date.fromisoformat(
+                args.ingest_date or date.today().isoformat()
+            )
+        ingest_dates = [ingest_date]
+        forced_dir = data_dir
+    else:
+        forced_dir = None
+        cli = parse_ingest_dates(args.ingest_dates, repeated=[args.ingest_date] if args.ingest_date else None)
+        ingest_dates = resolve_dates(cli, data_root, slug)
+        if not ingest_dates:
+            print(f"Error: no ingest dates for {args.municipality!r}", file=sys.stderr)
+            return 1
+
+    print(f"Data root: {data_root}")
+    print(f"Municipality: {args.municipality} slug={slug}")
+    print(f"Ingest dates: {', '.join(d.isoformat() for d in ingest_dates)}")
     print("Target: MinIO lakehouse (silver + gold + catalog)")
 
     try:
-        with psycopg.connect(url) as conn:
-            ids = get_municipality_ids(conn, args.municipality)
-            if not ids:
-                print(
-                    f"Error: municipality '{args.municipality}' not found in public.municipalities",
-                    file=sys.stderr,
-                )
-                return 1
-            municipality_id, province_id, region_id = ids
+        os.environ.setdefault("DATABASE_URL", url)
+        with open_db() as conn:
+            meta = fetch_municipality(conn, args.municipality)
             print(
-                f"  municipality_id={municipality_id}, province_id={province_id}, region_id={region_id}"
+                f"  municipality_id={meta['municipality_id']}, "
+                f"province_id={meta['province_id']}, region_id={meta['region_id']}"
             )
 
             area_att_id = get_attribute_type_id(conn, *AREA_ATTRIBUTE_TYPE)
@@ -599,32 +676,28 @@ def main() -> int:
                         file=sys.stderr,
                     )
 
-        print("Loading green areas from areas.geojson...")
-        areas_gdf, areas_table = load_areas_table(
-            data_dir, municipality_id, province_id, region_id, ingest_date
-        )
-        if areas_gdf.empty:
-            print("Error: no areas loaded", file=sys.stderr)
-            return 1
-
-        print("Loading green assets (hedges, shrubs, trees)...")
-        assets_table = load_assets_table(
-            data_dir, areas_gdf, municipality_id, province_id, region_id, ingest_date
-        )
-
-        meta = {
-            "municipality_id": municipality_id,
-            "province_id": province_id,
-            "region_id": region_id,
-            "name": args.municipality,
-        }
-        ingest_municipality_tables(
-            s3_client(),
-            meta=meta,
-            assets=assets_table,
-            areas=areas_table,
-            ingest_date=ingest_date,
-        )
+        client = s3_client()
+        for ingest_date in ingest_dates:
+            if forced_dir is not None:
+                print(f"Loading GeoJSON from {forced_dir} @ {ingest_date.isoformat()}…")
+                n_a, n_as = ingest_municipality_from_geojson(
+                    forced_dir, meta, ingest_date, s3=client
+                )
+                print(f"  → real areas={n_a} assets={n_as}")
+            else:
+                src = "real" if snapshot_data_dir(data_root, slug, ingest_date) else "mock"
+                print(f"Seeding {ingest_date.isoformat()} ({src})…")
+                source, n_a, n_as = seed_municipality_snapshot(
+                    meta,
+                    ingest_date,
+                    n_areas=8,
+                    n_trees=1200,
+                    n_hedges=80,
+                    base_seed=42,
+                    data_root=data_root,
+                    s3=client,
+                )
+                print(f"  → {source} areas={n_a} assets={n_as}")
         print("Done.")
         return 0
     except Exception as e:
