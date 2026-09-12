@@ -66,6 +66,12 @@ export interface GreenTablePanelContextValue {
   /** True while InfoPanel is on the layers step (toggles + green tables). */
   readonly layersPanelOpen: boolean
   readonly setLayersPanelOpen: (v: boolean) => void
+  /**
+   * Area Italia: false until admin territory geometries are on the map.
+   * Draw entry stays true (no admin layer to wait for).
+   */
+  readonly adminTerritoryReady: boolean
+  readonly setAdminTerritoryReady: (ready: boolean) => void
   readonly greenAssetsLayer: GreenAssetsLayerControls | null
   readonly registerGreenAssetsLayer: (controls: GreenAssetsLayerControls | null) => void
   /** Full reset to Italy landing (Indietro from layers panel). */
@@ -112,6 +118,7 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
   const [tablePanelActive, setTablePanelActive] = useState(false)
   const [mapTableAccordionVisible, setMapTableAccordionVisible] = useState(false)
   const [layersPanelOpen, setLayersPanelOpen] = useState(false)
+  const [adminTerritoryReady, setAdminTerritoryReady] = useState(false)
   const [greenAssetsLayer, setGreenAssetsLayer] = useState<GreenAssetsLayerControls | null>(null)
   const [resetToLanding, setResetToLanding] = useState<(() => void) | null>(null)
   const [territorySearchNav, setTerritorySearchNav] = useState<TerritorySearchNavControls | null>(
@@ -208,6 +215,7 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
     setTablePanelActive(false)
     setMapTableAccordionVisible(false)
     setLayersPanelOpen(false)
+    setAdminTerritoryReady(false)
     setAreasToggleLockedByGreenSearch(false)
     setEntryMode('admin')
     setSpatialClip(null)
@@ -229,6 +237,8 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
       setMapTableAccordionVisible,
       layersPanelOpen,
       setLayersPanelOpen,
+      adminTerritoryReady,
+      setAdminTerritoryReady,
       greenAssetsLayer,
       registerGreenAssetsLayer,
       resetToLanding,
@@ -258,6 +268,7 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
       resetPanelState,
       mapTableAccordionVisible,
       layersPanelOpen,
+      adminTerritoryReady,
       greenAssetsLayer,
       registerGreenAssetsLayer,
       resetToLanding,

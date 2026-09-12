@@ -97,6 +97,13 @@ if [[ "$SKIP_ROLLUP" -eq 0 ]]; then
     echo "=============================================="
     LAKEHOUSE_S3_ENDPOINT="$HOST_S3_ENDPOINT" \
       "$PYTHON" "$LAKEHOUSE_DIR/rollup_admin_gold.py"
+
+    echo ""
+    echo "=============================================="
+    echo "ADMIN AREAS STATS ROLLUP"
+    echo "=============================================="
+    LAKEHOUSE_S3_ENDPOINT="$HOST_S3_ENDPOINT" \
+      "$PYTHON" "$LAKEHOUSE_DIR/rollup_admin_areas_stats.py"
   fi
 fi
 

@@ -18,7 +18,7 @@ import { GreenTableDrillHeader } from './GreenTableDrillHeader'
 import { GreenTablePageJump } from './GreenTablePageJump'
 import { useGreenTableMode } from './useGreenTableMode'
 import { useGreenTablePagedData } from './useGreenTablePagedData'
-import { useGreenTableColumns } from './useGreenTableColumns'
+import { useGreenTableColumns } from './useGreenTableColumns.tsx'
 
 export interface GreenDataTableProps {
   readonly areasActive: boolean
@@ -74,6 +74,7 @@ export function GreenDataTable({
     setPageInput,
     total,
     totalPages,
+    totalIsApproximate,
     rawRows,
     handleSort,
     handlePaginationChange,
@@ -193,6 +194,7 @@ export function GreenDataTable({
               <GreenTablePageJump
                 page={page}
                 totalPages={totalPages}
+                totalIsApproximate={totalIsApproximate}
                 pageInput={pageInput}
                 loading={loading}
                 onPageInputChange={setPageInput}

@@ -106,8 +106,8 @@ export function useTerritoryMapGreenLayers({
               provinceId: last.provinceId,
               municipalityId: last.id,
               subMunicipalAreaId: last.subMunicipalAreaId,
-              dateFrom: dateFromIso || undefined,
-              dateTo: dateToIso || undefined,
+              dateFrom: dateFromIso,
+              dateTo: dateToIso,
             })
           : await territoryApi.getGreenAreas({
               regionId: last.regionId,
@@ -116,8 +116,8 @@ export function useTerritoryMapGreenLayers({
                 last.municipalityId ??
                 breadcrumb.find((c) => c.level === 'green_areas')?.id,
               containedInAreaId: last.id,
-              dateFrom: dateFromIso || undefined,
-              dateTo: dateToIso || undefined,
+              dateFrom: dateFromIso,
+              dateTo: dateToIso,
             })
       const isValidGeoJson =
         geojson != null && (geojson as { type?: string }).type === 'FeatureCollection'

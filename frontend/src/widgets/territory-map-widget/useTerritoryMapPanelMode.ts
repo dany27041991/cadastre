@@ -34,6 +34,7 @@ export type UseTerritoryMapPanelModeArgs = {
   closeGreenDetail: TerritorySearchNavControls['closeGreenDetail']
   deactivateLayerToggles: () => void
   resetPanelState: () => void
+  setAdminTerritoryReady: (ready: boolean) => void
   registerResetToLanding: (fn: (() => void) | null) => void
   registerTerritorySearchNav: (nav: TerritorySearchNavControls | null) => void
 }
@@ -56,6 +57,7 @@ export function useTerritoryMapPanelMode({
   closeGreenDetail,
   deactivateLayerToggles,
   resetPanelState,
+  setAdminTerritoryReady,
   registerResetToLanding,
   registerTerritorySearchNav,
 }: UseTerritoryMapPanelModeArgs) {
@@ -114,19 +116,25 @@ export function useTerritoryMapPanelMode({
     const wasOpen = prevLayersPanelOpenRef.current
     prevLayersPanelOpenRef.current = open
     if (!open) {
+      setAdminTerritoryReady(false)
       mapRef.current.clearTerritoryLayer()
       return
     }
     if (!wasOpen) {
       if (entryModeRef.current === 'draw') {
+        // Draw entry has no admin territories to wait for.
+        setAdminTerritoryReady(true)
         mapRef.current.clearTerritoryLayer()
         return
       }
-      // Drain pre-ready queued ops, then mount + frame Italy on first Area Italia enter.
+      // Lock dates/search until regions are on the map; keep current zoom.
+      setAdminTerritoryReady(false)
       mapRef.current.flushAdapterPending()
-      void loadRegionsRef.current({ fit: true })
+      void Promise.resolve(loadRegionsRef.current({ fit: false })).finally(() => {
+        setAdminTerritoryReady(true)
+      })
     }
-  }, [layersPanelOpen])
+  }, [layersPanelOpen, setAdminTerritoryReady])
 
   const resetToLanding = useCallback(() => {
     deactivateLayerToggles()

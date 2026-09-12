@@ -34,6 +34,7 @@ export function TerritoryMapWidget() {
     registerResetToLanding,
     registerTerritorySearchNav,
     resetPanelState,
+    setAdminTerritoryReady,
     layersPanelOpen,
     entryMode,
     spatialClip,
@@ -103,6 +104,7 @@ export function TerritoryMapWidget() {
       closeGreenDetail: greenDetail.close,
       deactivateLayerToggles,
       resetPanelState,
+      setAdminTerritoryReady,
       registerResetToLanding,
       registerTerritorySearchNav,
     })

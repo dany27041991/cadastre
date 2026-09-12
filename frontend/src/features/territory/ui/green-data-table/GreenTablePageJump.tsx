@@ -8,6 +8,8 @@ import { Box, Text } from 'dxc-webkit'
 export type GreenTablePageJumpProps = {
   page: number
   totalPages: number
+  /** True while BE returned has_more approx total (do not show a fake page count). */
+  totalIsApproximate?: boolean
   pageInput: string
   loading: boolean
   onPageInputChange: (value: string) => void
@@ -17,13 +19,15 @@ export type GreenTablePageJumpProps = {
 export const GreenTablePageJump: FC<GreenTablePageJumpProps> = ({
   page: _page,
   totalPages,
+  totalIsApproximate = false,
   pageInput,
   loading,
   onPageInputChange,
   onCommit,
 }) => {
   const { t } = useTranslation()
-  if (totalPages <= 1) return null
+  // Approx full page ⇒ at least one more page; keep the jump visible with "di …".
+  if (!totalIsApproximate && totalPages <= 1) return null
 
   return (
     <Box as="div" className="green-data-table-page-jump green-data-table-page-jump--top">
@@ -37,10 +41,14 @@ export const GreenTablePageJump: FC<GreenTablePageJumpProps> = ({
         type="number"
         className="green-data-table-page-jump-input"
         min={1}
-        max={totalPages}
+        {...(totalIsApproximate ? {} : { max: totalPages })}
         value={pageInput}
         disabled={loading}
-        aria-label={t('territory.table.goToPageAria', { max: totalPages })}
+        aria-label={
+          totalIsApproximate
+            ? t('territory.table.goToPageAriaApprox')
+            : t('territory.table.goToPageAria', { max: totalPages })
+        }
         onChange={(e) => onPageInputChange(e.target.value)}
         onBlur={onCommit}
         onKeyDown={(e) => {
@@ -51,7 +59,9 @@ export const GreenTablePageJump: FC<GreenTablePageJumpProps> = ({
         }}
       />
       <Text as="span" font="f1-body-sm" className="green-data-table-page-jump-suffix">
-        {t('territory.table.goToPageOf', { total: totalPages })}
+        {totalIsApproximate
+          ? t('territory.table.goToPageOfApprox')
+          : t('territory.table.goToPageOf', { total: totalPages })}
       </Text>
     </Box>
   )

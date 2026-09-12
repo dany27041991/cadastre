@@ -59,6 +59,20 @@ def gold_prefix(resolution: IngestResolution, zoom_band: str) -> str:
         f"zoom_band={zoom_band}"
     )
 
+
+def areas_stats_prefix(resolution: IngestResolution, zoom_band: str = "municipality") -> str:
+    return (
+        f"green_areas_stats/region_id={resolution.region_id}/"
+        f"province_id={resolution.province_id}/"
+        f"municipality_id={resolution.municipality_id}/"
+        f"ingest_date={resolution.ingest_at.isoformat()}/"
+        f"zoom_band={zoom_band}"
+    )
+
+
+# Cache band key for areas-stats municipality rows (must not collide with asset gold).
+_AREAS_STATS_CACHE_BAND = "areas_stats_municipality"
+
 def _cache_key(
     resolutions: list[IngestResolution], zoom_band: str
 ) -> tuple[str, tuple]:
@@ -165,6 +179,41 @@ def _read_gold_rows(resolutions: list[IngestResolution], zoom_band: str) -> list
                 _gold_cache.pop(old_key, None)
     return list(rows)
 
+
+def _read_areas_stats_muni_rows(resolutions: list[IngestResolution]) -> list[tuple]:
+    """Read per-municipality green_areas_stats bands (legacy path without admin rollup)."""
+    if not resolutions:
+        return []
+
+    now = time.monotonic()
+    cached, _hit_kind = _lookup_gold_cache(resolutions, _AREAS_STATS_CACHE_BAND, now)
+    if cached is not None:
+        return cached
+
+    key = _cache_key(resolutions, _AREAS_STATS_CACHE_BAND)
+    con = connect_lakehouse()
+    try:
+        with timed_op(
+            "areas_stats_read",
+            zoom_band="municipality",
+            municipalities=len(resolutions),
+        ):
+            globs = [
+                parquet_glob(areas_stats_prefix(resolution, "municipality"))
+                for resolution in resolutions
+            ]
+            rows = _read_globs(con, globs)
+    finally:
+        con.close()
+
+    with _gold_cache_lock:
+        _gold_cache[key] = (time.monotonic(), rows)
+        if len(_gold_cache) > 96:
+            oldest = sorted(_gold_cache.items(), key=lambda kv: kv[1][0])[:16]
+            for old_key, _ in oldest:
+                _gold_cache.pop(old_key, None)
+    return list(rows)
+
 def _intersects_bbox(r: tuple, bbox: tuple[float, float, float, float]) -> bool:
     minx, miny, maxx, maxy = bbox
     lon, lat = float(r[8]), float(r[9])
@@ -183,6 +232,16 @@ def _admin_region_uri(region_id: int) -> str:
     return (
         f"s3://{settings.lakehouse_s3_bucket}/"
         f"green_assets_admin_clusters/region_id={region_id}/"
+        f"part-municipality-bands.parquet"
+    )
+
+
+def _admin_areas_stats_region_uri(region_id: int) -> str:
+    from core.config import settings
+
+    return (
+        f"s3://{settings.lakehouse_s3_bucket}/"
+        f"green_areas_admin_stats/region_id={region_id}/"
         f"part-municipality-bands.parquet"
     )
 
@@ -270,6 +329,84 @@ def _read_admin_municipality_band_rows(
             for old_key, _ in oldest:
                 _gold_cache.pop(old_key, None)
     return list(rows)
+
+
+def _read_admin_areas_stats_band_rows(
+    resolutions: list[IngestResolution],
+) -> list[tuple]:
+    """Load areas root-count stats via consolidated per-region files when present.
+
+    Falls back to per-municipality ``green_areas_stats`` globs.
+    """
+    if not resolutions:
+        return []
+
+    cached, _hit_kind = _lookup_gold_cache(
+        resolutions, _AREAS_STATS_CACHE_BAND, time.monotonic()
+    )
+    if cached is not None:
+        return cached
+
+    wanted = {(int(r.municipality_id), r.ingest_at) for r in resolutions}
+    by_region: dict[int, list[IngestResolution]] = {}
+    for r in resolutions:
+        by_region.setdefault(int(r.region_id), []).append(r)
+
+    rows: list[tuple] = []
+    legacy_resolutions: list[IngestResolution] = []
+    con = connect_lakehouse()
+    try:
+        with timed_op(
+            "areas_stats_read_admin",
+            zoom_band="municipality",
+            municipalities=len(resolutions),
+            regions=len(by_region),
+        ):
+            for region_id, region_res in by_region.items():
+                uri = _admin_areas_stats_region_uri(region_id)
+                try:
+                    part = con.execute(
+                        f"""
+                        SELECT level, region_id, province_id, municipality_id,
+                               cell_x, cell_y, count, sample_id,
+                               lon, lat, min_lon, min_lat, max_lon, max_lat,
+                               ingest_at
+                        FROM read_parquet('{uri}', hive_partitioning=false)
+                        """
+                    ).fetchall()
+                except Exception as exc:
+                    logger.debug(
+                        "admin areas_stats missing region=%s (%s); legacy fallback",
+                        region_id,
+                        exc,
+                    )
+                    legacy_resolutions.extend(region_res)
+                    continue
+                matched = 0
+                for r in part:
+                    mid = int(r[3])
+                    ingest = _parse_ingest_at(r[14])
+                    if (mid, ingest) not in wanted:
+                        continue
+                    rows.append(r[:14])
+                    matched += 1
+                if matched == 0:
+                    legacy_resolutions.extend(region_res)
+    finally:
+        con.close()
+
+    if legacy_resolutions:
+        rows.extend(_read_areas_stats_muni_rows(legacy_resolutions))
+
+    key = _cache_key(resolutions, _AREAS_STATS_CACHE_BAND)
+    with _gold_cache_lock:
+        _gold_cache[key] = (time.monotonic(), rows)
+        if len(_gold_cache) > 96:
+            oldest = sorted(_gold_cache.items(), key=lambda kv: kv[1][0])[:16]
+            for old_key, _ in oldest:
+                _gold_cache.pop(old_key, None)
+    return list(rows)
+
 
 def _bbox_intersects(
     a: tuple[float, float, float, float],

@@ -166,6 +166,163 @@ def test_gold_clusters_build_municipality_and_grid_bands():
         assert bands[f"grid_{z}"].num_rows >= 1
 
 
+def test_areas_stats_build_municipality_band_counts_roots_only():
+    """Pure unit: areas stats count = parent_id IS NULL rows only."""
+    import sys
+    from pathlib import Path
+
+    import pyarrow as pa
+
+    scripts = (
+        Path(__file__).resolve().parents[2]
+        / "infrastructure"
+        / "scripts"
+        / "database"
+        / "lakehouse"
+    )
+    sys.path.insert(0, str(scripts))
+    from areas_stats import build_areas_municipality_band
+
+    areas = pa.table(
+        {
+            "id": pa.array([10, 11, 12], type=pa.int64()),
+            "parent_id": pa.array([None, 10, None], type=pa.int64()),
+            "lon": pa.array([18.17, 18.18, 18.19], type=pa.float64()),
+            "lat": pa.array([40.35, 40.36, 40.37], type=pa.float64()),
+        }
+    )
+    band = build_areas_municipality_band(
+        areas, region_id=16, province_id=75, municipality_id=999001
+    )
+    assert band.num_rows == 1
+    assert int(band.column("count")[0].as_py()) == 2
+
+    empty = build_areas_municipality_band(
+        pa.table(
+            {
+                "id": pa.array([], type=pa.int64()),
+                "parent_id": pa.array([], type=pa.int64()),
+                "lon": pa.array([], type=pa.float64()),
+                "lat": pa.array([], type=pa.float64()),
+            }
+        ),
+        region_id=1,
+        province_id=1,
+        municipality_id=1,
+    )
+    assert int(empty.column("count")[0].as_py()) == 0
+
+
+def test_resolve_wide_total_areas_roots_uses_gold(monkeypatch):
+    """Wide areas roots-only where prefers areas_stats gold over approx."""
+    from datetime import date
+
+    from territory.common.infrastructure.lakehouse.catalog import IngestResolution
+    from territory.common.infrastructure.lakehouse import silver_read
+
+    resolutions = [
+        IngestResolution(
+            municipality_id=i,
+            region_id=1,
+            province_id=1,
+            dataset="areas",
+            ingest_at=date(2024, 6, 1),
+            object_prefix=f"green_areas/municipality_id={i}",
+        )
+        for i in range(1, 45)
+    ]
+
+    silver_read._table_count_cache.clear()
+    monkeypatch.setattr(silver_read, "_area_total_from_gold", lambda _r: 1234)
+    monkeypatch.setattr(silver_read, "_asset_total_from_gold", lambda _r: 9999)
+    scheduled: list[bool] = []
+    monkeypatch.setattr(
+        silver_read,
+        "_schedule_wide_count",
+        lambda *_a, **_k: scheduled.append(True),
+    )
+
+    total, source = silver_read._resolve_wide_total(
+        resolutions,
+        where_sql="1=1 AND parent_id IS NULL",
+        offset=0,
+        row_count=5,
+        page_size=5,
+        prefer_gold=True,
+    )
+    assert source == "gold"
+    assert total == 1234
+    assert scheduled == []
+
+    total_q, source_q = silver_read._resolve_wide_total(
+        resolutions,
+        where_sql="1=1 AND parent_id IS NULL AND name ILIKE '%x%'",
+        offset=0,
+        row_count=5,
+        page_size=5,
+        prefer_gold=True,
+    )
+    assert source_q == "approx"
+    assert total_q == 6
+    assert scheduled == [True]
+
+
+def test_wide_select_rows_skips_via_gold_counts(monkeypatch):
+    """Deep offset must not LIMIT offset+page on every chunk — gold skip then local OFFSET."""
+    from datetime import date
+
+    from territory.common.infrastructure.lakehouse.catalog import IngestResolution
+    from territory.common.infrastructure.lakehouse import silver_read
+
+    resolutions = [
+        IngestResolution(
+            municipality_id=i,
+            region_id=1,
+            province_id=1,
+            dataset="areas",
+            ingest_at=date(2024, 6, 1),
+            object_prefix=f"green_areas/municipality_id={i}",
+        )
+        for i in range(1, 6)
+    ]
+    # 10 roots each → offset 42 lands in muni 5 with local offset 2
+    monkeypatch.setattr(
+        silver_read,
+        "_muni_counts_from_gold",
+        lambda _r, _w: {i: 10 for i in range(1, 6)},
+    )
+
+    executed: list[str] = []
+
+    class _FakeCon:
+        def execute(self, sql: str):
+            executed.append(" ".join(sql.split()))
+            class _R:
+                def fetchall(self_inner):
+                    return [(99,)]
+            return _R()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(silver_read, "connect_lakehouse", lambda: _FakeCon())
+
+    rows = silver_read._wide_select_rows(
+        resolutions,
+        where_sql="1=1 AND parent_id IS NULL",
+        select_cols="id",
+        order_col="id",
+        order_dir="ASC",
+        offset=42,
+        page_size=5,
+    )
+    assert rows == [(99,)]
+    assert len(executed) == 1
+    assert "OFFSET 2" in executed[0]
+    assert "LIMIT 5" in executed[0]
+    assert "municipality_id=5" in executed[0] or "green_areas/municipality_id=5" in executed[0]
+
+
 def test_lakehouse_gold_admin_clusters_from_minio():
     """Requires MinIO fixture with gold (run_seed_fixture_lakehouse.sh)."""
     import os

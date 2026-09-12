@@ -56,6 +56,15 @@ LAKEHOUSE_S3_ENDPOINT="$HOST_S3_ENDPOINT" \
   "$PYTHON" "$LECCE_PY" --municipality Lecce ${INGEST_ARGS[@]+"${INGEST_ARGS[@]}"}
 
 echo ""
+echo "=============================================="
+echo "ADMIN GOLD + AREAS STATS ROLLUP"
+echo "=============================================="
+LAKEHOUSE_S3_ENDPOINT="$HOST_S3_ENDPOINT" \
+  "$PYTHON" "$LAKEHOUSE_DIR/rollup_admin_gold.py"
+LAKEHOUSE_S3_ENDPOINT="$HOST_S3_ENDPOINT" \
+  "$PYTHON" "$LAKEHOUSE_DIR/rollup_admin_areas_stats.py"
+
+echo ""
 echo "=== DuckDB smoke ==="
 LAKEHOUSE_S3_ENDPOINT="$HOST_S3_ENDPOINT" \
   "$PYTHON" "$LAKEHOUSE_DIR/smoke_duckdb_catalog.py" --date-from "2000-01-01" --date-to "2099-12-31" || true

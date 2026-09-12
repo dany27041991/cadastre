@@ -37,6 +37,11 @@ from gold_clusters import (
     build_all_gold_bands,
     gold_hive_prefix,
 )
+from areas_stats import (
+    admin_areas_region_part_key,
+    areas_stats_hive_prefix,
+    build_areas_municipality_band,
+)
 
 CATALOG_KEY = "_catalog/municipality_ingests.parquet"
 _catalog_lock = threading.Lock()
@@ -90,10 +95,34 @@ def get_bytes(client, key: str) -> bytes | None:
     except client.exceptions.NoSuchKey:
         return None
     except Exception as exc:
+        # botocore may raise ClientError for NoSuchKey depending on version
         code = getattr(exc, "response", {}).get("Error", {}).get("Code")
         if code in {"NoSuchKey", "404"}:
             return None
         raise
+
+
+def read_parquet_bytes(raw: bytes) -> pa.Table:
+    """Read Parquet bytes; fall back to DuckDB when PyArrow histogram check fails."""
+    try:
+        return pq.read_table(io.BytesIO(raw))
+    except Exception:
+        # Older/DuckDB writers can trip PyArrow with
+        # "Repetition level histogram size mismatch".
+        import duckdb
+        import tempfile
+
+        fd, path = tempfile.mkstemp(suffix=".parquet")
+        try:
+            os.write(fd, raw)
+            os.close(fd)
+            con = duckdb.connect()
+            return con.execute(f"SELECT * FROM read_parquet('{path}')").fetch_arrow_table()
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
 
 
 def table_to_parquet_bytes(table: pa.Table) -> bytes:
@@ -126,7 +155,7 @@ def load_catalog_table(client) -> pa.Table:
     raw = get_bytes(client, CATALOG_KEY)
     if not raw:
         return pa.Table.from_pylist([], schema=catalog_schema())
-    return pq.read_table(io.BytesIO(raw))
+    return read_parquet_bytes(raw)
 
 
 def upsert_catalog(
@@ -222,12 +251,38 @@ def write_gold_part(
     return key
 
 
+def write_areas_stats_part(
+    client,
+    *,
+    region_id: int,
+    province_id: int,
+    municipality_id: int,
+    ingest_date: date,
+    table: pa.Table,
+) -> str:
+    """Write green_areas_stats municipality-band (root counts for table totals)."""
+    prefix = areas_stats_hive_prefix(
+        region_id, province_id, municipality_id, ingest_date
+    )
+    key = f"{prefix}/part-000.parquet"
+    put_bytes(client, key, table_to_parquet_bytes(table))
+    return key
+
+
 def write_admin_region_municipality_bands(client, *, region_id: int, table: pa.Table) -> str:
     """Overwrite consolidated municipality-band gold for one region (admin rollup)."""
     key = admin_region_part_key(region_id)
     put_bytes(client, key, table_to_parquet_bytes(table))
     return key
 
+
+def write_admin_areas_region_municipality_bands(
+    client, *, region_id: int, table: pa.Table
+) -> str:
+    """Overwrite consolidated areas-stats municipality bands for one region."""
+    key = admin_areas_region_part_key(region_id)
+    put_bytes(client, key, table_to_parquet_bytes(table))
+    return key
 
 def maybe_invalidate_api_catalog_cache() -> None:
     """Optional POST after ingest so API pods drop TTL cache immediately."""
@@ -289,6 +344,25 @@ def ingest_municipality_tables(
                 table=gtable,
             )
             print(f"  gold[{band}]: s3://{bucket_name()}/{gkey} rows={gtable.num_rows}")
+
+        areas_band = build_areas_municipality_band(
+            areas,
+            region_id=meta["region_id"],
+            province_id=meta["province_id"],
+            municipality_id=meta["municipality_id"],
+        )
+        akey = write_areas_stats_part(
+            client,
+            region_id=meta["region_id"],
+            province_id=meta["province_id"],
+            municipality_id=meta["municipality_id"],
+            ingest_date=ingest_date,
+            table=areas_band,
+        )
+        print(
+            f"  areas_stats[municipality]: s3://{bucket_name()}/{akey} "
+            f"roots={areas_band.column('count')[0].as_py()}"
+        )
 
     print(f"Catalog updated: s3://{bucket_name()}/{CATALOG_KEY}")
     maybe_invalidate_api_catalog_cache()

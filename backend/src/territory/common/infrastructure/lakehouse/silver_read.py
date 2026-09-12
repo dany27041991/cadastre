@@ -364,6 +364,29 @@ def _asset_total_from_gold(resolutions: list[IngestResolution]) -> int | None:
         return None
     return sum(int(r[6] or 0) for r in rows)
 
+
+def _area_total_from_gold(resolutions: list[IngestResolution]) -> int | None:
+    """Root areas total (parent_id IS NULL) from green_areas_stats gold."""
+    try:
+        from territory.common.infrastructure.lakehouse import gold_read
+
+        rows = gold_read._read_admin_areas_stats_band_rows(resolutions)
+    except Exception:
+        return None
+    if not rows:
+        return None
+    return sum(int(r[6] or 0) for r in rows)
+
+
+def _is_areas_roots_only_where(where_sql: str) -> bool:
+    """True when table where is default roots-only (no q / drill / allowlist)."""
+    normalized = " ".join(where_sql.split())
+    return normalized in {
+        "1=1 AND parent_id IS NULL",
+        "parent_id IS NULL",
+    }
+
+
 def _resolve_wide_total(
     resolutions: list[IngestResolution],
     *,
@@ -378,8 +401,12 @@ def _resolve_wide_total(
     cached = _count_cache_get(where_sql, fingerprint)
     if cached is not None:
         return cached, "cache"
-    if prefer_gold and where_sql == "1=1":
-        gold_total = _asset_total_from_gold(resolutions)
+    if prefer_gold:
+        gold_total: int | None = None
+        if where_sql == "1=1":
+            gold_total = _asset_total_from_gold(resolutions)
+        elif _is_areas_roots_only_where(where_sql):
+            gold_total = _area_total_from_gold(resolutions)
         if gold_total is not None:
             with _table_count_lock:
                 _table_count_cache[(where_sql, fingerprint)] = (
@@ -389,6 +416,37 @@ def _resolve_wide_total(
             return gold_total, "gold"
     _schedule_wide_count(resolutions, where_sql)
     return _has_more_total(offset, row_count, page_size), "approx"
+
+def _muni_counts_from_gold(
+    resolutions: list[IngestResolution],
+    where_sql: str,
+) -> dict[int, int] | None:
+    """Per-municipality counts from gold when ``where_sql`` matches gold semantics.
+
+    Returns None when gold is missing/incomplete — caller must not skip silver IO.
+    """
+    try:
+        from territory.common.infrastructure.lakehouse import gold_read
+
+        if where_sql == "1=1":
+            rows = gold_read._read_admin_municipality_band_rows(resolutions)
+        elif _is_areas_roots_only_where(where_sql):
+            rows = gold_read._read_admin_areas_stats_band_rows(resolutions)
+        else:
+            return None
+    except Exception:
+        return None
+    if not rows:
+        return None
+    counts: dict[int, int] = {}
+    for r in rows:
+        mid = int(r[3])
+        counts[mid] = counts.get(mid, 0) + int(r[6] or 0)
+    needed = {int(r.municipality_id) for r in resolutions}
+    if not needed.issubset(counts.keys()):
+        return None
+    return {mid: int(counts[mid]) for mid in needed}
+
 
 def _wide_select_rows(
     resolutions: list[IngestResolution],
@@ -400,41 +458,90 @@ def _wide_select_rows(
     offset: int,
     page_size: int,
 ) -> list[tuple]:
-    """Fetch one page by walking municipality chunks (no global OFFSET scan)."""
+    """Fetch one page by walking municipalities (no global OFFSET over all files).
+
+    Deep pages (e.g. last of ~64k rows) used to ``LIMIT offset+page_size`` on every
+    chunk — tens of seconds. Skip whole municipalities via gold counts when the
+    filter matches gold; otherwise COUNT(*) per chunk then a small OFFSET SELECT.
+    Wide order is always ``municipality_id ASC, {order_col}``, so muni-level skip
+    preserves global row order.
+    """
     ordered = sorted(
         resolutions,
         key=lambda r: (int(r.municipality_id), int(r.region_id), int(r.province_id)),
     )
     remaining_skip = max(0, offset)
     collected: list[tuple] = []
+    gold_counts = _muni_counts_from_gold(resolutions, where_sql)
+    skip_mode = "gold" if gold_counts is not None else "count"
+
     con = connect_lakehouse()
     try:
-        for i in range(0, len(ordered), _TABLE_WIDE_CHUNK):
-            if len(collected) >= page_size:
-                break
-            chunk = ordered[i : i + _TABLE_WIDE_CHUNK]
-            files_sql = _files_sql_for(chunk)
-            need = remaining_skip + (page_size - len(collected))
-            rows = con.execute(
-                f"""
-                SELECT {select_cols}
-                FROM read_parquet([{files_sql}], union_by_name=true)
-                WHERE {where_sql}
-                ORDER BY municipality_id ASC, {order_col} {order_dir}
-                LIMIT {int(need)}
-                """
-            ).fetchall()
-            if not rows:
-                continue
-            if len(rows) <= remaining_skip:
-                remaining_skip -= len(rows)
-                continue
-            take = rows[remaining_skip : remaining_skip + (page_size - len(collected))]
-            remaining_skip = 0
-            collected.extend(take)
+        with timed_op(
+            "silver_wide_select",
+            municipalities=len(ordered),
+            offset=offset,
+            page_size=page_size,
+            skip_mode=skip_mode,
+        ):
+            if gold_counts is not None:
+                i = 0
+                while i < len(ordered) and len(collected) < page_size:
+                    mid = int(ordered[i].municipality_id)
+                    muni_count = gold_counts.get(mid, 0)
+                    if remaining_skip >= muni_count:
+                        remaining_skip -= muni_count
+                        i += 1
+                        continue
+                    need = page_size - len(collected)
+                    files_sql = _files_sql_for([ordered[i]])
+                    rows = con.execute(
+                        f"""
+                        SELECT {select_cols}
+                        FROM read_parquet([{files_sql}], union_by_name=true)
+                        WHERE {where_sql}
+                        ORDER BY municipality_id ASC, {order_col} {order_dir}
+                        LIMIT {int(need)} OFFSET {int(remaining_skip)}
+                        """
+                    ).fetchall()
+                    remaining_skip = 0
+                    collected.extend(rows)
+                    i += 1
+            else:
+                for i in range(0, len(ordered), _TABLE_WIDE_CHUNK):
+                    if len(collected) >= page_size:
+                        break
+                    chunk = ordered[i : i + _TABLE_WIDE_CHUNK]
+                    files_sql = _files_sql_for(chunk)
+                    n = int(
+                        con.execute(
+                            f"""
+                            SELECT count(*)
+                            FROM read_parquet([{files_sql}], union_by_name=true)
+                            WHERE {where_sql}
+                            """
+                        ).fetchone()[0]
+                    )
+                    if remaining_skip >= n:
+                        remaining_skip -= n
+                        continue
+                    need = page_size - len(collected)
+                    rows = con.execute(
+                        f"""
+                        SELECT {select_cols}
+                        FROM read_parquet([{files_sql}], union_by_name=true)
+                        WHERE {where_sql}
+                        ORDER BY municipality_id ASC, {order_col} {order_dir}
+                        LIMIT {int(need)} OFFSET {int(remaining_skip)}
+                        """
+                    ).fetchall()
+                    remaining_skip = 0
+                    collected.extend(rows)
     finally:
         con.close()
+
     return collected
+
 
 def list_assets_table(
     resolutions: list[IngestResolution],
@@ -578,12 +685,14 @@ def read_areas_in_bbox(
     minx, miny, maxx, maxy = bbox
     if clip_geom is not None:
         cx0, cy0, cx1, cy1 = clip_geom.bounds
-        minx, miny = max(minx, cx0), max(miny, cy0)
-        maxx, maxy = min(maxx, cx1), min(maxy, cy1)
-        if minx > maxx or miny > maxy:
+        # Reject only when map bbox and clip envelopes are disjoint.
+        # Do NOT shrink the lon/lat candidate window to clip.bounds: parks that
+        # graze a sub-municipal clip often have centroids outside that envelope
+        # (Santa Rosa + Area boost 5: table hit, viewport miss).
+        if maxx < cx0 or minx > cx1 or maxy < cy0 or miny > cy1:
             return []
-    # ~2 km floor + half viewport: catch centroids of parks that still
-    # intersect the visible envelope.
+    # ~2 km floor + half *map* viewport: catch centroids of parks that still
+    # intersect the visible envelope (and any clip applied below).
     pad_x = max(0.02, (maxx - minx) * 0.5)
     pad_y = max(0.02, (maxy - miny) * 0.5)
     qminx, qminy = minx - pad_x, miny - pad_y
@@ -805,7 +914,7 @@ def list_areas_table(
             offset=offset,
             row_count=len(rows),
             page_size=page_size,
-            prefer_gold=False,
+            prefer_gold=True,
         )
     else:
         files_sql = _files_sql_for(resolutions)

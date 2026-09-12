@@ -111,6 +111,27 @@ green_assets_admin_clusters/region_id={R}/part-municipality-bands.parquet
 
 Schema = bande `municipality` + colonna `ingest_at`. Serving nazionale apre O(#regioni) file. Design: [../design/2026-09-08-gold-admin-region-rollup-design.md](../design/2026-09-08-gold-admin-region-rollup-design.md).
 
+## Gold areas stats (table totals)
+
+Contatori precalcolati all’ingest per il totale della tabella aree gestite (root `parent_id IS NULL`), senza `COUNT(*)` silver su scope nazionale.
+
+```text
+green_areas_stats/
+  region_id={R}/province_id={P}/municipality_id={M}/
+    ingest_date={YYYY-MM-DD}/
+      zoom_band=municipality/part-000.parquet
+```
+
+Schema = stesso municipality-band degli asset; **`count`** = numero di aree root nel comune/ingest.
+
+Rollup admin (dopo ingest o via `backfill_areas_stats.py` / `rollup_admin_areas_stats.py`):
+
+```text
+green_areas_admin_stats/region_id={R}/part-municipality-bands.parquet
+```
+
+Serving: `list_areas_table` wide + `where` roots-only → somma gold; con `q`/drill/clip resta silver COUNT / approx.
+
 ## Smoke / seed
 
 ```bash

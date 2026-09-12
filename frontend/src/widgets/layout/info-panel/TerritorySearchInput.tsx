@@ -22,6 +22,8 @@ export function TerritorySearchInput() {
   const pathValue = hasSelection
     ? territoryPathFromBreadcrumb(nav!.breadcrumb, italiaLabel)
     : ''
+  const searchDisabled =
+    !nav || nav.loading || (panel?.entryMode === 'admin' && panel.adminTerritoryReady === false)
 
   const selectedOptions = useMemo(
     () => (hasSelection && pathValue ? [{ value: pathValue, label: pathValue }] : []),
@@ -142,7 +144,7 @@ export function TerritorySearchInput() {
         isSearchable
         isClearable
         onClear={handleClear}
-        disabled={!nav || nav.loading}
+        disabled={searchDisabled}
       />
     </div>
   )

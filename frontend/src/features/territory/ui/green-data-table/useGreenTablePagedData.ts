@@ -12,6 +12,23 @@ import {
 /** Debounce delay (ms) before a filter-text change triggers a fetch. */
 const FILTER_DEBOUNCE_MS = 350
 
+/**
+ * Backoff for silent exact-total refetch while BE fills the wide COUNT cache.
+ * Starts fast so the pager updates soon after the background count lands.
+ */
+const APPROX_RETRY_DELAYS_MS = [
+  600, 800, 1200, 2000, 3000, 4000, 4000, 4000, 4000, 4000, 4000, 4000,
+] as const
+
+function isApproximateTotal(
+  data: GreenTablePage,
+  page: number,
+  pageSize: number,
+): boolean {
+  const rowsN = data.data?.length ?? 0
+  return rowsN === pageSize && data.total === (page - 1) * pageSize + rowsN + 1
+}
+
 export type UseGreenTablePagedDataArgs = {
   baseQuery: string | null
   showGreenAssets: boolean
@@ -32,9 +49,12 @@ export function useGreenTablePagedData({
   const [sort, setSort] = useState<[string, 'asc' | 'desc'] | null>(null)
   const [pageInput, setPageInput] = useState('1')
   const [exactTotalNonce, setExactTotalNonce] = useState(0)
+  const [totalIsApproximate, setTotalIsApproximate] = useState(false)
   const approxRetriesRef = useRef(0)
   const pageDataRef = useRef(pageData)
   pageDataRef.current = pageData
+  /** Last page/size successfully applied — SWR only for silent exact-total refresh. */
+  const displayedPageRef = useRef<{ page: number; pageSize: number } | null>(null)
 
   const [debouncedFilters, setDebouncedFilters] = useState<Record<string, string>>(
     () => ({ ...activeColumnFilters }),
@@ -63,9 +83,11 @@ export function useGreenTablePagedData({
     setPage(1)
     setPageData(null)
     pageDataRef.current = null
+    displayedPageRef.current = null
     panelInitialized.current = false
     approxRetriesRef.current = 0
     setExactTotalNonce(0)
+    setTotalIsApproximate(false)
   }, [baseQuery])
 
   const debouncedFiltersKey = useMemo(
@@ -85,6 +107,8 @@ export function useGreenTablePagedData({
       prevShowGreenAssets.current = showGreenAssets
       setPageData(null)
       pageDataRef.current = null
+      displayedPageRef.current = null
+      setTotalIsApproximate(false)
     }
   }, [debouncedFiltersKey, sort, showGreenAssets])
 
@@ -93,20 +117,29 @@ export function useGreenTablePagedData({
   }, [page])
 
   useEffect(() => {
+    if (totalIsApproximate) return
     const tp = pageData?.total_pages
     if (tp == null || tp < 1) return
     setPage((p) => (p > tp ? tp : p))
-  }, [pageData?.total_pages, pageData])
+  }, [pageData?.total_pages, pageData, totalIsApproximate])
 
   useEffect(() => {
     if (baseQuery == null) {
       setPageData(null)
+      setTotalIsApproximate(false)
       return
     }
 
     let cancelled = false
     let approxTimer: ReturnType<typeof setTimeout> | null = null
-    const keepRowsVisible = pageDataRef.current != null
+    const abort = new AbortController()
+    const displayed = displayedPageRef.current
+    // Keep rows only for silent exact-total refresh (same page/size). Page jumps show loader.
+    const keepRowsVisible =
+      pageDataRef.current != null &&
+      displayed != null &&
+      displayed.page === page &&
+      displayed.pageSize === pageSize
     if (!keepRowsVisible) setLoading(true)
 
     const params: Record<string, string | number> = { page, page_size: pageSize }
@@ -122,36 +155,44 @@ export function useGreenTablePagedData({
 
     const fetchFn = showGreenAssets ? fetchGreenAssetsTablePaged : fetchGreenAreasTablePaged
 
-    fetchFn(baseQuery, params)
+    fetchFn(baseQuery, params, abort.signal)
       .then((data) => {
         if (cancelled) return
-        const rowsN = data.data?.length ?? 0
-        const approx =
-          rowsN === pageSize &&
-          data.total === (page - 1) * pageSize + rowsN + 1
+        const approx = isApproximateTotal(data, page, pageSize)
         setPageData(data)
+        displayedPageRef.current = { page, pageSize }
+        setTotalIsApproximate(approx)
         setLoading(false)
         if (!panelInitialized.current) {
           panelInitialized.current = true
           setTablePanelActive(data.total > 0)
         }
-        if (approx && approxRetriesRef.current < 12) {
+        if (approx && approxRetriesRef.current < APPROX_RETRY_DELAYS_MS.length) {
+          const delay = APPROX_RETRY_DELAYS_MS[approxRetriesRef.current] ?? 4000
           approxRetriesRef.current += 1
           approxTimer = setTimeout(() => {
             setExactTotalNonce((n) => n + 1)
-          }, 4000)
+          }, delay)
         } else if (!approx) {
           approxRetriesRef.current = 0
         }
       })
-      .catch(() => {
-        if (cancelled) return
-        if (!keepRowsVisible) setPageData(null)
+      .catch((err) => {
+        const aborted =
+          cancelled ||
+          (err instanceof DOMException && err.name === 'AbortError') ||
+          (err instanceof Error && err.name === 'AbortError')
+        if (aborted) return
+        if (pageDataRef.current == null) {
+          setPageData(null)
+          setTotalIsApproximate(false)
+        }
         setLoading(false)
       })
 
     return () => {
       cancelled = true
+      abort.abort()
       if (approxTimer) clearTimeout(approxTimer)
     }
   }, [
@@ -176,7 +217,6 @@ export function useGreenTablePagedData({
   }, [])
 
   const commitPageJump = useCallback(() => {
-    const max = Math.max(1, pageData?.total_pages ?? 1)
     const raw = pageInput.trim()
     if (raw === '') {
       setPageInput(String(page))
@@ -187,10 +227,14 @@ export function useGreenTablePagedData({
       setPageInput(String(page))
       return
     }
+    // Approx has_more totals (e.g. "2") must not clamp jump — exact max is unknown yet.
+    const max = totalIsApproximate
+      ? Number.POSITIVE_INFINITY
+      : Math.max(1, pageData?.total_pages ?? 1)
     const clamped = Math.min(max, Math.max(1, n))
     setPageInput(String(clamped))
     if (clamped !== page) setPage(clamped)
-  }, [pageInput, page, pageData?.total_pages])
+  }, [pageInput, page, pageData?.total_pages, totalIsApproximate])
 
   return {
     pageData,
@@ -201,6 +245,7 @@ export function useGreenTablePagedData({
     setPageInput,
     total: pageData?.total ?? 0,
     totalPages: pageData?.total_pages ?? 1,
+    totalIsApproximate,
     rawRows: pageData?.data ?? [],
     handleSort,
     handlePaginationChange,

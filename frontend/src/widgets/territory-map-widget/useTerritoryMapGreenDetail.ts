@@ -164,15 +164,16 @@ export function useTerritoryMapGreenDetail({
       } else {
         pendingTableFrameRef.current = true
       }
-      // Screen-anchor first (map 50%/20%) so the panel never opens at window-center / (0,0).
-      const screenPointer = placeDetailPanelAtMapFraction()
+      // Geographic anchors from the feature — never pass the framing screen
+      // point as a "click" pointer (that inverted 50%/20% into wrong lon/lat).
       greenDetail.openFromSelection(
         resolved.id,
         resolved.label,
         resolved.feature,
         layerKind,
-        screenPointer,
+        null,
       )
+      placeDetailPanelAtMapFraction()
     },
     [
       map,
@@ -211,14 +212,14 @@ export function useTerritoryMapGreenDetail({
       } else {
         pendingTableFrameRef.current = true
       }
-      const screenPointer = placeDetailPanelAtMapFraction()
       greenDetail.openFromSelection(
         hit.id,
         leaf,
         feature,
         LAYER_KIND_GREEN_AREA,
-        screenPointer,
+        null,
       )
+      placeDetailPanelAtMapFraction()
     },
     [
       map,

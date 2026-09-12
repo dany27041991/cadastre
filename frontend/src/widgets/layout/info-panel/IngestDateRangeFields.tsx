@@ -61,11 +61,20 @@ export function IngestDateRangeFields() {
     ensureIngestDatepickerPortal()
   }, [])
 
+  useEffect(() => {
+    if (panel?.entryMode === 'admin' && panel.adminTerritoryReady === false) {
+      setOpenFrom(false)
+      setOpenTo(false)
+    }
+  }, [panel?.entryMode, panel?.adminTerritoryReady])
+
   if (!panel) return null
 
-  const { dateFrom, dateTo, setDateFrom, setDateTo } = panel
+  const { dateFrom, dateTo, setDateFrom, setDateTo, entryMode, adminTerritoryReady } = panel
+  const datesDisabled = entryMode === 'admin' && !adminTerritoryReady
 
   const handleOutside = (bound: Bound, event?: { target?: EventTarget | null }) => {
+    if (datesDisabled) return
     if (shouldKeepCalendarOpen(event?.target ?? null)) return
     if (bound === 'from') setOpenFrom(false)
     else setOpenTo(false)
@@ -90,19 +99,28 @@ export function IngestDateRangeFields() {
             label={`${t('territory.panel.dateFrom')} *`}
             value={dateFrom}
             max={dateTo ?? undefined}
+            disabled={datesDisabled}
             {...datePickerShared}
-            open={openFrom}
-            onFocus={() => setOpenFrom(true)}
-            onInputClick={() => setOpenFrom(true)}
-            onCalendarOpen={() => setOpenFrom(true)}
+            open={openFrom && !datesDisabled}
+            onFocus={() => {
+              if (!datesDisabled) setOpenFrom(true)
+            }}
+            onInputClick={() => {
+              if (!datesDisabled) setOpenFrom(true)
+            }}
+            onCalendarOpen={() => {
+              if (!datesDisabled) setOpenFrom(true)
+            }}
             onClickOutside={(event: { target?: EventTarget | null }) =>
               handleOutside('from', event)
             }
             onChange={(date) => {
+              if (datesDisabled) return
               setDateFrom(date ?? null)
               setOpenFrom(false)
             }}
             onCustomClear={() => {
+              if (datesDisabled) return
               setDateFrom(null)
               setOpenFrom(false)
             }}
@@ -114,19 +132,28 @@ export function IngestDateRangeFields() {
             label={`${t('territory.panel.dateTo')} *`}
             value={dateTo}
             min={dateFrom ?? undefined}
+            disabled={datesDisabled}
             {...datePickerShared}
-            open={openTo}
-            onFocus={() => setOpenTo(true)}
-            onInputClick={() => setOpenTo(true)}
-            onCalendarOpen={() => setOpenTo(true)}
+            open={openTo && !datesDisabled}
+            onFocus={() => {
+              if (!datesDisabled) setOpenTo(true)
+            }}
+            onInputClick={() => {
+              if (!datesDisabled) setOpenTo(true)
+            }}
+            onCalendarOpen={() => {
+              if (!datesDisabled) setOpenTo(true)
+            }}
             onClickOutside={(event: { target?: EventTarget | null }) =>
               handleOutside('to', event)
             }
             onChange={(date) => {
+              if (datesDisabled) return
               setDateTo(date ?? null)
               setOpenTo(false)
             }}
             onCustomClear={() => {
+              if (datesDisabled) return
               setDateTo(null)
               setOpenTo(false)
             }}

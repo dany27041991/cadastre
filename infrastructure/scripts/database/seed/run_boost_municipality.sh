@@ -61,5 +61,14 @@ LAKEHOUSE_S3_ENDPOINT="$HOST_S3_ENDPOINT" \
 
 echo ""
 echo "=============================================="
+echo "ADMIN GOLD + AREAS STATS ROLLUP"
+echo "=============================================="
+LAKEHOUSE_S3_ENDPOINT="$HOST_S3_ENDPOINT" \
+  "$PYTHON" "$LAKEHOUSE_DIR/rollup_admin_gold.py"
+LAKEHOUSE_S3_ENDPOINT="$HOST_S3_ENDPOINT" \
+  "$PYTHON" "$LAKEHOUSE_DIR/rollup_admin_areas_stats.py"
+
+echo ""
+echo "=============================================="
 echo "BOOST COMPLETATO: $MUNICIPALITY_RAW"
 echo "=============================================="

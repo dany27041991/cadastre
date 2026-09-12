@@ -64,5 +64,12 @@ LAKEHOUSE_S3_ENDPOINT="$HOST_S3_ENDPOINT" \
 
 echo ""
 echo "=============================================="
+echo "ADMIN AREAS STATS ROLLUP (root counts for table totals)"
+echo "=============================================="
+LAKEHOUSE_S3_ENDPOINT="$HOST_S3_ENDPOINT" \
+  "$PYTHON" "$LAKEHOUSE_DIR/rollup_admin_areas_stats.py"
+
+echo ""
+echo "=============================================="
 echo "POPULATE REGION COMPLETATO"
 echo "=============================================="

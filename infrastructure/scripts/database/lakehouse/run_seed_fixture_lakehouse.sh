@@ -33,6 +33,11 @@ fi
 
 "$PYTHON" "$SCRIPT_DIR/lakehouse_writer.py" --fixture ${INGEST_ARGS[@]+"${INGEST_ARGS[@]}"}
 
+echo ""
+echo "=== Admin rollups (assets gold + areas stats) ==="
+"$PYTHON" "$SCRIPT_DIR/rollup_admin_gold.py"
+"$PYTHON" "$SCRIPT_DIR/rollup_admin_areas_stats.py"
+
 TODAY="${INGEST_DATE:-$(date +%F)}"
 echo ""
 echo "=== DuckDB smoke ==="
