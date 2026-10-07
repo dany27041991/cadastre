@@ -1092,6 +1092,42 @@ def read_area_roots_intersecting_geom(
             out.append(t)
     return out
 
+
+def read_area_roots_intersecting_clip(
+    resolutions: list[IngestResolution],
+    *,
+    clip_geom,
+    limit: int = _CATALOG_FEATURE_LIMIT,
+) -> list[tuple]:
+    """Root areas intersecting ``clip_geom`` across pre-pruned resolutions (draw national).
+
+    Callers must pass resolutions already limited to municipalities intersecting the
+    clip (e.g. via ``municipalities_intersecting_clip``). Unlike
+    ``read_area_roots_intersecting_geom``, no single-municipality SQL filter.
+    """
+    from shapely import wkb as shapely_wkb
+
+    if clip_geom is None or getattr(clip_geom, "is_empty", False):
+        return []
+    # No lon/lat shrink to clip.bounds — centroids of intersecting roots can sit
+    # just outside the clip envelope (same failure mode as Santa Rosa Area 5).
+    # Resolutions must already be municipality-pruned to the clip.
+    out: list[tuple] = []
+    for r in _fetch_area_raw_rows(resolutions, "parent_id IS NULL", limit):
+        if r[1] is None:
+            continue
+        try:
+            geom = shapely_wkb.loads(bytes(r[1]))
+        except Exception:
+            continue
+        if not geom.intersects(clip_geom):
+            continue
+        t = _raw_area_to_fc_tuple(r)
+        if t is not None:
+            out.append(t)
+    return out
+
+
 def read_areas_contained_or_intersecting(
     resolutions: list[IngestResolution],
     *,

@@ -343,6 +343,41 @@ class GreenAreasLakehouseRepository:
                     clip_geom=clip_geom,
                 )
                 id_allowlist = [int(r[0]) for r in rows]
+        elif (
+            area_id is None
+            and parent_id is None
+            and contained_in_area_id is None
+            and clip_wkt
+            and municipality_id is None
+        ):
+            # Draw-on-map without municipality (Area Italia + clip): allowlist roots ∩ clip.
+            # Without clip_wkt this branch is skipped → national roots (Area Italia unchanged).
+            clip_geom = silver_read._parse_clip_geom(clip_wkt)
+            if clip_geom is None or clip_geom.is_empty:
+                return [], 0
+            minx, miny, maxx, maxy = clip_geom.bounds
+            view_muni_ids = self._municipality_ids_for_view(
+                bbox=(minx, miny, maxx, maxy),
+                clip_wkt=clip_wkt,
+                municipality_id=None,
+                region_id=region_id,
+                province_id=province_id,
+            )
+            if not view_muni_ids:
+                return [], 0
+            resolutions = self._resolutions(
+                region_id=region_id,
+                province_id=province_id,
+                municipality_id=None,
+                municipality_ids=view_muni_ids,
+            )
+            if not resolutions:
+                return [], 0
+            rows = silver_read.read_area_roots_intersecting_clip(
+                resolutions,
+                clip_geom=clip_geom,
+            )
+            id_allowlist = [int(r[0]) for r in rows]
         return silver_read.list_areas_table(
             resolutions,
             page=page,
