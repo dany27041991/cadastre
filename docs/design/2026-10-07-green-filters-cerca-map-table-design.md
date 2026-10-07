@@ -1,7 +1,8 @@
 # Filtri green: Cerca → tabella e mappa (lakehouse)
 
 **Data:** 2026-10-07  
-**Stato:** draft (in review)  
+**Stato:** accepted  
+**Piano:** [2026-10-07-green-filters-cerca-map-table-plan.md](./2026-10-07-green-filters-cerca-map-table-plan.md)  
 **Approccio:** predicati condivisi BE + applied filters FE (approccio 1)  
 **Correlati:**
 - [2026-08-13-green-table-multifield-filters-design.md](./2026-08-13-green-table-multifield-filters-design.md) — **supersede** su scope mappa e UX Cerca/debounce
