@@ -42,6 +42,7 @@ from areas_stats import (
     areas_stats_hive_prefix,
     build_areas_municipality_band,
 )
+from silver_schema import ensure_areas_table, ensure_assets_table
 
 CATALOG_KEY = "_catalog/municipality_ingests.parquet"
 _catalog_lock = threading.Lock()
@@ -314,6 +315,8 @@ def ingest_municipality_tables(
         f"id={meta['municipality_id']} ingest_date={ingest_date} "
         f"assets={assets.num_rows} areas={areas.num_rows}"
     )
+    assets = ensure_assets_table(assets)
+    areas = ensure_areas_table(areas)
     for dataset, table in (("assets", assets), ("areas", areas)):
         key, n, checksum = write_dataset_part(
             client,
@@ -395,9 +398,15 @@ def fixture_tables(ingest_date: date) -> tuple[dict[str, Any], pa.Table, pa.Tabl
             "family": pa.array(["Fagaceae", "Pinaceae"], type=pa.string()),
             "genus": pa.array(["Quercus", "Pinus"], type=pa.string()),
             "variety": pa.array([None, None], type=pa.string()),
-            "health_status": pa.array(["GOOD", "FAIR"], type=pa.string()),
+            "health_status": pa.array(["HEALTHY", "DEGRADED"], type=pa.string()),
             "asset_status": pa.array(["ACTIVE", "ACTIVE"], type=pa.string()),
             "survey_date": pa.array([None, None], type=pa.timestamp("us", tz="UTC")),
+            "species_code": pa.array(["QUEILE", "PINPIN"], type=pa.string()),
+            "trunk_diameter_cm": pa.array([32.0, 45.0], type=pa.float64()),
+            "plant_height_m": pa.array([8.5, 12.0], type=pa.float64()),
+            "crown_diameter_m": pa.array([4.0, 6.5], type=pa.float64()),
+            "growth_stage": pa.array(["MATURE", "SEMI_MATURE"], type=pa.string()),
+            "protection_status": pa.array(["NONE", "PROTECTED"], type=pa.string()),
         }
     )
     areas = pa.table(
@@ -413,12 +422,17 @@ def fixture_tables(ingest_date: date) -> tuple[dict[str, Any], pa.Table, pa.Tabl
             "lon": pa.array([18.1725], type=pa.float64()),
             "lat": pa.array([40.3525], type=pa.float64()),
             "geom_wkb": pa.array([None], type=pa.binary()),
-            "area_classification": pa.array(["PARK"], type=pa.string()),
+            "area_classification": pa.array(["URBAN_PARKS"], type=pa.string()),
             "administrative_status": pa.array(["ACTIVE"], type=pa.string()),
             "survey_date": pa.array([None], type=pa.timestamp("us", tz="UTC")),
+            "zril_identifier": pa.array(["ZRIL-FIX-10"], type=pa.string()),
+            "istat_classification": pa.array(["URBAN_PARKS"], type=pa.string()),
+            "intensity_of_fruition": pa.array(["MEDIUM"], type=pa.string()),
+            "perimeter_type": pa.array(["REAL"], type=pa.string()),
+            "surface_area_m2": pa.array([12500.0], type=pa.float64()),
         }
     )
-    return meta, assets, areas
+    return meta, ensure_assets_table(assets), ensure_areas_table(areas)
 
 
 def open_db():

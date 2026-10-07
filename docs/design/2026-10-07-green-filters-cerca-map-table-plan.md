@@ -72,14 +72,15 @@ Nessuna colonna `attributes` / JSON in nessun sample.
 
 **Gate:** catalogo FE completo **non** è filtrabile solo con serving code. Serve **P0b — arricchimento schema silver + re-seed** (o riduzione temporanea del form).
 
-### P0b — Arricchimento silver (nuovo, bloccante per “tutti i campi”)
+### P0b — Arricchimento silver — DONE 2026-10-07
 
-- [ ] Estendere writer/seed (`lakehouse_writer` + Lecce/national seed) con colonne mancanti (o `attributes` JSON strutturato).
-- [ ] Aggiornare `lakehouse-parquet-layout.md`.
-- [ ] Re-seed (fixture + almeno un comune smoke; nazionale se richiesto).
-- [ ] Poi sbloccare P1 su tutto il layout FE.
+- [x] `silver_schema.py` + `ensure_areas_table` / `ensure_assets_table` in `ingest_municipality_tables`
+- [x] Fixture, Lecce loader, boost municipality popolano le colonne V1.1
+- [x] Doc `lakehouse-parquet-layout.md` aggiornato
+- [x] Re-seed smoke: fixture `999001@2026-10-07`; Lecce `5998@2024-01-01` (zril/istat/… presenti)
+- [ ] **National mock `ingest_date=2026-09-09`**: ancora schema V1 (senza colonne filtro). Per copertura Italia intera rilanciare `run_populate_national_data.sh` (o boost per comune). Finché mixed, DuckDB `union_by_name` tratta le colonne assenti come NULL.
 
-**Alternativa (se P0b slitta):** P1/P4 solo sulle key OK; FE nasconde o disabilita i campi MISSING finché lo silver non li ha — **non** lasciare no-op silenziosi.
+P1 sbloccato sul layout FE completo (su prefix già V1.1; NULL sui prefix non re-seedati).
 
 ---
 

@@ -22,8 +22,8 @@ Partition keys are **also stored as columns** inside the file (DuckDB-friendly).
 
 | Colonna | Tipo | Note |
 |---------|------|------|
-| id | int64 | PK logica asset |
-| green_area_id | int64 nullable | |
+| id | int64 | PK logica asset (`plant_code` filter) |
+| green_area_id | int64 nullable | `area_code` filter (asset) |
 | region_id | int32 | partition |
 | province_id | int32 | partition |
 | municipality_id | int32 | partition |
@@ -34,8 +34,13 @@ Partition keys are **also stored as columns** inside the file (DuckDB-friendly).
 | lat | float64 | centroid / point Y |
 | geom_wkb | binary | WKB EPSG:4326 (opzionale se troppo pesante; V1 incluso) |
 | species, family, genus, variety | string nullable | |
-| health_status, asset_status, … | string nullable | enum as text |
+| health_status, asset_status | string nullable | enum as text |
 | survey_date | timestamp nullable | |
+| species_code | string nullable | **V1.1** filter |
+| trunk_diameter_cm, plant_height_m, crown_diameter_m | float64 nullable | **V1.1** filter |
+| growth_stage, protection_status | string nullable | **V1.1** enum filter |
+
+Canonical writer helper: `infrastructure/scripts/database/lakehouse/silver_schema.py`.
 
 ## Silver `green_areas`
 
@@ -49,8 +54,13 @@ Partition keys are **also stored as columns** inside the file (DuckDB-friendly).
 | name | string | |
 | lon, lat | float64 | centroid |
 | geom_wkb | binary | |
-| area_classification, administrative_status, … | string nullable | |
+| area_classification, administrative_status | string nullable | |
 | survey_date | timestamp nullable | |
+| zril_identifier | string nullable | **V1.1** → FE `area_code` |
+| istat_classification | string nullable | **V1.1** |
+| intensity_of_fruition | string nullable | **V1.1** |
+| perimeter_type | string nullable | **V1.1** |
+| surface_area_m2 | float64 nullable | **V1.1** |
 
 ## Catalog `_catalog/municipality_ingests.parquet`
 

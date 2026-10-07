@@ -411,6 +411,20 @@ def load_areas_table(
     classifications: list[str | None] = []
     admin_statuses: list[str | None] = []
     survey_dates: list[datetime | None] = []
+    zril_ids: list[str | None] = []
+    istat_classifications: list[str | None] = []
+    intensity_l: list[str | None] = []
+    perimeter_l: list[str | None] = []
+    surface_l: list[float | None] = []
+
+    # Import late so script still runs if lakehouse package path differs.
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _lh = _Path(__file__).resolve().parents[2] / "lakehouse"
+    if str(_lh) not in _sys.path:
+        _sys.path.insert(0, str(_lh))
+    from silver_schema import approx_surface_area_m2  # type: ignore
 
     for _, row in gdf.iterrows():
         name = row.get("denominaz") or row.get("denominazione") or DEFAULT_AREA_NAME
@@ -419,11 +433,20 @@ def load_areas_table(
         name = str(name).strip() or DEFAULT_AREA_NAME
         classification = map_tipologia2_to_istat(row.get("tipologia2"))
         survey_date = parse_survey_date(row.get("data_rilie"))
-        # attributes mapped for parity with legacy seed; silver V1 schema omits JSONB column
-        _ = build_english_attributes(row, _AREA_ATTR_KEY_MAP, exclude=_AREA_ATTRS_PROMOTED)
+        attrs = build_english_attributes(row, _AREA_ATTR_KEY_MAP, exclude=_AREA_ATTRS_PROMOTED)
         wkb, lon, lat = _geom_to_wkb_lon_lat(row.geometry)
+        area_id = int(row["_lh_id"])
+        zril = attrs.get("survey_number") or attrs.get("management_code")
+        zril_s = str(zril).strip()[:80] if zril is not None else f"ZRIL-{area_id}"
+        surf = attrs.get("surface_area_m2")
+        try:
+            surf_f = float(surf) if surf is not None else None
+        except (TypeError, ValueError):
+            surf_f = None
+        if surf_f is None:
+            surf_f = approx_surface_area_m2(row.geometry, lon, lat)
 
-        ids.append(int(row["_lh_id"]))
+        ids.append(area_id)
         region_ids.append(region_id)
         province_ids.append(province_id)
         municipality_ids.append(municipality_id)
@@ -437,6 +460,11 @@ def load_areas_table(
         classifications.append(classification)
         admin_statuses.append("ACTIVE")
         survey_dates.append(survey_date)
+        zril_ids.append(zril_s)
+        istat_classifications.append(classification)
+        intensity_l.append("MEDIUM")
+        perimeter_l.append("REAL")
+        surface_l.append(surf_f)
 
     table = pa.table(
         {
@@ -454,6 +482,11 @@ def load_areas_table(
             "area_classification": pa.array(classifications, type=pa.string()),
             "administrative_status": pa.array(admin_statuses, type=pa.string()),
             "survey_date": pa.array(survey_dates, type=pa.timestamp("us", tz="UTC")),
+            "zril_identifier": pa.array(zril_ids, type=pa.string()),
+            "istat_classification": pa.array(istat_classifications, type=pa.string()),
+            "intensity_of_fruition": pa.array(intensity_l, type=pa.string()),
+            "perimeter_type": pa.array(perimeter_l, type=pa.string()),
+            "surface_area_m2": pa.array(surface_l, type=pa.float64()),
         }
     )
     print(f"  Built {len(gdf)} green_areas (silver)")
@@ -492,6 +525,12 @@ def load_assets_table(
     health_l: list[str | None] = []
     status_l: list[str | None] = []
     survey_l: list[datetime | None] = []
+    species_code_l: list[str | None] = []
+    trunk_l: list[float | None] = []
+    height_l: list[float | None] = []
+    crown_l: list[float | None] = []
+    growth_l: list[str | None] = []
+    protection_l: list[str | None] = []
 
     next_id = 1
     for filename, asset_type, geometry_type in ASSET_FILES:
@@ -526,8 +565,26 @@ def load_assets_table(
             genus = _str_prop(row, "Genere")
             species = _str_prop(row, "Specie")
             family = _str_prop(row, "Famiglia")
-            _ = build_english_attributes(row, _ASSET_ATTR_KEY_MAP, exclude=_ASSET_ATTRS_PROMOTED)
+            attrs = build_english_attributes(
+                row, _ASSET_ATTR_KEY_MAP, exclude=_ASSET_ATTRS_PROMOTED
+            )
             wkb, lon, lat = _geom_to_wkb_lon_lat(row.geometry)
+            sc = attrs.get("species_code")
+            sc_s = str(sc).strip()[:40] if sc is not None else None
+            circ = attrs.get("trunk_circumference_cm")
+            try:
+                circ_f = float(circ) if circ is not None else None
+            except (TypeError, ValueError):
+                circ_f = None
+            trunk = (circ_f / 3.141592653589793) if circ_f and circ_f > 0 else None
+            try:
+                height = float(attrs["first_branch_height_m"]) if "first_branch_height_m" in attrs else None
+            except (TypeError, ValueError):
+                height = None
+            try:
+                crown = float(attrs["crown_diameter_m"]) if "crown_diameter_m" in attrs else None
+            except (TypeError, ValueError):
+                crown = None
 
             ids.append(next_id)
             next_id += 1
@@ -545,9 +602,15 @@ def load_assets_table(
             family_l.append(family[:80] if family else None)
             genus_l.append(genus[:50] if genus else None)
             variety_l.append(None)
-            health_l.append(None)
+            health_l.append("UNKNOWN")
             status_l.append("ACTIVE")
             survey_l.append(None)
+            species_code_l.append(sc_s)
+            trunk_l.append(trunk)
+            height_l.append(height)
+            crown_l.append(crown)
+            growth_l.append("MATURE" if asset_type == "tree" else "SEMI_MATURE")
+            protection_l.append("NONE")
             n_file += 1
         print(f"  Built {n_file} green_assets from {filename} (asset_type={asset_type})")
 
@@ -572,6 +635,12 @@ def load_assets_table(
             "health_status": pa.array(health_l, type=pa.string()),
             "asset_status": pa.array(status_l, type=pa.string()),
             "survey_date": pa.array(survey_l, type=pa.timestamp("us", tz="UTC")),
+            "species_code": pa.array(species_code_l, type=pa.string()),
+            "trunk_diameter_cm": pa.array(trunk_l, type=pa.float64()),
+            "plant_height_m": pa.array(height_l, type=pa.float64()),
+            "crown_diameter_m": pa.array(crown_l, type=pa.float64()),
+            "growth_stage": pa.array(growth_l, type=pa.string()),
+            "protection_status": pa.array(protection_l, type=pa.string()),
         }
     )
 
