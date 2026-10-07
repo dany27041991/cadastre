@@ -3,6 +3,7 @@
  * Endpoint: GET /api/territory/green-areas
  */
 import { API_URL } from '@/shared/config/map'
+import { appendAppliedFilters } from '../lib/appendAppliedFilters'
 import {
   createFetcher,
   EMPTY_GEOJSON,
@@ -39,6 +40,8 @@ export type GreenAreaViewportParams = {
   /** Ingest window (ISO YYYY-MM-DD); required by BE (lakehouse-only). */
   dateFrom?: string
   dateTo?: string
+  /** Applied InfoPanel column filters (Cerca commit). */
+  filters?: Readonly<Record<string, string>>
 }
 
 export function buildGreenAreasViewportQuery(
@@ -57,6 +60,7 @@ export function buildGreenAreasViewportQuery(
   if (params.clipWkt) search.set('clip_wkt', params.clipWkt)
   if (params.dateFrom) search.set('date_from', params.dateFrom)
   if (params.dateTo) search.set('date_to', params.dateTo)
+  appendAppliedFilters(search, params.filters)
   search.set('format', 'geobuf')
   return search.toString()
 }

@@ -55,6 +55,9 @@ export type UseTerritoryMapGreenLayersArgs = {
   setGreenAssetsLayerActive: (active: boolean) => void
   greenAreasLayerActive: boolean
   setGreenAreasLayerActive: (active: boolean) => void
+  appliedAreaFilters?: Readonly<Record<string, string>>
+  appliedAssetFilters?: Readonly<Record<string, string>>
+  filtersRevision?: number
   registerGreenAssetsLayer: (
     layer: {
       active: boolean
@@ -80,6 +83,9 @@ export function useTerritoryMapGreenLayers({
   setGreenAssetsLayerActive,
   greenAreasLayerActive,
   setGreenAreasLayerActive,
+  appliedAreaFilters,
+  appliedAssetFilters,
+  filtersRevision = 0,
   registerGreenAssetsLayer,
 }: UseTerritoryMapGreenLayersArgs) {
   const restoreGreenAreas = useCallback(
@@ -178,6 +184,9 @@ export function useTerritoryMapGreenLayers({
     clipRequired,
     dateFrom: dateFromIso,
     dateTo: dateToIso,
+    areaFilters: appliedAreaFilters,
+    assetFilters: appliedAssetFilters,
+    filtersRevision,
   })
 
   const setAssetsActiveRef = useRef(greenAssetsLayer.setAssetsActive)

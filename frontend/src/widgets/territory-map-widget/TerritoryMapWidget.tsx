@@ -42,6 +42,8 @@ export function TerritoryMapWidget() {
     setMapTableAccordionVisible,
     dateFromIso,
     dateToIso,
+    appliedFiltersByKind,
+    filtersRevision,
   } = useGreenTablePanel()
 
   const {
@@ -122,6 +124,9 @@ export function TerritoryMapWidget() {
     setGreenAssetsLayerActive,
     greenAreasLayerActive,
     setGreenAreasLayerActive,
+    appliedAreaFilters: appliedFiltersByKind.area,
+    appliedAssetFilters: appliedFiltersByKind.asset,
+    filtersRevision,
     registerGreenAssetsLayer,
   })
 

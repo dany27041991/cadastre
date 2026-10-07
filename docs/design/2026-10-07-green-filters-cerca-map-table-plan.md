@@ -1,7 +1,7 @@
 # Plan — Filtri Cerca → tabella e mappa (lakehouse)
 
 **Spec:** [2026-10-07-green-filters-cerca-map-table-design.md](./2026-10-07-green-filters-cerca-map-table-design.md)  
-**Stato:** in progress (P0–P3 done; next P4 map applied)  
+**Stato:** in progress (P0–P4 done; next P5 polish optional)  
 **Branch:** `features/lakehouse`  
 **Vincolo:** nessun regressione Area Italia (no `clip_wkt`) / Disegna (`clip_wkt` conservato).
 
@@ -123,12 +123,12 @@ P1 sbloccato sul layout FE completo (su prefix già V1.1; NULL sui prefix non re
 
 ---
 
-## P4 — FE mappa propaga applied
+## P4 — FE mappa propaga applied — DONE 2026-10-07
 
-- [ ] `buildGreenAreasViewportQuery` / `buildGreenAssetViewportQuery`: append applied filters kind.
-- [ ] Thread `appliedFilters` + `filtersRevision` da context → `useTerritoryMapGreenLayers` / `useGreenAssetsLayer` (dependency key include revision).
-- [ ] Dual: aree ON → filtri area sul viewport aree; asset ON → filtri asset sul viewport asset.
-- [ ] Tabella continua a usare solo `tableKind` applied.
+- [x] `buildGreenAreasViewportQuery` / `buildGreenAssetViewportQuery`: `appendAppliedFilters`.
+- [x] Thread applied + `filtersRevision` → `useTerritoryMapGreenLayers` / `useGreenAssetsLayer` (contextKey includes revision).
+- [x] Dual: area filters → areas viewport; asset filters → assets viewport.
+- [x] Tabella usa solo `appliedFiltersByKind[tableKind]` (P3).
 
 **Verify:** Cerca con `name` (aree) riduce feature mappa e righe tabella; Disegna conserva `clip_wkt` in entrambe le URL; Area Italia senza `clip_wkt`.
 

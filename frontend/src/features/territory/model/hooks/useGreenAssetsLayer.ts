@@ -59,6 +59,12 @@ export interface UseGreenAssetsLayerOptions {
   /** Ingest window ISO dates (always sent when set). */
   readonly dateFrom?: string | null
   readonly dateTo?: string | null
+  /** Applied area column filters (Cerca); empty/undefined = no attribute filter. */
+  readonly areaFilters?: Readonly<Record<string, string>> | null
+  /** Applied asset column filters (Cerca). */
+  readonly assetFilters?: Readonly<Record<string, string>> | null
+  /** Bumps when Cerca commits so viewport refetch even if filter maps are equal. */
+  readonly filtersRevision?: number
 }
 
 export interface UseGreenAssetsLayerResult {
@@ -79,14 +85,23 @@ function scopeFromContext(context: GreenContext) {
   }
 }
 
+type AppliedFilters = Readonly<Record<string, string>> | null | undefined
+
+function filtersOrUndef(filters: AppliedFilters): AppliedFilters {
+  if (!filters || Object.keys(filters).length === 0) return undefined
+  return filters
+}
+
 function areasFetcherFor(
   context: GreenContext,
   clipWkt?: string | null,
   dateFrom?: string | null,
-  dateTo?: string | null
+  dateTo?: string | null,
+  areaFilters?: AppliedFilters,
 ) {
   const scope = scopeFromContext(context)
   const greenAreaId = context.greenAreaId
+  const filters = filtersOrUndef(areaFilters)
   // After Esplodi / Seleziona: keep companion areas inside the drilled scope
   // (viewport roots would re-show every municipality area).
   if (
@@ -117,6 +132,7 @@ function areasFetcherFor(
       ...(clipWkt ? { clipWkt } : {}),
       ...(dateFrom ? { dateFrom } : {}),
       ...(dateTo ? { dateTo } : {}),
+      ...(filters ? { filters } : {}),
     })
 }
 
@@ -126,10 +142,13 @@ function startViewportMode(
   includeAreas: boolean,
   clipWkt?: string | null,
   dateFrom?: string | null,
-  dateTo?: string | null
+  dateTo?: string | null,
+  areaFilters?: AppliedFilters,
+  assetFilters?: AppliedFilters,
 ): void {
   const scope = scopeFromContext(context)
   const greenAreaId = context.greenAreaId
+  const filters = filtersOrUndef(assetFilters)
   const assetsFetcher = (bbox: [number, number, number, number], zoom: number) =>
     territoryApi.getGreenAssetsViewport({
       bbox,
@@ -139,10 +158,13 @@ function startViewportMode(
       ...(clipWkt ? { clipWkt } : {}),
       ...(dateFrom ? { dateFrom } : {}),
       ...(dateTo ? { dateTo } : {}),
+      ...(filters ? { filters } : {}),
     })
   loadGreenLayerViewport(
     assetsFetcher,
-    includeAreas ? areasFetcherFor(context, clipWkt, dateFrom, dateTo) : undefined
+    includeAreas
+      ? areasFetcherFor(context, clipWkt, dateFrom, dateTo, areaFilters)
+      : undefined,
   )
 }
 
@@ -152,10 +174,14 @@ function startAreasOnlyViewportMode(
   loadGreenLayerViewport: ViewportFetcher,
   clipWkt?: string | null,
   dateFrom?: string | null,
-  dateTo?: string | null
+  dateTo?: string | null,
+  areaFilters?: AppliedFilters,
 ): void {
   const emptyAssets = async () => EMPTY_FEATURE_COLLECTION
-  loadGreenLayerViewport(emptyAssets, areasFetcherFor(context, clipWkt, dateFrom, dateTo))
+  loadGreenLayerViewport(
+    emptyAssets,
+    areasFetcherFor(context, clipWkt, dateFrom, dateTo, areaFilters),
+  )
 }
 
 export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGreenAssetsLayerResult {
@@ -175,6 +201,9 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     clipRequired = false,
     dateFrom = null,
     dateTo = null,
+    areaFilters = null,
+    assetFilters = null,
+    filtersRevision = 0,
   } = options
 
   const [loading, setLoading] = useState(false)
@@ -186,8 +215,9 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
 
   const context = useMemo(() => getGreenContext(breadcrumb), [breadcrumb])
   const contextKey = useMemo(
-    () => `${greenContextKey(context)}#${clipWkt ?? ''}#${dateFrom ?? ''}#${dateTo ?? ''}`,
-    [context, clipWkt, dateFrom, dateTo]
+    () =>
+      `${greenContextKey(context)}#${clipWkt ?? ''}#${dateFrom ?? ''}#${dateTo ?? ''}#f${filtersRevision}`,
+    [context, clipWkt, dateFrom, dateTo, filtersRevision],
   )
   const clipReady = !clipRequired || Boolean(clipWkt)
   const greenLevel = isGreenMapLevel(level)
@@ -205,7 +235,14 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
         return
       }
       setLoading(true)
-      startAreasOnlyViewportMode(context, loadGreenLayerViewport, clipWkt, dateFrom, dateTo)
+      startAreasOnlyViewportMode(
+        context,
+        loadGreenLayerViewport,
+        clipWkt,
+        dateFrom,
+        dateTo,
+        areaFilters,
+      )
       setGreenLayerVisible(true)
       lastContextKeyRef.current = contextKey
       setLoading(false)
@@ -222,6 +259,7 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     clipWkt,
     dateFrom,
     dateTo,
+    areaFilters,
     clipReady,
     loadGreenLayerViewport,
     setGreenLayerVisible,
@@ -243,7 +281,9 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
       areasLayerActiveRef.current,
       clipWkt,
       dateFrom,
-      dateTo
+      dateTo,
+      areaFilters,
+      assetFilters,
     )
     setGreenLayerVisible(true)
     onAssetsLayerActiveChange(true)
@@ -255,6 +295,8 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     clipWkt,
     dateFrom,
     dateTo,
+    areaFilters,
+    assetFilters,
     clipReady,
     greenLevel,
     loadGreenLayerViewport,
@@ -286,7 +328,9 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
       areasLayerActiveRef.current,
       clipWkt,
       dateFrom,
-      dateTo
+      dateTo,
+      areaFilters,
+      assetFilters,
     )
     setGreenLayerVisible(true)
     // Preserve zoom on sub-area drill — fitting children bbox often zooms out.
@@ -306,6 +350,10 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     onBeforeLoadingAssets,
     clipReady,
     clipWkt,
+    dateFrom,
+    dateTo,
+    areaFilters,
+    assetFilters,
     clearGreenLayer,
   ])
 
@@ -323,7 +371,14 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     lastContextKeyRef.current = contextKey
     setLoading(true)
     // Scoped via greenAreaId when at sub_areas (areasFetcherFor).
-    startAreasOnlyViewportMode(context, loadGreenLayerViewport, clipWkt, dateFrom, dateTo)
+    startAreasOnlyViewportMode(
+      context,
+      loadGreenLayerViewport,
+      clipWkt,
+      dateFrom,
+      dateTo,
+      areaFilters,
+    )
     setGreenLayerVisible(true)
     setLoading(false)
   }, [
@@ -337,6 +392,7 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     clipWkt,
     dateFrom,
     dateTo,
+    areaFilters,
     clearGreenLayer,
   ])
 
@@ -370,7 +426,16 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
           return
         }
         setLoading(true)
-        startViewportMode(context, loadGreenLayerViewport, active, clipWkt, dateFrom, dateTo)
+        startViewportMode(
+          context,
+          loadGreenLayerViewport,
+          active,
+          clipWkt,
+          dateFrom,
+          dateTo,
+          areaFilters,
+          assetFilters,
+        )
         setGreenLayerVisible(true)
         lastContextKeyRef.current = contextKey
         setLoading(false)
@@ -385,7 +450,14 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
           return
         }
         setLoading(true)
-        startAreasOnlyViewportMode(context, loadGreenLayerViewport, clipWkt, dateFrom, dateTo)
+        startAreasOnlyViewportMode(
+          context,
+          loadGreenLayerViewport,
+          clipWkt,
+          dateFrom,
+          dateTo,
+          areaFilters,
+        )
         setGreenLayerVisible(true)
         lastContextKeyRef.current = contextKey
         setLoading(false)
@@ -406,6 +478,8 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
       clipReady,
       dateFrom,
       dateTo,
+      areaFilters,
+      assetFilters,
       loadGreenLayerViewport,
       setGreenLayerVisible,
       clearGreenLayer,
