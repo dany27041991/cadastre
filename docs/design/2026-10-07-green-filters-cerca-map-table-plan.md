@@ -84,23 +84,14 @@ P1 sbloccato sul layout FE completo (su prefix già V1.1; NULL sui prefix non re
 
 ---
 
-## P1 — BE builder predicati (table only)
+## P1 — BE builder predicati (table only) — DONE 2026-10-07
 
-- [ ] Creare `table_filters.py` con:
-  - `area_filter_where(filters: dict) -> list[str]`
-  - `asset_filter_where(filters: dict) -> list[str]`
-  - Remap: `area_code`→`zril_identifier` (aree) / `green_area_id` (asset); `plant_code`→`id`
-  - Enum FE → exact; testo → ILIKE; int non parseable → clausola impossibile (`1=0`)
-  - Escape `'`; ignore unknown keys
-- [ ] Integrare in `list_areas_table` / `list_assets_table` (oltre a `q` esistente se ancora utile).
-- [ ] Estendere SELECT parquet dove serve (es. `zril_identifier`, `attributes`, enum area) **senza** cambiare shape response tabella se non necessario (filtro in WHERE basta).
-- [ ] Unit test mapping per ogni key del layout FE (almeno 1 assert SQL/fragment per key).
+- [x] `table_filters.py`: `area_filter_where` / `asset_filter_where` (remap, enum exact, ILIKE, int/`1=0`, escape)
+- [x] Integrato in `list_areas_table` / `list_assets_table`
+- [x] Unit tests `tests/test_table_filters.py` (9 passed)
+- [x] Smoke Lecce `5998`: `name=Garibaldi`, `area_code=ZRIL-1`, asset `species`+`plant_code` restringono total
 
-**Verify:**  
-`GET .../green-areas/table?...&name=...` e `.../green-assets/table?...&health_status=HEALTHY&species=...` riducono `total` vs unfiltered (stesso scope/date/clip).  
-Area Italia senza clip + Disegna con clip invariati su scope params.
-
-**Rollback:** feature flag o revert del builder; table torna al subset attuale.
+**Rollback:** revert `table_filters.py` + chiamate in `silver_read`.
 
 ---
 

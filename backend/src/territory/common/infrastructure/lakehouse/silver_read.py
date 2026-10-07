@@ -17,6 +17,10 @@ from territory.common.infrastructure.lakehouse.duckdb_client import (
     parquet_glob,
 )
 from territory.common.infrastructure.lakehouse.metrics import timed_op
+from territory.common.infrastructure.lakehouse.table_filters import (
+    area_filter_where,
+    asset_filter_where,
+)
 
 DatasetName = Literal["assets", "areas"]
 
@@ -564,21 +568,7 @@ def list_assets_table(
         if clause is None:
             return [], 0
         where.append(clause)
-    filters = filters or {}
-    for key in ("asset_type", "geometry_type", "health_status", "asset_status"):
-        val = filters.get(key)
-        if val:
-            safe = str(val).replace("'", "''")
-            where.append(f"{key} = '{safe}'")
-    q = filters.get("q")
-    if q:
-        safe = str(q).replace("'", "''")
-        where.append(
-            "("
-            f"species ILIKE '%{safe}%' OR family ILIKE '%{safe}%' "
-            f"OR genus ILIKE '%{safe}%' OR variety ILIKE '%{safe}%'"
-            ")"
-        )
+    where.extend(asset_filter_where(filters))
     where_sql = " AND ".join(where)
     allowed_sort = {
         "id",
@@ -884,9 +874,7 @@ def list_areas_table(
         where.append(clause)
     elif default_roots_only:
         where.append("parent_id IS NULL")
-    if filters.get("q"):
-        safe = str(filters["q"]).replace("'", "''")
-        where.append(f"name ILIKE '%{safe}%'")
+    where.extend(area_filter_where(filters))
     where_sql = " AND ".join(where)
     order_col = sort_by if sort_by in {"id", "name", "level", "survey_date"} else "id"
     order_dir = "DESC" if sort_dir.lower() == "desc" else "ASC"
