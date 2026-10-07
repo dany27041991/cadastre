@@ -7,7 +7,7 @@ from typing import Literal
 
 import geobuf
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from core.api.dependencies import get_green_areas_uc
@@ -16,6 +16,10 @@ from territory.common.infrastructure.clip_wkt import ClipWktError, normalize_cli
 from territory.common.infrastructure.dto.green_detail_out import GreenDetailOut
 from territory.common.infrastructure.green_table_page_out import GreenTablePageOut
 from territory.common.infrastructure.lakehouse.http_dates import parse_lakehouse_date_range
+from territory.common.infrastructure.lakehouse.table_filters import (
+    AREA_FILTER_KEYS,
+    collect_filters,
+)
 
 router = APIRouter(tags=["territory-areas"])
 
@@ -83,6 +87,7 @@ def get_green_areas(
 
 @router.get("/green-areas/viewport", response_model=None)
 def get_green_areas_viewport(
+    request: Request,
     bbox: str = Query(..., description="minLon,minLat,maxLon,maxLat (EPSG:4326)"),
     zoom: float = Query(..., ge=0, le=22),
     region_id: int | None = None,
@@ -98,13 +103,15 @@ def get_green_areas_viewport(
 
     Empty below the areas min zoom; otherwise polygons intersecting the bbox,
     simplified to display resolution and capped (largest areas first).
-    Territory filters are optional: omit them for a nationwide view."""
+    Territory filters are optional: omit them for a nationwide view.
+    Attribute filters (same keys as /table) AND-overlay via query params."""
     try:
         parts = [float(p) for p in bbox.split(",")]
     except ValueError:
         parts = []
     if len(parts) != 4:
         raise HTTPException(status_code=422, detail="bbox must be minLon,minLat,maxLon,maxLat")
+    filters = collect_filters(request.query_params, AREA_FILTER_KEYS)
     result = _uc(date_from, date_to).viewport_green_areas(
         (parts[0], parts[1], parts[2], parts[3]),
         zoom,
@@ -113,6 +120,7 @@ def get_green_areas_viewport(
         municipality_id=municipality_id,
         sub_municipal_area_id=sub_municipal_area_id,
         clip_wkt=_clip_wkt_or_400(clip_wkt),
+        filters=filters or None,
     )
     if not result.get("features"):
         return _empty_response(output_format)

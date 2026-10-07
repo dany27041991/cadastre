@@ -75,6 +75,7 @@ def read_assets_in_bbox(
     *,
     green_area_id: int | None = None,
     clip_geom=None,
+    filters: dict[str, Any] | None = None,
 ) -> list[tuple]:
     """Return rows (id, geometry_dict, asset_type, geometry_type, species, region_id, province_id).
 
@@ -94,9 +95,14 @@ def read_assets_in_bbox(
     globs = [parquet_glob(r.object_prefix) for r in resolutions]
     # DuckDB list of files
     files_sql = ", ".join(f"'{g}'" for g in globs)
-    where_extra = ""
+    where_parts = [
+        f"lon BETWEEN {minx} AND {maxx}",
+        f"lat BETWEEN {miny} AND {maxy}",
+    ]
     if green_area_id is not None:
-        where_extra = f" AND green_area_id = {int(green_area_id)}"
+        where_parts.append(f"green_area_id = {int(green_area_id)}")
+    where_parts.extend(asset_filter_where(filters))
+    where_sql = " AND ".join(where_parts)
     fetch_limit = int(limit) if clip_geom is None else int(limit) * 4
 
     con = connect_lakehouse()
@@ -111,9 +117,7 @@ def read_assets_in_bbox(
                 SELECT id, lon, lat, asset_type, geometry_type, species,
                        region_id, province_id, municipality_id, geom_wkb
                 FROM read_parquet([{files_sql}], union_by_name=true)
-                WHERE lon BETWEEN {minx} AND {maxx}
-                  AND lat BETWEEN {miny} AND {maxy}
-                  {where_extra}
+                WHERE {where_sql}
                 LIMIT {fetch_limit}
                 """
             ).fetchall()
@@ -662,6 +666,7 @@ def read_areas_in_bbox(
     *,
     clip_geom=None,
     simplify_tolerance_deg: float = 0.0,
+    filters: dict[str, Any] | None = None,
 ) -> list[tuple]:
     """Rows (id, geometry_dict, name, region_id, province_id, municipality_id, level).
 
@@ -691,14 +696,19 @@ def read_areas_in_bbox(
     cand_limit = max(int(limit) * 8, 2000)
     globs = [parquet_glob(r.object_prefix) for r in resolutions]
     files_sql = ", ".join(f"'{g}'" for g in globs)
+    where_parts = [
+        f"lon BETWEEN {qminx} AND {qmaxx}",
+        f"lat BETWEEN {qminy} AND {qmaxy}",
+    ]
+    where_parts.extend(area_filter_where(filters))
+    where_sql = " AND ".join(where_parts)
     con = connect_lakehouse()
     try:
         rows = con.execute(
             f"""
             SELECT id, geom_wkb, lon, lat, name, level, parent_id, region_id, province_id, municipality_id
             FROM read_parquet([{files_sql}], union_by_name=true)
-            WHERE lon BETWEEN {qminx} AND {qmaxx}
-              AND lat BETWEEN {qminy} AND {qmaxy}
+            WHERE {where_sql}
             LIMIT {cand_limit}
             """
         ).fetchall()

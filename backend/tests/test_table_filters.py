@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
+from territory.assets.application.usecases.query.catalog_green_asset import (
+    CatalogGreenAsset,
+    LAST_ZOOM_RAW_HARD_CAP,
+)
 from territory.common.infrastructure.lakehouse.table_filters import (
+    AREA_FILTER_KEYS,
+    ASSET_FILTER_KEYS,
     area_filter_where,
     asset_filter_where,
+    collect_filters,
 )
 
 
@@ -71,3 +80,44 @@ def test_asset_measures_and_growth():
 def test_sql_escape_quote():
     clauses = area_filter_where({"name": "O'Brien"})
     assert "O''Brien" in clauses[0]
+
+
+def test_collect_filters_picks_product_keys_only():
+    params = {
+        "name": "  Parco  ",
+        "bbox": "1,2,3,4",
+        "clip_wkt": "POLYGON((0 0,1 0,1 1,0 1,0 0))",
+        "species": "Quercus",
+        "empty": "",
+    }
+    areas = collect_filters(params, AREA_FILTER_KEYS)
+    assert areas == {"name": "Parco"}
+    assets = collect_filters(params, ASSET_FILTER_KEYS)
+    assert assets == {"species": "Quercus"}
+
+
+def test_viewport_assets_with_filters_skips_gold_uses_raw():
+    repo = MagicMock()
+    repo.get_raw_in_bbox.return_value = {
+        "type": "FeatureCollection",
+        "features": [{"type": "Feature", "properties": {"id": 1}, "geometry": None}],
+    }
+    uc = CatalogGreenAsset(repo)
+    bbox = (18.1, 40.3, 18.2, 40.4)
+    out = uc.viewport_green_assets(
+        bbox, 8.0, municipality_id=5998, filters={"species": "Quercus"}
+    )
+    repo.get_admin_clusters_in_bbox.assert_not_called()
+    repo.get_grid_clusters_from_gold.assert_not_called()
+    repo.get_raw_in_bbox.assert_called_once_with(
+        bbox,
+        LAST_ZOOM_RAW_HARD_CAP,
+        filters={"species": "Quercus"},
+        region_id=None,
+        province_id=None,
+        municipality_id=5998,
+        sub_municipal_area_id=None,
+        green_area_id=None,
+        clip_wkt=None,
+    )
+    assert len(out["features"]) == 1

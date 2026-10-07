@@ -1,7 +1,7 @@
 # Plan — Filtri Cerca → tabella e mappa (lakehouse)
 
 **Spec:** [2026-10-07-green-filters-cerca-map-table-design.md](./2026-10-07-green-filters-cerca-map-table-design.md)  
-**Stato:** in progress (P0 done — P0b gate)  
+**Stato:** in progress (P0–P2 done; next P3 FE)  
 **Branch:** `features/lakehouse`  
 **Vincolo:** nessun regressione Area Italia (no `clip_wkt`) / Disegna (`clip_wkt` conservato).
 
@@ -95,14 +95,14 @@ P1 sbloccato sul layout FE completo (su prefix già V1.1; NULL sui prefix non re
 
 ---
 
-## P2 — BE viewport + repository
+## P2 — BE viewport + repository — DONE 2026-10-07
 
-- [ ] Ctrl viewport aree/asset: accettare gli stessi Query param del catalogo → `filters` dict.
-- [ ] Usecase `viewport_green_*` propaga `filters`.
-- [ ] Repository: passare `filters` a `read_areas_in_bbox` / `read_assets_in_bbox` (e path raw usati dal layer).
-- [ ] Applicare lo **stesso** builder WHERE (non duplicare logica).
-- [ ] Cluster admin/grid con filtri: soft-cap — exact ∩ filtri sotto soglia; over-cap → approximate/empty+header (allineare clip-exact; documentare scelta in commento breve).
-- [ ] Test: viewport con filtro enum restituisce subset; senza filtro comportamento precedente.
+- [x] Ctrl viewport aree/asset: `Request` + `collect_filters` → `filters` dict (stessi KEYS di `/table`).
+- [x] Usecase `viewport_green_*` propaga `filters`.
+- [x] Repository: `filters` → `read_areas_in_bbox` / `read_assets_in_bbox`.
+- [x] Stesso builder WHERE (`area_filter_where` / `asset_filter_where`).
+- [x] Asset + filtri: skip admin/gold → silver raw capped (`LAST_ZOOM_RAW_HARD_CAP`); commento soft-cap in usecase.
+- [x] Test: `collect_filters` + mock viewport skip-gold (`test_table_filters.py`).
 
 **Verify:** stesso filtro su `/table` e `/viewport` (stesso bbox/scope) → id set tabella ⊆ id in viewport (o count coerente a zoom raw).
 

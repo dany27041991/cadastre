@@ -165,6 +165,7 @@ class GreenAreasLakehouseRepository:
         municipality_id: int | None = None,
         sub_municipal_area_id: int | None = None,
         clip_wkt: str | None = None,
+        filters: dict[str, Any] | None = None,
     ) -> GeoJSONFeatureCollection:
         view_muni_ids = self._municipality_ids_for_view(
             bbox=bbox,
@@ -197,6 +198,7 @@ class GreenAreasLakehouseRepository:
             limit,
             clip_geom=clip_geom,
             simplify_tolerance_deg=simplify_tolerance_deg,
+            filters=filters,
         )
         return build_green_area_feature_collection(rows)
 

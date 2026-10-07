@@ -6,7 +6,60 @@ Product query keys match FE ``greenTableFilterFields`` / design
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
+
+# Product keys accepted on /table and /viewport (same names as FE form).
+AREA_FILTER_KEYS: frozenset[str] = frozenset(
+    {
+        "q",
+        "name",
+        "area_code",
+        "zril_identifier",
+        "area_classification",
+        "istat_classification",
+        "intensity_of_fruition",
+        "perimeter_type",
+        "survey_date",
+        "surface_area_m2",
+    }
+)
+
+ASSET_FILTER_KEYS: frozenset[str] = frozenset(
+    {
+        "q",
+        "plant_code",
+        "area_code",
+        "species_code",
+        "latitude",
+        "longitude",
+        "species",
+        "genus",
+        "variety",
+        "trunk_diameter_cm",
+        "plant_height_m",
+        "crown_diameter_m",
+        "survey_date",
+        "growth_stage",
+        "protection_status",
+        "health_status",
+        "asset_type",
+        "geometry_type",
+        "asset_status",
+    }
+)
+
+
+def collect_filters(
+    params: Mapping[str, str],
+    keys: frozenset[str],
+) -> dict[str, str]:
+    """Pick non-empty product filter params from a query mapping."""
+    out: dict[str, str] = {}
+    for key in keys:
+        val = params.get(key)
+        if val is not None and str(val).strip() != "":
+            out[key] = str(val).strip()
+    return out
 
 # Mirrors frontend FILTER_ENUM_VALUES (exact match when value is in set).
 _AREA_ENUMS: dict[str, frozenset[str]] = {

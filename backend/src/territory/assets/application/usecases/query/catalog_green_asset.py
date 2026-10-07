@@ -85,6 +85,7 @@ class CatalogGreenAsset:
         sub_municipal_area_id: int | None = None,
         green_area_id: int | None = None,
         clip_wkt: str | None = None,
+        filters: dict[str, Any] | None = None,
     ) -> GeoJSONFeatureCollection:
         """Viewport-sized green assets response (national-scale map rendering).
 
@@ -101,7 +102,25 @@ class CatalogGreenAsset:
         At low zooms clusters come from pre-aggregated admin gold instead of a
         live grid scan: a nationwide grid aggregation measured 12s on 5.5M rows
         and grows with the dataset, while admin aggregates are O(#admin units).
+
+        Attribute filters (InfoPanel Cerca) skip admin/gold — those aggregates
+        cannot apply silver predicates — and return filtered silver raw capped
+        at LAST_ZOOM_RAW_HARD_CAP (soft-cap; over-cap truncates like clip-exact).
         """
+        scope = {
+            "region_id": region_id,
+            "province_id": province_id,
+            "municipality_id": municipality_id,
+            "sub_municipal_area_id": sub_municipal_area_id,
+            "green_area_id": green_area_id,
+            "clip_wkt": clip_wkt,
+        }
+        # Gold/admin ignore attribute filters; serve filtered silver raw instead.
+        if filters:
+            return self._repository.get_raw_in_bbox(
+                bbox, LAST_ZOOM_RAW_HARD_CAP, filters=filters, **scope
+            )
+
         # Admin gold (with optional clip on unit extent) for low zooms.
         # A green-area scope has no pre-aggregated admin rows; grid/raw only.
         if green_area_id is None:
@@ -114,14 +133,6 @@ class CatalogGreenAsset:
             if admin is not None:
                 return admin
 
-        scope = {
-            "region_id": region_id,
-            "province_id": province_id,
-            "municipality_id": municipality_id,
-            "sub_municipal_area_id": sub_municipal_area_id,
-            "green_area_id": green_area_id,
-            "clip_wkt": clip_wkt,
-        }
         # Raw only when the silver scan stays cheap (few municipality files).
         # Wide/national raw measured 4–56s opening hundreds–thousands of Parquet.
         force_grid_level: int | None = None

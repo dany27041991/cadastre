@@ -443,6 +443,7 @@ class GreenAssetsLakehouseRepository:
         sub_municipal_area_id: int | None = None,
         green_area_id: int | None = None,
         clip_wkt: str | None = None,
+        filters: dict[str, Any] | None = None,
     ) -> GeoJSONFeatureCollection:
         view_muni_ids = self._municipality_ids_for_view(
             bbox=bbox,
@@ -474,6 +475,7 @@ class GreenAssetsLakehouseRepository:
             limit,
             green_area_id=green_area_id,
             clip_geom=clip_geom,
+            filters=filters,
         )
         if not rows:
             return _EMPTY_FC

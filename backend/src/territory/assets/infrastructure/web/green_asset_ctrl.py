@@ -7,7 +7,7 @@ from typing import Literal
 
 import geobuf
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from core.api.dependencies import get_green_assets_uc
@@ -16,6 +16,10 @@ from territory.common.infrastructure.clip_wkt import ClipWktError, normalize_cli
 from territory.common.infrastructure.dto.green_detail_out import GreenDetailOut
 from territory.common.infrastructure.green_table_page_out import GreenTablePageOut
 from territory.common.infrastructure.lakehouse.http_dates import parse_lakehouse_date_range
+from territory.common.infrastructure.lakehouse.table_filters import (
+    ASSET_FILTER_KEYS,
+    collect_filters,
+)
 
 router = APIRouter(tags=["territory-assets"])
 
@@ -82,6 +86,7 @@ def get_green_assets(
 
 @router.get("/green-assets/viewport", response_model=None)
 def get_green_assets_viewport(
+    request: Request,
     bbox: str = Query(..., description="minLon,minLat,maxLon,maxLat (EPSG:4326)"),
     zoom: float = Query(..., ge=0, le=22),
     region_id: int | None = None,
@@ -99,6 +104,7 @@ def get_green_assets_viewport(
     Returns raw assets at the vendor's last zoom level, gold lakehouse clusters otherwise.
     With clip_wkt, cluster counts are exact (silver∩clip) under soft cap; over-cap sets
     header X-Cadastre-Cluster-Over-Cap: 1.
+    Attribute filters (same keys as /table) skip gold/admin and AND-overlay on silver raw.
     """
     from territory.common.infrastructure.lakehouse.clip_exact_flag import (
         is_cluster_over_cap,
@@ -112,6 +118,7 @@ def get_green_assets_viewport(
     if len(parts) != 4:
         raise HTTPException(status_code=422, detail="bbox must be minLon,minLat,maxLon,maxLat")
     reset_cluster_over_cap()
+    filters = collect_filters(request.query_params, ASSET_FILTER_KEYS)
     result = _uc(date_from, date_to).viewport_green_assets(
         (parts[0], parts[1], parts[2], parts[3]),
         zoom,
@@ -121,6 +128,7 @@ def get_green_assets_viewport(
         sub_municipal_area_id=sub_municipal_area_id,
         green_area_id=green_area_id,
         clip_wkt=_clip_wkt_or_400(clip_wkt),
+        filters=filters or None,
     )
     over_headers = (
         {"X-Cadastre-Cluster-Over-Cap": "1"} if is_cluster_over_cap() else None

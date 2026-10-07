@@ -88,6 +88,7 @@ class CatalogGreenArea:
         municipality_id: int | None = None,
         sub_municipal_area_id: int | None = None,
         clip_wkt: str | None = None,
+        filters: dict[str, Any] | None = None,
     ) -> GeoJSONFeatureCollection:
         """Root green areas intersecting the viewport bbox (full geometry).
 
@@ -105,6 +106,7 @@ class CatalogGreenArea:
             municipality_id=municipality_id,
             sub_municipal_area_id=sub_municipal_area_id,
             clip_wkt=clip_wkt,
+            filters=filters,
         )
         return result
 
