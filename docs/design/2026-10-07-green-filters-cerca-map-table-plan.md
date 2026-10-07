@@ -1,7 +1,7 @@
 # Plan — Filtri Cerca → tabella e mappa (lakehouse)
 
 **Spec:** [2026-10-07-green-filters-cerca-map-table-design.md](./2026-10-07-green-filters-cerca-map-table-design.md)  
-**Stato:** ready  
+**Stato:** in progress (P0 done — P0b gate)  
 **Branch:** `features/lakehouse`  
 **Vincolo:** nessun regressione Area Italia (no `clip_wkt`) / Disegna (`clip_wkt` conservato).
 
@@ -34,16 +34,52 @@
 
 ---
 
-## P0 — Spike schema silver (gate)
+## P0 — Spike schema silver (gate) — DONE 2026-10-07
 
-Obiettivo: ogni key FE ha una colonna/path parquet reale, altrimenti piano SELECT/attrs.
+Ispezione live MinIO (`cadastre-lake`, 7896 comuni, sample 15 prefix aree + DESCRIBE asset muni=1).  
+Layout doc: [`lakehouse-parquet-layout.md`](../infrastructure/lakehouse-parquet-layout.md).  
+Seeder: `load_lecce_green_data.py` — *“silver V1 schema omits JSONB column”*.
 
-- [ ] Ispezionare 1 prefix aree + 1 asset (`DESCRIBE` / `SELECT * LIMIT 1` DuckDB) per:  
-  `zril_identifier`, `attributes`, `area_classification`, `istat_classification`, `intensity_of_fruition`, `perimeter_type`, `surface_area_m2`, `growth_stage`, `protection_status`, `species_code`, misure.
-- [ ] Documentare tabella spike nello spec o in questo plan (colonne presenti / solo in `attributes` / assenti).
-- [ ] Se assenti: task esplicito in P1 per estendere ingest SELECT o fall-back documentato (non lasciare no-op silenziosi).
+### Colonne silver osservate
 
-**Verify:** tabella spike completa per `AREA_FILTER_LAYOUT` + `ASSET_FILTER_LAYOUT`.
+**Areas:** `id, region_id, province_id, municipality_id, ingest_date, parent_id, level, name, lon, lat, geom_wkb, area_classification, administrative_status, survey_date`
+
+**Assets:** `id, green_area_id, region_id, province_id, municipality_id, ingest_date, asset_type, geometry_type, lon, lat, geom_wkb, species, family, genus, variety, health_status, asset_status, survey_date`
+
+Nessuna colonna `attributes` / JSON in nessun sample.
+
+### Coverage vs `AREA_FILTER_LAYOUT` / `ASSET_FILTER_LAYOUT`
+
+| FE key | Physical | Status |
+|--------|----------|--------|
+| **Area** `name` | `name` | OK |
+| Area `area_classification` | `area_classification` | OK |
+| Area `survey_date` | `survey_date` | OK |
+| Area `area_code` | `zril_identifier` | **MISSING** |
+| Area `surface_area_m2` | col / attrs / ST_Area | **MISSING** (geom presente → computabile a query) |
+| Area `istat_classification` | — | **MISSING** |
+| Area `intensity_of_fruition` | — | **MISSING** |
+| Area `perimeter_type` | — | **MISSING** |
+| **Asset** `plant_code` | `id` | OK |
+| Asset `area_code` | `green_area_id` | OK |
+| Asset `latitude`/`longitude` | `lat`/`lon` | OK |
+| Asset `species`/`genus`/`variety` | colonne | OK |
+| Asset `survey_date` | `survey_date` | OK |
+| Asset `health_status` | `health_status` | OK |
+| Asset `species_code` | attrs | **MISSING** |
+| Asset `trunk_diameter_cm` / `plant_height_m` / `crown_diameter_m` | attrs | **MISSING** |
+| Asset `growth_stage` / `protection_status` | — | **MISSING** |
+
+**Gate:** catalogo FE completo **non** è filtrabile solo con serving code. Serve **P0b — arricchimento schema silver + re-seed** (o riduzione temporanea del form).
+
+### P0b — Arricchimento silver (nuovo, bloccante per “tutti i campi”)
+
+- [ ] Estendere writer/seed (`lakehouse_writer` + Lecce/national seed) con colonne mancanti (o `attributes` JSON strutturato).
+- [ ] Aggiornare `lakehouse-parquet-layout.md`.
+- [ ] Re-seed (fixture + almeno un comune smoke; nazionale se richiesto).
+- [ ] Poi sbloccare P1 su tutto il layout FE.
+
+**Alternativa (se P0b slitta):** P1/P4 solo sulle key OK; FE nasconde o disabilita i campi MISSING finché lo silver non li ha — **non** lasciare no-op silenziosi.
 
 ---
 
