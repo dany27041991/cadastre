@@ -160,7 +160,7 @@ export function InfoPanelContent() {
   }
 
   const handleSearch = () => {
-    panel?.setMapTableAccordionVisible(true)
+    panel?.applyFiltersAndShowResults()
   }
 
   const handleMonitoraggioSelect = (id: MonitoraggioActionId) => {

@@ -70,12 +70,16 @@ export function MainContent({
     }
   }, [showGreenTableAccordion])
 
-  // External close only (e.g. detail modal): collapse on true → false, not on initial false.
+  // External open/close (Cerca → open; detail modal → close). Edge-only to avoid loops
+  // with the local→context sync effect above.
   useEffect(() => {
     const prev = prevExternalVisibleRef.current
     prevExternalVisibleRef.current = mapTableAccordionVisible
     if (prev === true && mapTableAccordionVisible === false && accordionOpen === 'green-data') {
       setAccordionOpen('')
+    }
+    if (prev === false && mapTableAccordionVisible === true && accordionOpen !== 'green-data') {
+      setAccordionOpen('green-data')
     }
   }, [mapTableAccordionVisible, accordionOpen])
 

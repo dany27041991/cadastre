@@ -48,12 +48,27 @@ export interface TerritorySearchNavControls {
 export type TerritoryEntryMode = 'admin' | 'draw'
 
 export interface GreenTablePanelContextValue {
+  /** Draft column filters edited in the InfoPanel form (not yet on wire). */
   readonly columnFiltersByKind: {
     readonly area: ColumnFiltersMap
     readonly asset: ColumnFiltersMap
   }
+  /**
+   * Filters committed by Cerca — sole source for /table and /viewport fetches.
+   */
+  readonly appliedFiltersByKind: {
+    readonly area: ColumnFiltersMap
+    readonly asset: ColumnFiltersMap
+  }
+  /** Bumps on each Cerca commit so map layers can invalidate. */
+  readonly filtersRevision: number
   readonly setColumnFilter: (kind: GreenTableKind, key: string, value: string) => void
   readonly clearColumnFilters: (kind: GreenTableKind) => void
+  /**
+   * Copy draft → applied, open green-data accordion, bump revision.
+   * No-op when ingest date range is incomplete.
+   */
+  readonly applyFiltersAndShowResults: () => void
   /** Table kind currently shown (registered by GreenDataTable). */
   readonly activeTableKind: GreenTableKind
   readonly setActiveTableKind: (kind: GreenTableKind) => void
@@ -114,6 +129,11 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
     area: ColumnFiltersMap
     asset: ColumnFiltersMap
   }>({ area: EMPTY_FILTERS, asset: EMPTY_FILTERS })
+  const [appliedFiltersByKind, setAppliedFiltersByKind] = useState<{
+    area: ColumnFiltersMap
+    asset: ColumnFiltersMap
+  }>({ area: EMPTY_FILTERS, asset: EMPTY_FILTERS })
+  const [filtersRevision, setFiltersRevision] = useState(0)
   const [activeTableKind, setActiveTableKind] = useState<GreenTableKind>('area')
   const [tablePanelActive, setTablePanelActive] = useState(false)
   const [mapTableAccordionVisible, setMapTableAccordionVisible] = useState(false)
@@ -209,8 +229,20 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
     })
   }, [])
 
+  const applyFiltersAndShowResults = useCallback(() => {
+    if (!ingestRangeReady) return
+    setAppliedFiltersByKind({
+      area: Object.freeze({ ...columnFiltersByKind.area }),
+      asset: Object.freeze({ ...columnFiltersByKind.asset }),
+    })
+    setFiltersRevision((n) => n + 1)
+    setMapTableAccordionVisible(true)
+  }, [columnFiltersByKind, ingestRangeReady])
+
   const resetPanelState = useCallback(() => {
     setColumnFiltersByKind({ area: EMPTY_FILTERS, asset: EMPTY_FILTERS })
+    setAppliedFiltersByKind({ area: EMPTY_FILTERS, asset: EMPTY_FILTERS })
+    setFiltersRevision((n) => n + 1)
     setActiveTableKind('area')
     setTablePanelActive(false)
     setMapTableAccordionVisible(false)
@@ -226,8 +258,11 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
   const value = useMemo(
     () => ({
       columnFiltersByKind,
+      appliedFiltersByKind,
+      filtersRevision,
       setColumnFilter,
       clearColumnFilters,
+      applyFiltersAndShowResults,
       activeTableKind,
       setActiveTableKind,
       tablePanelActive,
@@ -261,8 +296,11 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
     }),
     [
       columnFiltersByKind,
+      appliedFiltersByKind,
+      filtersRevision,
       setColumnFilter,
       clearColumnFilters,
+      applyFiltersAndShowResults,
       activeTableKind,
       tablePanelActive,
       resetPanelState,

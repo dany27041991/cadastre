@@ -1,7 +1,7 @@
 # Plan — Filtri Cerca → tabella e mappa (lakehouse)
 
 **Spec:** [2026-10-07-green-filters-cerca-map-table-design.md](./2026-10-07-green-filters-cerca-map-table-design.md)  
-**Stato:** in progress (P0–P2 done; next P3 FE)  
+**Stato:** in progress (P0–P3 done; next P4 map applied)  
 **Branch:** `features/lakehouse`  
 **Vincolo:** nessun regressione Area Italia (no `clip_wkt`) / Disegna (`clip_wkt` conservato).
 
@@ -110,14 +110,14 @@ P1 sbloccato sul layout FE completo (su prefix già V1.1; NULL sui prefix non re
 
 ---
 
-## P3 — FE draft / applied + Cerca
+## P3 — FE draft / applied + Cerca — DONE 2026-10-07
 
-- [ ] Context: `appliedFiltersByKind`, `filtersRevision` (number), `applyFiltersAndShowResults()`.
-- [ ] `resetPanelState` / landing: clear draft **e** applied + bump revision.
-- [ ] `InfoPanelContent.handleSearch` → `applyFiltersAndShowResults()` (+ date gate se manca range).
-- [ ] `MainContent`: su `mapTableAccordionVisible` false→true → `setAccordionOpen('green-data')` (no loop).
-- [ ] `useGreenTablePagedData`: params da **applied** del kind; rimuovere debounce che refetcha dalla bozza (opzionale debounce solo se si riusa per altro).
-- [ ] Helper merge URL: append applied filters + denylist scope keys (test unit).
+- [x] Context: `appliedFiltersByKind`, `filtersRevision`, `applyFiltersAndShowResults()`.
+- [x] `resetPanelState` / landing: clear draft **e** applied + bump revision.
+- [x] `InfoPanelContent.handleSearch` → `applyFiltersAndShowResults()` (no-op se date ingest incomplete).
+- [x] `MainContent`: false→true `mapTableAccordionVisible` → `setAccordionOpen('green-data')`.
+- [x] `useGreenTablePagedData`: solo applied; debounce draft rimosso.
+- [x] Helper `appendAppliedFilters` + denylist + unit test.
 
 **Verify:** edit form senza Cerca → Network senza nuovi `/table` per filtri; Cerca → 1 fetch table + accordion aperto.
 

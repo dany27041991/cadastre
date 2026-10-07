@@ -43,7 +43,7 @@ export function GreenDataTable({
     [t],
   )
 
-  const { columnFiltersByKind, setActiveTableKind, setTablePanelActive } = useGreenTablePanel()
+  const { appliedFiltersByKind, setActiveTableKind, setTablePanelActive } = useGreenTablePanel()
 
   const {
     dualMode,
@@ -63,7 +63,7 @@ export function GreenDataTable({
     setActiveTableKind,
   })
 
-  const activeColumnFilters = columnFiltersByKind[tableKind]
+  const activeColumnFilters = appliedFiltersByKind[tableKind]
 
   const {
     pageData,

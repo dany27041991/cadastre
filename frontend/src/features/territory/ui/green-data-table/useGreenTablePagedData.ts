@@ -1,6 +1,7 @@
 /**
- * Server-side pagination, sort, debounced filters and fetch for green tables.
+ * Server-side pagination, sort, applied filters and fetch for green tables.
  * Keeps rows visible while exact totals refresh (stale-while-revalidate).
+ * Filters come from applied (Cerca commit), not draft — no live debounce.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -8,9 +9,7 @@ import {
   fetchGreenAreasTablePaged,
   type GreenTablePage,
 } from '../../api/greenTable.api'
-
-/** Debounce delay (ms) before a filter-text change triggers a fetch. */
-const FILTER_DEBOUNCE_MS = 350
+import { FILTER_SCOPE_DENYLIST } from '../../lib/appendAppliedFilters'
 
 /**
  * Backoff for silent exact-total refetch while BE fills the wide COUNT cache.
@@ -32,6 +31,7 @@ function isApproximateTotal(
 export type UseGreenTablePagedDataArgs = {
   baseQuery: string | null
   showGreenAssets: boolean
+  /** Applied filters for the active table kind (committed via Cerca). */
   activeColumnFilters: Record<string, string>
   setTablePanelActive: (active: boolean) => void
 }
@@ -56,23 +56,10 @@ export function useGreenTablePagedData({
   /** Last page/size successfully applied — SWR only for silent exact-total refresh. */
   const displayedPageRef = useRef<{ page: number; pageSize: number } | null>(null)
 
-  const [debouncedFilters, setDebouncedFilters] = useState<Record<string, string>>(
-    () => ({ ...activeColumnFilters }),
-  )
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const filtersSerialized = useMemo(
+  const appliedFiltersKey = useMemo(
     () => JSON.stringify(activeColumnFilters),
     [activeColumnFilters],
   )
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      setDebouncedFilters(JSON.parse(filtersSerialized) as Record<string, string>)
-    }, FILTER_DEBOUNCE_MS)
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-    }
-  }, [filtersSerialized])
 
   const panelInitialized = useRef(false)
 
@@ -90,16 +77,12 @@ export function useGreenTablePagedData({
     setTotalIsApproximate(false)
   }, [baseQuery])
 
-  const debouncedFiltersKey = useMemo(
-    () => JSON.stringify(debouncedFilters),
-    [debouncedFilters],
-  )
   const prevFilterKey = useRef(
-    `${debouncedFiltersKey}|${String(sort)}|${String(showGreenAssets)}`,
+    `${appliedFiltersKey}|${String(sort)}|${String(showGreenAssets)}`,
   )
   const prevShowGreenAssets = useRef(showGreenAssets)
   useEffect(() => {
-    const key = `${debouncedFiltersKey}|${String(sort)}|${String(showGreenAssets)}`
+    const key = `${appliedFiltersKey}|${String(sort)}|${String(showGreenAssets)}`
     if (prevFilterKey.current === key) return
     prevFilterKey.current = key
     setPage(1)
@@ -110,7 +93,7 @@ export function useGreenTablePagedData({
       displayedPageRef.current = null
       setTotalIsApproximate(false)
     }
-  }, [debouncedFiltersKey, sort, showGreenAssets])
+  }, [appliedFiltersKey, sort, showGreenAssets])
 
   useEffect(() => {
     setPageInput(String(page))
@@ -147,9 +130,10 @@ export function useGreenTablePagedData({
       params['sort_by'] = sort[0]
       params['sort_dir'] = sort[1]
     }
-    if (debouncedFiltersKey !== '{}') {
-      for (const [k, v] of Object.entries(debouncedFilters)) {
-        if (v) params[k] = v
+    if (appliedFiltersKey !== '{}') {
+      for (const [k, v] of Object.entries(activeColumnFilters)) {
+        if (!v || FILTER_SCOPE_DENYLIST.has(k)) continue
+        params[k] = v
       }
     }
 
@@ -201,8 +185,8 @@ export function useGreenTablePagedData({
     page,
     pageSize,
     sort,
-    debouncedFilters,
-    debouncedFiltersKey,
+    activeColumnFilters,
+    appliedFiltersKey,
     setTablePanelActive,
     exactTotalNonce,
   ])
