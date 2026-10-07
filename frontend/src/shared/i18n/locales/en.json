@@ -48,7 +48,7 @@
       "btnForward": "Next",
       "btnSearch": "Search",
       "filtersTitle": "Search filters",
-      "filtersDescription": "Enter one or more search criteria. Results will include only items that match all the values you entered.",
+      "filtersDescription": "Enter one or more search criteria, then press Search: table and map will include only items that match all the values you entered.",
       "legacyFiltersSection": "Additional filters",
       "sectionTableManagement": "Table management",
       "sectionTableManagementSub": "Show or hide columns in addition to the five default columns.",

@@ -1,7 +1,7 @@
 # Plan — Filtri Cerca → tabella e mappa (lakehouse)
 
 **Spec:** [2026-10-07-green-filters-cerca-map-table-design.md](./2026-10-07-green-filters-cerca-map-table-design.md)  
-**Stato:** in progress (P0–P4 done; next P5 polish optional)  
+**Stato:** accepted (P0–P6)  
 **Branch:** `features/lakehouse`  
 **Vincolo:** nessun regressione Area Italia (no `clip_wkt`) / Disegna (`clip_wkt` conservato).
 
@@ -134,21 +134,21 @@ P1 sbloccato sul layout FE completo (su prefix già V1.1; NULL sui prefix non re
 
 ---
 
-## P5 — Dual-toggle UX polish + i18n
+## P5 — Dual-toggle UX polish + i18n — DONE 2026-10-07
 
-- [ ] Opzionale: hint form “I filtri si applicano con Cerca” (i18n it/en).
-- [ ] Disable Cerca se date ingest incomplete (coerente LayersPanel).
-- [ ] Documentare in UI che in dual la tabella mostra il kind attivo (già as-is).
+- [x] Hint form: `filtersDescription` it/en menziona Cerca → tabella e mappa.
+- [x] Cerca disabled se `hasIngestDateRange` false (coerente LayersPanel + apply no-op).
+- [x] Dual: tabella resta sul `tableKind` attivo (as-is; nessun cambio UI extra).
 
 **Verify:** smoke manuale dual + drill asset con filtri asset applied.
 
 ---
 
-## P6 — Close-out
+## P6 — Close-out — DONE 2026-10-07
 
-- [ ] Spec stato → `accepted`; link piano.
-- [ ] Addendum breve su `2026-08-13-green-table-multifield-filters-design.md` (superseded points).
-- [ ] Checklist anti-regressione dallo spec eseguita e annotata (commento PR o sezione Verify sotto).
+- [x] Spec già `accepted`; piano collegato.
+- [x] Addendum su `2026-08-13-green-table-multifield-filters-design.md`.
+- [x] Anti-regressione: filtri AND-overlay; clip/date/scope denylist; Area Italia no `clip_wkt`; Disegna conserva clip; Cerca commit-only.
 
 ---
 

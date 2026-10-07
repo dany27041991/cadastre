@@ -7,6 +7,8 @@
 **Vincolo UI:** solo dxc-webkit (`InfoPanel`, `SearchInput`, `Text`, `Box`).
 
 > **Addendum cutover:** filtri AND su table lakehouse (DuckDB); stessi query param date del fetch tabella.
+>
+> **Superseded 2026-10-07** by [2026-10-07-green-filters-cerca-map-table-design.md](./2026-10-07-green-filters-cerca-map-table-design.md): scope **tabella + mappa**; commit solo su **Cerca** (no debounce live sulla bozza); footer filters con Cerca. Restano validi: form multi-campo AND, catalogo FE, persistenza in-memory.
 
 ## Obiettivo
 

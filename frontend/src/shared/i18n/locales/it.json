@@ -48,7 +48,7 @@
       "btnForward": "Avanti",
       "btnSearch": "Cerca",
       "filtersTitle": "Filtri di ricerca",
-      "filtersDescription": "Indica uno o più criteri di ricerca. I risultati mostreranno solo le voci che soddisfano tutti i valori inseriti.",
+      "filtersDescription": "Indica uno o più criteri di ricerca, poi premi Cerca: tabella e mappa mostreranno solo le voci che soddisfano tutti i valori inseriti.",
       "legacyFiltersSection": "Altri filtri",
       "sectionTableManagement": "Gestione tabella",
       "sectionTableManagementSub": "Attiva o disattiva le colonne aggiuntive rispetto alle cinque predefinite.",

@@ -52,6 +52,7 @@ function InfoPanelFooter({
   showPrimary,
   primaryWithArrow,
   primaryWithSearchIcon,
+  primaryDisabled = false,
 }: {
   readonly backLabel: string
   readonly onBack: () => void
@@ -60,6 +61,7 @@ function InfoPanelFooter({
   readonly showPrimary: boolean
   readonly primaryWithArrow?: boolean
   readonly primaryWithSearchIcon?: boolean
+  readonly primaryDisabled?: boolean
 }) {
   return (
     <div className="Container-button" style={{ overflow: 'hidden' }}>
@@ -79,7 +81,12 @@ function InfoPanelFooter({
         </div>
         {showPrimary && primaryLabel && onPrimary ? (
           <div>
-            <Button color="primary" kind="filled" onClick={onPrimary}>
+            <Button
+              color="primary"
+              kind="filled"
+              onClick={onPrimary}
+              disabled={primaryDisabled}
+            >
               {primaryWithSearchIcon ? (
                 <icons.SearchIcon
                   size="xs"
@@ -246,6 +253,7 @@ export function InfoPanelContent() {
             showPrimary
             primaryWithArrow={false}
             primaryWithSearchIcon
+            primaryDisabled={panel?.hasIngestDateRange !== true}
           />
         }
       >
