@@ -96,6 +96,15 @@ def test_collect_filters_picks_product_keys_only():
     assert assets == {"species": "Quercus"}
 
 
+def test_area_filter_where_appends_for_catalog_parent_path():
+    """Catalog drill WHERE must compose with area_filter_where fragments."""
+    clauses = area_filter_where({"name": "Garibaldi", "area_classification": "URBAN_PARKS"})
+    assert len(clauses) == 2
+    where = "parent_id = 1 AND region_id = 16 AND " + " AND ".join(clauses)
+    assert "name" in where and "Garibaldi" in where
+    assert "area_classification = 'URBAN_PARKS'" in where
+
+
 def test_viewport_assets_with_filters_skips_gold_uses_raw():
     repo = MagicMock()
     repo.get_raw_in_bbox.return_value = {

@@ -66,6 +66,7 @@ class CatalogGreenArea:
         municipality_id: int | None = None,
         sub_municipal_area_id: int | None = None,
         contained_in_area_id: int | None = None,
+        filters: dict[str, Any] | None = None,
     ) -> GeoJSONFeatureCollection:
         return get_cached_green_areas(
             self._repository,
@@ -75,6 +76,7 @@ class CatalogGreenArea:
             municipality_id,
             sub_municipal_area_id,
             contained_in_area_id,
+            filters=filters,
         )
 
     @log_invocation(log_args=True, log_result=False)

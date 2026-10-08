@@ -114,6 +114,7 @@ function areasFetcherFor(
         ...params,
         ...(dateFrom ? { dateFrom } : {}),
         ...(dateTo ? { dateTo } : {}),
+        ...(filters ? { filters } : {}),
       })
     return async () =>
       fetchGreenAreasForDrillScope(

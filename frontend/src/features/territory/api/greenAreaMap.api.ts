@@ -23,6 +23,8 @@ export type GreenAreasParams = {
   /** Ingest window (ISO YYYY-MM-DD); required by BE (lakehouse-only). */
   dateFrom?: string
   dateTo?: string
+  /** Applied InfoPanel column filters (Cerca); used by drill companion path. */
+  filters?: Readonly<Record<string, string>>
 }
 
 export type GreenAreaViewportParams = {
@@ -78,6 +80,7 @@ export function buildGreenAreasQuery(params: GreenAreasParams): string {
     search.set('sub_municipal_area_id', String(params.subMunicipalAreaId))
   if (params.dateFrom) search.set('date_from', params.dateFrom)
   if (params.dateTo) search.set('date_to', params.dateTo)
+  appendAppliedFilters(search, params.filters)
   search.set('format', 'geobuf')
   return search.toString()
 }

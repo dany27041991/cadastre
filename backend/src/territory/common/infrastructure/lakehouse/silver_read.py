@@ -1038,6 +1038,7 @@ def read_areas_by_parent(
     province_id: int | None = None,
     municipality_id: int | None = None,
     limit: int = _CATALOG_FEATURE_LIMIT,
+    filters: dict[str, Any] | None = None,
 ) -> list[tuple]:
     """Direct children of parent_id → FC row tuples.
 
@@ -1050,6 +1051,9 @@ def read_areas_by_parent(
         where += f" AND province_id = {int(province_id)}"
     if municipality_id is not None:
         where += f" AND municipality_id = {int(municipality_id)}"
+    extra = area_filter_where(filters)
+    if extra:
+        where += " AND " + " AND ".join(extra)
     out: list[tuple] = []
     for r in _fetch_area_raw_rows(resolutions, where, limit):
         t = _raw_area_to_fc_tuple(r)
@@ -1134,17 +1138,26 @@ def read_areas_contained_or_intersecting(
     province_id: int,
     municipality_id: int,
     limit: int = _CATALOG_FEATURE_LIMIT,
+    filters: dict[str, Any] | None = None,
 ) -> list[tuple]:
-    """Selected area first, then level+1 areas with real overlap (≥ 1 m²)."""
+    """Selected area first, then level+1 areas with real overlap (≥ 1 m²).
+
+    Attribute filters (Cerca) apply to candidates. Selected is always loaded for
+    the overlap test; it is included in the result only when it also matches
+    filters (or when no filters are set).
+    """
     from shapely import wkb as shapely_wkb
 
-    where_all = (
+    scope_sql = (
         f"municipality_id = {int(municipality_id)}"
         f" AND region_id = {int(region_id)}"
         f" AND province_id = {int(province_id)}"
     )
-    raw = _fetch_area_raw_rows(resolutions, where_all, limit)
-    selected_raw = next((r for r in raw if int(r[0]) == int(area_id)), None)
+    # Selected geom must load even when attribute filters exclude it.
+    selected_rows = _fetch_area_raw_rows(
+        resolutions, f"{scope_sql} AND id = {int(area_id)}", 1
+    )
+    selected_raw = selected_rows[0] if selected_rows else None
     if selected_raw is None or selected_raw[1] is None:
         return []
     try:
@@ -1156,9 +1169,19 @@ def read_areas_contained_or_intersecting(
     if selected_tuple is None:
         return []
 
+    where_cand = scope_sql
+    extra = area_filter_where(filters)
+    if extra:
+        where_cand += " AND " + " AND ".join(extra)
+    raw = _fetch_area_raw_rows(resolutions, where_cand, limit)
+
     children: list[tuple] = []
+    selected_matches_filters = False
     for r in raw:
-        if int(r[0]) == int(area_id) or r[1] is None:
+        if int(r[0]) == int(area_id):
+            selected_matches_filters = True
+            continue
+        if r[1] is None:
             continue
         if int(r[5]) != selected_level + 1:
             continue
@@ -1173,7 +1196,9 @@ def read_areas_contained_or_intersecting(
         t = _raw_area_to_fc_tuple(r)
         if t is not None:
             children.append(t)
-    return [selected_tuple] + children
+    if not filters or selected_matches_filters:
+        return [selected_tuple] + children
+    return children
 
 def read_assets_catalog(
     resolutions: list[IngestResolution],

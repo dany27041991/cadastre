@@ -208,6 +208,7 @@ class GreenAreasLakehouseRepository:
         region_id: int,
         province_id: int | None = None,
         municipality_id: int | None = None,
+        filters: dict[str, Any] | None = None,
     ) -> GeoJSONFeatureCollection:
         resolutions = self._resolutions(
             region_id=region_id,
@@ -222,6 +223,7 @@ class GreenAreasLakehouseRepository:
             region_id=region_id,
             province_id=province_id,
             municipality_id=municipality_id,
+            filters=filters,
         )
         return build_green_area_feature_collection(rows)
 
@@ -278,6 +280,7 @@ class GreenAreasLakehouseRepository:
         region_id: int,
         province_id: int,
         municipality_id: int,
+        filters: dict[str, Any] | None = None,
     ) -> GeoJSONFeatureCollection:
         resolutions = self._resolutions(
             region_id=region_id,
@@ -292,6 +295,7 @@ class GreenAreasLakehouseRepository:
             region_id=region_id,
             province_id=province_id,
             municipality_id=municipality_id,
+            filters=filters,
         )
         return build_green_area_feature_collection(rows)
 

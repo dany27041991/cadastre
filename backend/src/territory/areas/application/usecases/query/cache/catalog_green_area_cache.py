@@ -33,11 +33,19 @@ def get_cached_green_areas(
     municipality_id: int | None,
     sub_municipal_area_id: int | None = None,
     contained_in_area_id: int | None = None,
+    filters: dict[str, Any] | None = None,
 ) -> GeoJSONFeatureCollection:
-    """Return green areas (from cache when applicable). Uses the dated lakehouse repo."""
+    """Return green areas (from cache when applicable). Uses the dated lakehouse repo.
+
+    Attribute filters skip the LRU cache (key would explode; drill/Cerca is uncached).
+    """
     if contained_in_area_id is not None and municipality_id is not None:
         return repository.get_contained_or_intersecting_area(
-            contained_in_area_id, region_id, province_id, municipality_id
+            contained_in_area_id,
+            region_id,
+            province_id,
+            municipality_id,
+            filters=filters,
         )
     if parent_id is not None:
         # Scope to province (+ municipality when known). Region-only parent
@@ -47,10 +55,12 @@ def get_cached_green_areas(
             region_id,
             province_id=province_id,
             municipality_id=municipality_id,
+            filters=filters,
         )
         return result
     if municipality_id is None:
         return _EMPTY
+    # Roots catalog path ignores attribute filters (map uses /viewport).
     dates = _date_key(repository)
     if sub_municipal_area_id is not None:
         key = (region_id, province_id, municipality_id, *dates, sub_municipal_area_id)

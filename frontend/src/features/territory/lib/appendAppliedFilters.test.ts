@@ -40,3 +40,24 @@ describe('appendAppliedFilters', () => {
     }
   })
 })
+
+describe('buildGreenAreasQuery with filters', () => {
+  it('appends applied filters for drill catalog path', async () => {
+    const { buildGreenAreasQuery } = await import(
+      '../api/greenAreaMap.api'
+    )
+    const q = buildGreenAreasQuery({
+      regionId: 16,
+      provinceId: 75,
+      municipalityId: 5998,
+      containedInAreaId: 42,
+      dateFrom: '2024-01-01',
+      dateTo: '2026-12-31',
+      filters: { name: 'Garibaldi' },
+    })
+    const params = new URLSearchParams(q)
+    expect(params.get('contained_in_area_id')).toBe('42')
+    expect(params.get('name')).toBe('Garibaldi')
+    expect(params.get('date_from')).toBe('2024-01-01')
+  })
+})

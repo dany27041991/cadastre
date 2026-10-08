@@ -47,6 +47,7 @@ def _uc(date_from: date, date_to: date):
 
 @router.get("/green-areas", response_model=None)
 def get_green_areas(
+    request: Request,
     region_id: int,
     province_id: int,
     parent_id: int | None = None,
@@ -65,10 +66,12 @@ def get_green_areas(
     - With parent_id: children of that area (by parent_id).
     - Without: root areas for municipality_id (optionally filtered by sub_municipal_area_id).
     region_id and province_id required. Use ?format=geobuf for compact binary response.
+    Attribute filters (same keys as /table|/viewport) AND-overlay on parent/contained paths.
     """
     if parent_id is None and municipality_id is None and contained_in_area_id is None:
         return _empty_response(output_format)
 
+    filters = collect_filters(request.query_params, AREA_FILTER_KEYS)
     result = _uc(date_from, date_to).catalog_green_areas(
         region_id,
         province_id=province_id,
@@ -76,6 +79,7 @@ def get_green_areas(
         municipality_id=municipality_id,
         sub_municipal_area_id=sub_municipal_area_id,
         contained_in_area_id=contained_in_area_id,
+        filters=filters or None,
     )
 
     if not result.get("features"):
