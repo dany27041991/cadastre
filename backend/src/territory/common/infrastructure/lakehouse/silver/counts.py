@@ -92,8 +92,51 @@ def _schedule_wide_count(
         _table_count_inflight.add(key)
 
     def _run() -> None:
+        import time as _time_delay
+
+        # Defer behind viewport DuckDB/MinIO (debug 4fe799: bg COUNT raced Cerca
+        # assets and amplified pool contention). Rows already returned approx.
+        _time_delay.sleep(2.5)
         try:
+            _t0 = _time_delay.monotonic()
             _wide_count(resolutions, where_sql, stub=stub)
+            _ms = int((_time_delay.monotonic() - _t0) * 1000)
+            # #region agent log
+            try:
+                import json as _json
+                import urllib.request as _urlreq
+
+                _payload = _json.dumps(
+                    {
+                        "sessionId": "4fe799",
+                        "runId": "perf-table-p2",
+                        "hypothesisId": "H-count-defer",
+                        "location": "counts._schedule_wide_count",
+                        "message": "table_count_bg_done",
+                        "data": {
+                            "ms": _ms,
+                            "stub": stub,
+                            "defer_sec": 2.5,
+                            "n_res": len(resolutions),
+                        },
+                        "timestamp": int(_time_delay.time() * 1000),
+                    }
+                ).encode("utf-8")
+                _urlreq.urlopen(
+                    _urlreq.Request(
+                        "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
+                        data=_payload,
+                        headers={
+                            "Content-Type": "application/json",
+                            "X-Debug-Session-Id": "4fe799",
+                        },
+                        method="POST",
+                    ),
+                    timeout=1.5,
+                )
+            except Exception:
+                pass
+            # #endregion
         except Exception:
             pass
         finally:

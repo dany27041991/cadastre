@@ -8,7 +8,9 @@
 _TABLE_SINGLE_SHOT_MAX = 40
 _TABLE_WIDE_CHUNK = 40
 _TABLE_COUNT_CHUNK = 80
-_TABLE_COUNT_TTL_SEC = 120.0
+# Longer warm so pager exact-total refetches hit cache after Cerca (debug 4fe799
+# Fase 2: 120s was short vs multi-zoom sessions).
+_TABLE_COUNT_TTL_SEC = 300.0
 # Attribute search allowlist: munis with gold presence > floor (path B — no
 # density sort). Floor 0 = every nonempty muni so national filters (e.g. Area
 # boost) are complete; stubs with mode≈8 must not be dropped.

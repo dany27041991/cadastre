@@ -25,14 +25,15 @@ from cachetools import TTLCache
 if TYPE_CHECKING:
     from territory.common.infrastructure.lakehouse.catalog import IngestResolution
 
-# Match scope (muni ids / area pairs) — short warm for zoom + table same Cerca.
-MATCH_CACHE_MAXSIZE = 32
-MATCH_CACHE_TTL_SEC = 60.0
+# Match scope (muni ids / area pairs) — warm for zoom + table same Cerca.
+# 120s aligns with typical Cerca→zoom→pager sequences (Fase 2 plan).
+MATCH_CACHE_MAXSIZE = 48
+MATCH_CACHE_TTL_SEC = 120.0
 # Do not retain large pair lists (viewport limit can be 50k) — coalesce only.
 MATCH_AREAS_VALUE_MAX = 2_000
 
 # Exact table COUNT background fill.
-TABLE_COUNT_CACHE_MAXSIZE = 128
+TABLE_COUNT_CACHE_MAXSIZE = 256
 # Allowlist denseness mid-set.
 ALLOWLIST_CACHE_MAXSIZE = 64
 

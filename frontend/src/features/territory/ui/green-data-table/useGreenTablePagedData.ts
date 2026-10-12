@@ -20,9 +20,9 @@ import { markPerfScan } from '../../lib/perfScan'
  * Backoff for silent exact-total refetch while BE fills the wide COUNT cache.
  * Starts fast so the pager updates soon after the background count lands.
  */
-// Keep short: each retry re-hits DuckDB (debug 4fe799: 5× table refetch after
-// 1st Cerca piled onto the 2nd Cerca and left the UI spinning).
-const APPROX_RETRY_DELAYS_MS = [2000, 5000, 10000] as const
+// Softer exact-total polls (Fase 2): fewer DuckDB hits while viewport settles.
+// Burst still floors delay at 15s (was 10s) — debug 4fe799 pool contention.
+const APPROX_RETRY_DELAYS_MS = [5000, 12000] as const
 
 function isApproximateTotal(
   data: GreenTablePage,
@@ -203,14 +203,12 @@ export function useGreenTablePagedData({
         }
         if (approx && approxRetriesRef.current < APPROX_RETRY_DELAYS_MS.length) {
           // Defer exact-total polls while Cerca viewport holds DuckDB (debug 4fe799).
-          const base = APPROX_RETRY_DELAYS_MS[approxRetriesRef.current] ?? 4000
+          const base = APPROX_RETRY_DELAYS_MS[approxRetriesRef.current] ?? 8000
           const burst = isViewportLoadBurstActive()
-          const delay = burst ? Math.max(base, 10000) : base
+          const delay = burst ? Math.max(base, 15000) : base
           approxRetriesRef.current += 1
           // #region agent log
-          if (burst) {
-            fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'pool-storm',hypothesisId:'H-table-defer',location:'useGreenTablePagedData.ts:approx',message:'table_approx_defer',data:{delay},timestamp:Date.now()})}).catch(()=>{})
-          }
+          fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'perf-table-p2',hypothesisId:'H-table-defer',location:'useGreenTablePagedData.ts:approx',message:'table_approx_defer',data:{delay,burst,attempt:approxRetriesRef.current},timestamp:Date.now()})}).catch(()=>{})
           // #endregion
           approxTimer = setTimeout(() => {
             setExactTotalNonce((n) => n + 1)
