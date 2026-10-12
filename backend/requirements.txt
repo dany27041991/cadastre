@@ -22,3 +22,5 @@ pydantic==2.10.2
 pydantic-settings==2.6.1
 # Lakehouse serving (MinIO + DuckDB) — required for green assets/areas
 duckdb>=1.1.0
+# DuckDB needs pytz when reading non-null timestamptz Parquet columns (survey_date).
+pytz>=2024.1

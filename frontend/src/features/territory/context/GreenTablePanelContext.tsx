@@ -17,6 +17,7 @@ import {
 import type { GreenTableKind } from '../lib/greenDetailColumnCatalog'
 import { hasIngestDateRange, toIsoDate } from '../lib/ingestDateRange'
 import type { SpatialClipPolygon } from '../lib/spatialClipWkt'
+import { beginViewportLoadBurst } from '../model/hooks/viewportLoadGate'
 import type { BreadcrumbCrumb } from '../types'
 import type { TerritorySearchHit } from '../types/territorySearch'
 
@@ -64,6 +65,8 @@ export interface GreenTablePanelContextValue {
   readonly filtersRevision: number
   readonly setColumnFilter: (kind: GreenTableKind, key: string, value: string) => void
   readonly clearColumnFilters: (kind: GreenTableKind) => void
+  /** Clear draft + applied filters for both kinds and bump revision (map/table refresh). */
+  readonly clearAllSearchFilters: () => void
   /**
    * Copy draft → applied, open green-data accordion, bump revision.
    * No-op when ingest date range is incomplete.
@@ -229,11 +232,25 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
     })
   }, [])
 
+  const clearAllSearchFilters = useCallback(() => {
+    setColumnFiltersByKind({ area: EMPTY_FILTERS, asset: EMPTY_FILTERS })
+    setAppliedFiltersByKind({ area: EMPTY_FILTERS, asset: EMPTY_FILTERS })
+    setFiltersRevision((n) => n + 1)
+  }, [])
+
   const applyFiltersAndShowResults = useCallback(() => {
     if (!ingestRangeReady) return
+    const area = { ...columnFiltersByKind.area }
+    const asset = { ...columnFiltersByKind.asset }
+    // #region agent log
+    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'and-filters',hypothesisId:'H-and',location:'GreenTablePanelContext.tsx:applyFilters',message:'cerca_commit',data:{areaKeys:Object.keys(area),assetKeys:Object.keys(asset),area,asset},timestamp:Date.now()})}).catch(()=>{})
+    // #endregion
+    // Arm burst BEFORE setState so table effect cannot race viewport MinIO
+    // (debug 4fe799: table_http_start +26ms before burst → MinIO IO Error).
+    beginViewportLoadBurst('cerca-commit')
     setAppliedFiltersByKind({
-      area: Object.freeze({ ...columnFiltersByKind.area }),
-      asset: Object.freeze({ ...columnFiltersByKind.asset }),
+      area: Object.freeze(area),
+      asset: Object.freeze(asset),
     })
     setFiltersRevision((n) => n + 1)
     setMapTableAccordionVisible(true)
@@ -262,6 +279,7 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
       filtersRevision,
       setColumnFilter,
       clearColumnFilters,
+      clearAllSearchFilters,
       applyFiltersAndShowResults,
       activeTableKind,
       setActiveTableKind,
@@ -300,6 +318,7 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
       filtersRevision,
       setColumnFilter,
       clearColumnFilters,
+      clearAllSearchFilters,
       applyFiltersAndShowResults,
       activeTableKind,
       tablePanelActive,

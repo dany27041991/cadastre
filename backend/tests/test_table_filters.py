@@ -12,15 +12,27 @@ from territory.common.infrastructure.lakehouse.table_filters import (
     AREA_FILTER_KEYS,
     ASSET_FILTER_KEYS,
     area_filter_where,
+    area_filters_are_selective,
     asset_filter_where,
     collect_filters,
 )
 
 
 def test_area_name_and_area_code_remap():
-    clauses = area_filter_where({"name": "Parco", "area_code": "ZRIL-1"})
+    clauses = area_filter_where({"name": "Parco", "area_code": "ZRIL-1-3"})
     assert any("name" in c and "ILIKE" in c and "Parco" in c for c in clauses)
-    assert any("zril_identifier" in c and "ZRIL-1" in c for c in clauses)
+    assert any(
+        "zril_identifier" in c and "ILIKE" in c and "ZRIL-1-3" in c for c in clauses
+    )
+
+
+def test_area_filters_are_selective_from_product_filters():
+    assert area_filters_are_selective({"area_code": "zril-1-1"}) is True
+    # name-only stays non-selective so widespread ILIKE can probe_wide.
+    assert area_filters_are_selective({"name": "Area boost"}) is False
+    assert area_filters_are_selective({"area_classification": "URBAN_PARKS"}) is True
+    assert area_filters_are_selective({"surface_area_m2_min": "10"}) is False
+    assert area_filters_are_selective({}) is False
 
 
 def test_area_enum_exact_vs_ilike():
@@ -30,10 +42,51 @@ def test_area_enum_exact_vs_ilike():
     assert len(fuzzy) == 1 and "ILIKE" in fuzzy[0]
 
 
-def test_area_surface_numeric():
-    clauses = area_filter_where({"surface_area_m2": "12500"})
+def test_area_surface_range_min_only():
+    clauses = area_filter_where({"surface_area_m2_min": "1000"})
     assert len(clauses) == 1
-    assert "TRY_CAST(surface_area_m2 AS DOUBLE)" in clauses[0]
+    assert "TRY_CAST(surface_area_m2 AS DOUBLE) >= 1000" in clauses[0]
+    assert "<=" not in clauses[0]
+
+
+def test_area_surface_range_max_only():
+    clauses = area_filter_where({"surface_area_m2_max": "5000"})
+    assert len(clauses) == 1
+    assert "TRY_CAST(surface_area_m2 AS DOUBLE) <= 5000" in clauses[0]
+
+
+def test_area_surface_range_both():
+    clauses = area_filter_where(
+        {"surface_area_m2_min": "1000", "surface_area_m2_max": "5000"}
+    )
+    assert len(clauses) == 1
+    assert ">= 1000" in clauses[0] and "<= 5000" in clauses[0]
+
+
+def test_area_surface_range_inverted_is_empty():
+    assert area_filter_where(
+        {"surface_area_m2_min": "9000", "surface_area_m2_max": "100"}
+    ) == ["1=0"]
+
+
+def test_area_legacy_surface_single_ignored():
+    assert area_filter_where({"surface_area_m2": "12500"}) == []
+
+
+def test_area_survey_date_range():
+    clauses = area_filter_where(
+        {"survey_date_from": "2024-01-01", "survey_date_to": "2024-12-31"}
+    )
+    assert len(clauses) == 1
+    assert "TRY_CAST(survey_date AS DATE)" in clauses[0]
+    assert "DATE '2024-01-01'" in clauses[0]
+    assert "DATE '2024-12-31'" in clauses[0]
+
+
+def test_area_survey_date_inverted_is_empty():
+    assert area_filter_where(
+        {"survey_date_from": "2025-01-01", "survey_date_to": "2024-01-01"}
+    ) == ["1=0"]
 
 
 def test_area_unknown_key_ignored():
@@ -62,19 +115,44 @@ def test_asset_health_exact():
     ]
 
 
-def test_asset_measures_and_growth():
+def test_asset_measures_range_and_growth():
     clauses = asset_filter_where(
         {
-            "trunk_diameter_cm": "32",
+            "trunk_diameter_cm_min": "20",
+            "trunk_diameter_cm_max": "40",
+            "plant_height_m_min": "5",
+            "crown_diameter_m_max": "12",
             "growth_stage": "MATURE",
             "protection_status": "NONE",
             "species_code": "QUE",
         }
     )
-    assert any("trunk_diameter_cm" in c for c in clauses)
+    assert any("trunk_diameter_cm" in c and ">= 20" in c and "<= 40" in c for c in clauses)
+    assert any("plant_height_m" in c and ">= 5" in c for c in clauses)
+    assert any("crown_diameter_m" in c and "<= 12" in c for c in clauses)
     assert "growth_stage = 'MATURE'" in clauses
     assert "protection_status = 'NONE'" in clauses
     assert any("species_code" in c for c in clauses)
+
+
+def test_asset_legacy_measure_single_ignored():
+    assert asset_filter_where({"trunk_diameter_cm": "32"}) == []
+
+
+def test_area_full_and_mix():
+    clauses = area_filter_where(
+        {
+            "name": "Villa",
+            "area_classification": "URBAN_PARKS",
+            "surface_area_m2_min": "100",
+            "surface_area_m2_max": "99999",
+            "survey_date_from": "2020-01-01",
+            "survey_date_to": "2026-12-31",
+        }
+    )
+    assert len(clauses) == 4
+    assert any("Villa" in c for c in clauses)
+    assert "area_classification = 'URBAN_PARKS'" in clauses
 
 
 def test_sql_escape_quote():

@@ -1,3 +1,4 @@
+import { isViewportLoadBurstActive } from '@/features/territory/model/hooks/viewportLoadGate'
 import {
   APPLY_REASON,
   RAW_CLUSTER_APPLY_DEBOUNCE_MS,
@@ -51,6 +52,14 @@ export function scheduleRawClusterApply(host: GeoinsightGreenClusterHost, reason
       rawApplyReasons.delete(host)
       const run = () => {
         if (!host.greenAssetClusteringActive) return
+        // Timer may have been scheduled before Cerca burst began; do not abort
+        // the in-flight viewport (debug 4fe799 NetworkError storm).
+        if (isViewportLoadBurstActive()) {
+          // #region agent log
+          fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'post-fix',hypothesisId:'H-watchdog',location:'scheduleApply.ts:run',message:'schedule_burst_skip',data:{effectiveReason},timestamp:Date.now()})}).catch(()=>{})
+          // #endregion
+          return
+        }
         // Re-read the zoom at execution time: the view-change and zoom-change
         // paths share this timer, so a pan bump fired during a zoom animation
         // could execute with the zoom captured mid-animation and mount the

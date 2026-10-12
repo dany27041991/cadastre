@@ -124,25 +124,35 @@ def fmt_or_nan(value: Any, *, kind: str = "plain") -> str:
     return formatted if formatted is not None else MISSING
 
 
-def _trunk_diameter_cm(attrs: dict[str, Any]) -> float | None:
-    direct = _to_float(attrs.get("trunk_diameter_cm"))
+def _row_or_attr(row: dict[str, Any], key: str) -> Any:
+    """Prefer silver top-level columns; fall back to legacy attributes JSON."""
+    if key in row and row.get(key) is not None and row.get(key) != "":
+        return row.get(key)
+    return _attr(row, key)
+
+
+def _trunk_diameter_cm(row: dict[str, Any]) -> float | None:
+    direct = _to_float(_row_or_attr(row, "trunk_diameter_cm"))
     if direct is not None:
         return direct
-    circumference = _to_float(attrs.get("trunk_circumference_cm"))
+    circumference = _to_float(_row_or_attr(row, "trunk_circumference_cm"))
     if circumference is None or circumference <= 0:
         return None
     return circumference / math.pi
 
 
-def _plant_height_m(attrs: dict[str, Any]) -> float | None:
+def _plant_height_m(row: dict[str, Any]) -> float | None:
     for key in ("plant_height_m", "height_m"):
-        n = _to_float(attrs.get(key))
+        n = _to_float(_row_or_attr(row, key))
         if n is not None:
             return n
     return None
 
 
 def _surface_area_m2(row: dict[str, Any]) -> float | None:
+    from_col = _to_float(row.get("surface_area_m2"))
+    if from_col is not None:
+        return from_col
     from_attr = _to_float(_attr(row, "surface_area_m2"))
     if from_attr is not None:
         return from_attr
@@ -152,7 +162,7 @@ def _surface_area_m2(row: dict[str, Any]) -> float | None:
 def prepare_area_raw_values(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "name": row.get("name"),
-        "area_code": row.get("zril_identifier"),
+        "area_code": row.get("zril_identifier") or _attr(row, "area_code"),
         "area_classification": row.get("area_classification"),
         "istat_classification": row.get("istat_classification"),
         "intensity_of_fruition": row.get("intensity_of_fruition"),
@@ -163,20 +173,21 @@ def prepare_area_raw_values(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def prepare_asset_raw_values(row: dict[str, Any]) -> dict[str, Any]:
-    attrs = _attrs(row)
     return {
         "plant_code": row.get("id"),
-        "species_code": attrs.get("species_code"),
+        "species_code": _row_or_attr(row, "species_code"),
         "area_code": row.get("green_area_id"),
-        "latitude": row.get("latitude"),
-        "longitude": row.get("longitude"),
+        "latitude": row.get("latitude") if row.get("latitude") is not None else row.get("lat"),
+        "longitude": row.get("longitude")
+        if row.get("longitude") is not None
+        else row.get("lon"),
         "survey_date": row.get("survey_date"),
         "species": row.get("species"),
         "genus": row.get("genus"),
         "variety": row.get("variety"),
-        "trunk_diameter_cm": _trunk_diameter_cm(attrs),
-        "plant_height_m": _plant_height_m(attrs),
-        "crown_diameter_m": _to_float(attrs.get("crown_diameter_m")),
+        "trunk_diameter_cm": _trunk_diameter_cm(row),
+        "plant_height_m": _plant_height_m(row),
+        "crown_diameter_m": _to_float(_row_or_attr(row, "crown_diameter_m")),
         "growth_stage": row.get("growth_stage"),
         "protection_status": row.get("protection_status"),
         "health_status": row.get("health_status"),

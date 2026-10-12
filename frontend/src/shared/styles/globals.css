@@ -337,3 +337,48 @@ map-widget {
     transform: rotate(360deg);
   }
 }
+
+/*
+ * Table loader — dxc Spinner type="grow" needs Bootstrap-like styles.
+ * dxc-webkit ships spinner-border only (circle); grow is otherwise invisible
+ * (debug 4fe799: TableLoadingState mounts but user sees no dots).
+ */
+.table-dots-loader {
+  gap: 0.45rem;
+  color: var(--primary, #0b5fff);
+}
+.table-dots-loader .spinner-grow {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  background-color: currentColor;
+  border-radius: 50%;
+  opacity: 0;
+  animation: table-spinner-grow 0.85s linear infinite;
+}
+.table-dots-loader .spinner-grow-sm,
+.table-dots-loader .spinner-size-sm.spinner-grow {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+.table-dots-loader .text-primary {
+  color: var(--primary, #0b5fff) !important;
+}
+.table-dots-loader > *:nth-child(1) .spinner-grow {
+  animation-delay: 0ms;
+}
+.table-dots-loader > *:nth-child(2) .spinner-grow {
+  animation-delay: 150ms;
+}
+.table-dots-loader > *:nth-child(3) .spinner-grow {
+  animation-delay: 300ms;
+}
+@keyframes table-spinner-grow {
+  0% {
+    transform: scale(0);
+  }
+  50% {
+    opacity: 1;
+    transform: none;
+  }
+}

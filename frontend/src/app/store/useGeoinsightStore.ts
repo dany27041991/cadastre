@@ -46,9 +46,19 @@ export const useGeoinsightStore = create<GeoinsightStoreState>((set) => ({
   setMapZoom: (mapZoom) => set({ mapZoom }),
   bumpMapViewEpoch: () => set((state) => ({ mapViewEpoch: state.mapViewEpoch + 1 })),
   beginGreenViewportLoad: () =>
-    set((state) => ({ greenViewportLoadingCount: state.greenViewportLoadingCount + 1 })),
+    set((state) => {
+      const greenViewportLoadingCount = state.greenViewportLoadingCount + 1
+      // #region agent log
+      fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'cerca-no-cam',hypothesisId:'H-loader',location:'useGeoinsightStore.beginGreenViewportLoad',message:'loader_count',data:{op:'begin',greenViewportLoadingCount},timestamp:Date.now()})}).catch(()=>{})
+      // #endregion
+      return { greenViewportLoadingCount }
+    }),
   endGreenViewportLoad: () =>
-    set((state) => ({
-      greenViewportLoadingCount: Math.max(0, state.greenViewportLoadingCount - 1),
-    })),
+    set((state) => {
+      const greenViewportLoadingCount = Math.max(0, state.greenViewportLoadingCount - 1)
+      // #region agent log
+      fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'cerca-no-cam',hypothesisId:'H-loader',location:'useGeoinsightStore.endGreenViewportLoad',message:'loader_count',data:{op:'end',greenViewportLoadingCount},timestamp:Date.now()})}).catch(()=>{})
+      // #endregion
+      return { greenViewportLoadingCount }
+    }),
 }))

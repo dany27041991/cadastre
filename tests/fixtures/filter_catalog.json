@@ -1,0 +1,29 @@
+{
+  "area": {
+    "name": { "kind": "text", "fallback": "Garibaldi" },
+    "area_code": { "kind": "text", "fallback": "ZRIL-" },
+    "surface_area_m2": { "kind": "number-range", "fallback": "500" },
+    "area_classification": { "kind": "enum", "fallback": "HISTORICAL_GREEN" },
+    "istat_classification": { "kind": "enum", "fallback": "HISTORICAL_GREEN" },
+    "intensity_of_fruition": { "kind": "enum", "fallback": "LOW" },
+    "perimeter_type": { "kind": "enum", "fallback": "REAL" },
+    "survey_date": { "kind": "date-range", "fallback": "2019-02-02" }
+  },
+  "asset": {
+    "plant_code": { "kind": "integer", "fallback": "1" },
+    "area_code": { "kind": "integer", "fallback": "1" },
+    "species_code": { "kind": "text", "fallback": "QUE" },
+    "latitude": { "kind": "number", "fallback": "40.35" },
+    "longitude": { "kind": "number", "fallback": "18.17" },
+    "species": { "kind": "text", "fallback": "Quercus" },
+    "genus": { "kind": "text", "fallback": "Quercus" },
+    "variety": { "kind": "text", "fallback": "a" },
+    "trunk_diameter_cm": { "kind": "number-range", "fallback": "20" },
+    "plant_height_m": { "kind": "number-range", "fallback": "10" },
+    "crown_diameter_m": { "kind": "number-range", "fallback": "5" },
+    "survey_date": { "kind": "date-range", "fallback": "2019-02-02" },
+    "growth_stage": { "kind": "enum", "fallback": "MATURE" },
+    "protection_status": { "kind": "enum", "fallback": "NONE" },
+    "health_status": { "kind": "enum", "fallback": "HEALTHY" }
+  }
+}

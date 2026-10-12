@@ -16,6 +16,10 @@ from territory.common.infrastructure.lakehouse.duckdb_client import (
 
 DatasetName = Literal["assets", "areas"]
 
+# Lakehouse smoke fixture (see lakehouse_writer.fixture_tables) — not real territory.
+_FIXTURE_REGION_ID = 999
+_FIXTURE_MUNICIPALITY_ID = 999001
+
 
 @dataclass(frozen=True)
 class IngestResolution:
@@ -92,6 +96,8 @@ def resolve_latest_ingests(
         if row["dataset"] != dataset:
             continue
         mid = row["municipality_id"]
+        if mid == _FIXTURE_MUNICIPALITY_ID or int(row["region_id"]) == _FIXTURE_REGION_ID:
+            continue
         if allowed is not None and mid not in allowed:
             continue
         ingest_at: date = row["ingest_at"]

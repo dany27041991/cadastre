@@ -1,7 +1,10 @@
 /**
  * Hierarchy typeahead on Layers step — SearchInput synced with breadcrumb / jump.
+ * Disabled while Aree gestite and/or Assets Verdi toggles are on (mutual exclusion
+ * with territory navigation). Exception: green-area search lock keeps the control
+ * enabled so the user can clear and unlock Aree gestite.
  */
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { SearchInput, icons } from 'dxc-webkit'
 import { territoryApi } from '@/features/territory'
@@ -22,8 +25,23 @@ export function TerritorySearchInput() {
   const pathValue = hasSelection
     ? territoryPathFromBreadcrumb(nav!.breadcrumb, italiaLabel)
     : ''
+  const areasOn = panel?.greenAssetsLayer?.areasActive === true
+  const assetsOn = panel?.greenAssetsLayer?.active === true
+  const layerOn = areasOn || assetsOn
+  const greenSearchLock = panel?.areasToggleLockedByGreenSearch === true
+  // Layers block territory search; green-search lock keeps Clear available.
+  const blockedByLayers = layerOn && !greenSearchLock
   const searchDisabled =
-    !nav || nav.loading || (panel?.entryMode === 'admin' && panel.adminTerritoryReady === false)
+    !nav ||
+    nav.loading ||
+    (panel?.entryMode === 'admin' && panel.adminTerritoryReady === false) ||
+    blockedByLayers
+
+  // #region agent log
+  useEffect(() => {
+    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'territory-search-gate',hypothesisId:'H-search-toggle',location:'TerritorySearchInput:gate',message:'territory_search_gate',data:{areasOn,assetsOn,layerOn,greenSearchLock,blockedByLayers,searchDisabled,hasNav:!!nav,adminReady:panel?.adminTerritoryReady??null},timestamp:Date.now()})}).catch(()=>{})
+  }, [areasOn, assetsOn, layerOn, greenSearchLock, blockedByLayers, searchDisabled, nav, panel?.adminTerritoryReady])
+  // #endregion
 
   const selectedOptions = useMemo(
     () => (hasSelection && pathValue ? [{ value: pathValue, label: pathValue }] : []),
@@ -141,10 +159,15 @@ export function TerritorySearchInput() {
         debounceTimeMillis={300}
         showArrow
         thick={false}
-        isSearchable
+        isSearchable={!blockedByLayers}
         isClearable
         onClear={handleClear}
         disabled={searchDisabled}
+        helperText={
+          blockedByLayers
+            ? t('territory.panel.territorySearchDisabledByLayers')
+            : undefined
+        }
       />
     </div>
   )

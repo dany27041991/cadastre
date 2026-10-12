@@ -41,5 +41,9 @@ export function clearAssetAndClusterLayerPrefixes(host: GeoinsightGreenClusterHo
     geometry.geom_id.startsWith(GEOM_PREFIX.greenArea)
   )
   host.removeGeomIds(ids)
+  // Count labels are separate geoms ("20\u200BGC_…"); also force vendor label
+  // visibility off when the remount has nothing to add (debug 4fe799).
+  host.addGeometries([], { showLabels: false })
+  host.lastGreenShowClusterCountLabels = false
   return ids
 }

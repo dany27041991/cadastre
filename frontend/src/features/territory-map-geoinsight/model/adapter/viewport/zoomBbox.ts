@@ -128,12 +128,15 @@ export function zoomGeoinsightForClusterDrill(
 export function fitGeoinsightToBboxViaPoint(
   host: GeoinsightMapRuntimeHost,
   bbox: [number, number, number, number] | null,
-  options?: { zoomOffset?: number }
+  options?: { zoomOffset?: number; minPadDegrees?: number }
 ): void {
   if (!isValidBbox(bbox)) {
     return
   }
-  const fitBbox = bufferBbox(bbox)
+  const fitBbox =
+    options?.minPadDegrees != null
+      ? bufferBbox(bbox, undefined, options.minPadDegrees)
+      : bufferBbox(bbox)
   const [lon, lat] = bboxCenter(fitBbox)
   const zoomOffset = options?.zoomOffset ?? 0
   runGeoinsightOrQueue(host, () => {
@@ -145,6 +148,9 @@ export function fitGeoinsightToBboxViaPoint(
       VIEW_MAX_ZOOM,
       Math.max(0, fitZoomForBbox(fitBbox) + zoomOffset)
     )
+    // #region agent log
+    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'persist',hypothesisId:'H-fit-tight',location:'zoomBbox.fitGeoinsightToBboxViaPoint',message:'fit_zoom_target',data:{rawBbox:bbox,fitBbox,lon,lat,targetZoom,zoomOffset,minPadDegrees:options?.minPadDegrees??null},timestamp:Date.now()})}).catch(()=>{})
+    // #endregion
     ref.zoomToPoint(
       getGeoinsightMapId(),
       [lon, lat],

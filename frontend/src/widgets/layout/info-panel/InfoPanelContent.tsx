@@ -9,8 +9,11 @@
  */
 import { useState, useEffect, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'react-toastify'
 import { Button, InfoPanel, icons } from 'dxc-webkit'
 import { useGreenTablePanelOptional } from '@/features/territory/context/GreenTablePanelContext'
+import { findInvalidFilterRange } from '@/features/territory/lib/greenTableFilterFields'
+import { startPerfScan } from '@/features/territory/lib/perfScan'
 import { GreenTablePanelSections } from './GreenTablePanelSections'
 import { LayersPanel } from './LayersPanel'
 import { DrawPromptPanel } from './DrawPromptPanel'
@@ -53,6 +56,10 @@ function InfoPanelFooter({
   primaryWithArrow,
   primaryWithSearchIcon,
   primaryDisabled = false,
+  clearLabel,
+  onClear,
+  showClear = false,
+  clearDisabled = false,
 }: {
   readonly backLabel: string
   readonly onBack: () => void
@@ -62,10 +69,17 @@ function InfoPanelFooter({
   readonly primaryWithArrow?: boolean
   readonly primaryWithSearchIcon?: boolean
   readonly primaryDisabled?: boolean
+  readonly clearLabel?: string
+  readonly onClear?: () => void
+  readonly showClear?: boolean
+  readonly clearDisabled?: boolean
 }) {
   return (
     <div className="Container-button" style={{ overflow: 'hidden' }}>
-      <div className="btn-page-prev-next d-flex align-items-center">
+      <div
+        className="btn-page-prev-next d-flex align-items-center"
+        style={{ justifyContent: 'space-between', width: '100%', gap: '8px' }}
+      >
         <div>
           <Button color="primary" kind="outlined" onClick={onBack}>
             <icons.VectorIcon
@@ -79,8 +93,22 @@ function InfoPanelFooter({
             <div className="infopanel-button-text">{backLabel}</div>
           </Button>
         </div>
-        {showPrimary && primaryLabel && onPrimary ? (
-          <div>
+        <div className="d-flex align-items-center" style={{ gap: '8px' }}>
+          {showClear && clearLabel && onClear ? (
+            <Button
+              color="primary"
+              kind="outlined"
+              onClick={onClear}
+              disabled={clearDisabled}
+            >
+              <div className="infopanel-button-text">{clearLabel}</div>
+              <icons.TrashIcon
+                size="xs"
+                style={{ width: '14px', height: '14px', marginLeft: '8px' }}
+              />
+            </Button>
+          ) : null}
+          {showPrimary && primaryLabel && onPrimary ? (
             <Button
               color="primary"
               kind="filled"
@@ -100,8 +128,8 @@ function InfoPanelFooter({
                 />
               ) : null}
             </Button>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
     </div>
   )
@@ -167,8 +195,41 @@ export function InfoPanelContent() {
   }
 
   const handleSearch = () => {
-    panel?.applyFiltersAndShowResults()
+    if (!panel) return
+    const invalid = findInvalidFilterRange(
+      panel.columnFiltersByKind.area,
+      panel.columnFiltersByKind.asset,
+    )
+    if (invalid) {
+      const fieldLabel = t(`territory.panel.detail.meta.${invalid.baseKey}`, {
+        defaultValue: invalid.baseKey,
+      })
+      toast.error(t('territory.panel.filterRangeInvalid', { field: fieldLabel }))
+      return
+    }
+    const areaKeys = Object.keys(panel.columnFiltersByKind.area)
+    const assetKeys = Object.keys(panel.columnFiltersByKind.asset)
+    // #region agent log
+    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'range-filters',hypothesisId:'H-range',location:'InfoPanelContent.tsx:handleSearch',message:'cerca_range_ok',data:{areaKeys,assetKeys},timestamp:Date.now()})}).catch(()=>{})
+    // #endregion
+    startPerfScan('cerca', { areaKeys, assetKeys })
+    panel.applyFiltersAndShowResults()
   }
+
+  const handleClearFilters = () => {
+    panel?.clearAllSearchFilters()
+  }
+
+  const hasDraftOrAppliedFilters = (() => {
+    if (!panel) return false
+    const maps = [
+      panel.columnFiltersByKind.area,
+      panel.columnFiltersByKind.asset,
+      panel.appliedFiltersByKind.area,
+      panel.appliedFiltersByKind.asset,
+    ]
+    return maps.some((m) => Object.keys(m).length > 0)
+  })()
 
   const handleMonitoraggioSelect = (id: MonitoraggioActionId) => {
     setSelectedId(id)
@@ -242,12 +303,19 @@ export function InfoPanelContent() {
   }
 
   if (step === 'filters') {
+    // #region agent log
+    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'post-fix',hypothesisId:'H3',location:'InfoPanelContent.tsx:filters',message:'filters_step_footer',data:{clearLabel:'Pulisci',clearLeftOfSearch:true,hasClearButton:true,hasSearchButton:true,hasDraftOrAppliedFilters,draftAreaKeys:Object.keys(panel?.columnFiltersByKind.area??{}),draftAssetKeys:Object.keys(panel?.columnFiltersByKind.asset??{}),appliedAreaKeys:Object.keys(panel?.appliedFiltersByKind.area??{}),appliedAssetKeys:Object.keys(panel?.appliedFiltersByKind.asset??{})},timestamp:Date.now()})}).catch(()=>{})
+    // #endregion
     return (
       <PanelShell
         footer={
           <InfoPanelFooter
             backLabel={t('territory.panel.btnBack')}
             onBack={goToLayers}
+            clearLabel={t('territory.panel.btnClearFilters')}
+            onClear={handleClearFilters}
+            showClear
+            clearDisabled={!hasDraftOrAppliedFilters}
             primaryLabel={t('territory.panel.btnSearch')}
             onPrimary={handleSearch}
             showPrimary

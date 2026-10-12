@@ -145,6 +145,9 @@ services:
       # DuckDB httpfs pool (national seed + concurrent zoom exhausted size=4)
       LAKEHOUSE_DUCKDB_POOL_SIZE: ${LAKEHOUSE_DUCKDB_POOL_SIZE:-8}
       LAKEHOUSE_DUCKDB_POOL_WAIT_SEC: ${LAKEHOUSE_DUCKDB_POOL_WAIT_SEC:-8}
+      # Filter-propagation live tests (NDJSON under /app/.filter-test-runtime.ndjson)
+      FILTER_TEST_LOG: ${FILTER_TEST_LOG:-1}
+      FILTER_TEST_LOG_PATH: ${FILTER_TEST_LOG_PATH:-/app/.filter-test-runtime.ndjson}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
       - "${BACKEND_DEBUG_PORT:-5678}:5678"

@@ -1,7 +1,7 @@
 /**
  * InfoPanel multi-field table filters.
  * Shows area and/or asset catalogs based on layer toggles.
- * Controls: SearchInput (enum), DatePicker (dates), Input text/number — dxc-webkit only.
+ * Controls: SearchInput (enum), DatePicker range, Input text/number/range — dxc-webkit only.
  */
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -14,6 +14,10 @@ import {
   filterLayoutFor,
   formatFilterDate,
   parseFilterDate,
+  rangeFromKey,
+  rangeMaxKey,
+  rangeMinKey,
+  rangeToKey,
 } from '@/features/territory/lib/greenTableFilterFields'
 import { Line } from '@/shared/ui'
 import styles from './GreenTablePanelSections.module.css'
@@ -64,12 +68,13 @@ export function GreenTablePanelSections() {
   const renderField = (kind: GreenTableKind, key: string) => {
     const filters = panel.columnFiltersByKind[kind]
     const label = t(`territory.panel.detail.meta.${key}`, { defaultValue: key })
-    const value = filters[key] ?? ''
-    const setValue = (next: string) => panel.setColumnFilter(kind, key, next)
+    const setValue = (filterKey: string, next: string) =>
+      panel.setColumnFilter(kind, filterKey, next)
     const control = filterControlKind(kind, key)
     const fieldKey = `${kind}-${key}`
 
     if (control === 'enum') {
+      const value = filters[key] ?? ''
       return (
         <Box as="div" key={fieldKey} className={styles.field}>
           <SearchInput
@@ -78,7 +83,7 @@ export function GreenTablePanelSections() {
             PlaceholderIcon={icons.SearchIcon}
             options={enumOptionsByKey[key] ?? []}
             value={value}
-            onChange={(v) => setValue(typeof v === 'string' ? v : '')}
+            onChange={(v) => setValue(key, typeof v === 'string' ? v : '')}
             showArrow
             thick={false}
             isSearchable
@@ -88,14 +93,93 @@ export function GreenTablePanelSections() {
       )
     }
 
+    if (control === 'date-range') {
+      const fromKey = rangeFromKey(key)
+      const toKey = rangeToKey(key)
+      const fromVal = filters[fromKey] ?? ''
+      const toVal = filters[toKey] ?? ''
+      return (
+        <Box as="div" key={fieldKey} className={styles.rangePair}>
+          <Text as="p" font="f1-label-sm" className={styles.rangePairLabel}>
+            {label}
+          </Text>
+          <Box as="div" className={styles.rangeRow}>
+            <DatePicker
+              name={`green-filter-${kind}-${fromKey}`}
+              label={t('territory.panel.filterRangeFrom')}
+              value={parseFilterDate(fromVal)}
+              onChange={(date) => setValue(fromKey, formatFilterDate(date ?? null))}
+              locale={dateLocale}
+              placeholder={t('territory.panel.filterDatePlaceholder')}
+              helperText={t('territory.panel.filterDateHelper')}
+              customDateFormat="dd/MM/yyyy"
+              isClearable
+            />
+            <DatePicker
+              name={`green-filter-${kind}-${toKey}`}
+              label={t('territory.panel.filterRangeTo')}
+              value={parseFilterDate(toVal)}
+              onChange={(date) => setValue(toKey, formatFilterDate(date ?? null))}
+              locale={dateLocale}
+              placeholder={t('territory.panel.filterDatePlaceholder')}
+              helperText={t('territory.panel.filterDateHelper')}
+              customDateFormat="dd/MM/yyyy"
+              isClearable
+            />
+          </Box>
+        </Box>
+      )
+    }
+
+    if (control === 'number-range') {
+      const minKey = rangeMinKey(key)
+      const maxKey = rangeMaxKey(key)
+      const minVal = filters[minKey] ?? ''
+      const maxVal = filters[maxKey] ?? ''
+      return (
+        <Box as="div" key={fieldKey} className={styles.rangePair}>
+          <Text as="p" font="f1-label-sm" className={styles.rangePairLabel}>
+            {label}
+          </Text>
+          <Box as="div" className={styles.rangeRow}>
+            <Input
+              name={`green-filter-${kind}-${minKey}`}
+              type="number"
+              inputMode="decimal"
+              step="any"
+              label={t('territory.panel.filterRangeMin')}
+              value={minVal}
+              placeholder={t('territory.panel.filterNumberPlaceholder')}
+              isClearable
+              onClear={() => setValue(minKey, '')}
+              onChange={(v) => setValue(minKey, typeof v === 'string' ? v : '')}
+            />
+            <Input
+              name={`green-filter-${kind}-${maxKey}`}
+              type="number"
+              inputMode="decimal"
+              step="any"
+              label={t('territory.panel.filterRangeMax')}
+              value={maxVal}
+              placeholder={t('territory.panel.filterNumberPlaceholder')}
+              isClearable
+              onClear={() => setValue(maxKey, '')}
+              onChange={(v) => setValue(maxKey, typeof v === 'string' ? v : '')}
+            />
+          </Box>
+        </Box>
+      )
+    }
+
     if (control === 'date') {
+      const value = filters[key] ?? ''
       return (
         <Box as="div" key={fieldKey} className={styles.field}>
           <DatePicker
             name={`green-filter-${kind}-${key}`}
             label={label}
             value={parseFilterDate(value)}
-            onChange={(date) => setValue(formatFilterDate(date ?? null))}
+            onChange={(date) => setValue(key, formatFilterDate(date ?? null))}
             locale={dateLocale}
             placeholder={t('territory.panel.filterDatePlaceholder')}
             helperText={t('territory.panel.filterDateHelper')}
@@ -107,6 +191,7 @@ export function GreenTablePanelSections() {
     }
 
     if (control === 'number' || control === 'integer') {
+      const value = filters[key] ?? ''
       return (
         <Box as="div" key={fieldKey} className={styles.field}>
           <Input
@@ -118,13 +203,14 @@ export function GreenTablePanelSections() {
             value={value}
             placeholder={t('territory.panel.filterNumberPlaceholder')}
             isClearable
-            onClear={() => setValue('')}
-            onChange={(v) => setValue(typeof v === 'string' ? v : '')}
+            onClear={() => setValue(key, '')}
+            onChange={(v) => setValue(key, typeof v === 'string' ? v : '')}
           />
         </Box>
       )
     }
 
+    const value = filters[key] ?? ''
     return (
       <Box as="div" key={fieldKey} className={styles.field}>
         <Input
@@ -134,8 +220,8 @@ export function GreenTablePanelSections() {
           value={value}
           placeholder={t('territory.panel.filterTextPlaceholder')}
           isClearable
-          onClear={() => setValue('')}
-          onChange={(v) => setValue(typeof v === 'string' ? v : '')}
+          onClear={() => setValue(key, '')}
+          onChange={(v) => setValue(key, typeof v === 'string' ? v : '')}
         />
       </Box>
     )

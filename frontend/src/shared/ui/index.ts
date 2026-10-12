@@ -13,4 +13,5 @@ export {
   type SpinnerSize,
 } from '../ui-components'
 export { LoadingState, type LoadingStateProps } from './LoadingState'
+export { TableLoadingState, type TableLoadingStateProps } from './TableLoadingState'
 export { BackNavHeader, type BackNavHeaderProps } from './BackNavHeader'

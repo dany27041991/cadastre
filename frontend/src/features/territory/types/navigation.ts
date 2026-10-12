@@ -85,7 +85,10 @@ export interface MapBridgeGreen {
   clearGreenLayer: () => void
   clearTerritoryLayer: () => void
   clearMapVectorLayers: () => void
-  fitToGreenExtent: (includeTerritoryBbox?: boolean) => void
+  fitToGreenExtent: (
+    includeTerritoryBbox?: boolean,
+    options?: { layerKinds?: ReadonlyArray<'green_area' | 'green_asset' | 'cluster'> }
+  ) => void
   setGreenLayerVisibleWhenMoveEnds: () => void
   ensureGreenLayerVisibleAfterFit: () => void
   /** Hide territory fill so green is not covered by gray during fit animation. */

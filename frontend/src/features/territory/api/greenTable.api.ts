@@ -13,6 +13,8 @@ export interface GreenTablePage {
   page: number
   page_size: number
   total_pages: number
+  /** When false, total is a has_more lower bound (pager shows "di …"). */
+  total_exact?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -58,9 +60,17 @@ function buildTableUrl(
 export async function fetchGreenAssetsTablePaged(
   territoryQuery: string,
   params: GreenTableParams = {},
+  signal?: AbortSignal,
 ): Promise<GreenTablePage> {
   const url = buildTableUrl(`${API_URL}/api/territory/green-assets/table`, territoryQuery, params)
-  const res = await authFetch(url)
+  const t0 = Date.now()
+  // #region agent log
+  fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'pool-storm',hypothesisId:'H-table',location:'greenTable.api:assets',message:'table_http_start',data:{kind:'assets',url:url.slice(0,220)},timestamp:Date.now()})}).catch(()=>{})
+  // #endregion
+  const res = await authFetch(url, signal ? { signal } : undefined)
+  // #region agent log
+  fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'pool-storm',hypothesisId:'H-table',location:'greenTable.api:assets',message:'table_http_done',data:{kind:'assets',status:res.status,ms:Date.now()-t0},timestamp:Date.now()})}).catch(()=>{})
+  // #endregion
   if (!res.ok) throw new Error(`green-assets/table ${res.status}`)
   return res.json() as Promise<GreenTablePage>
 }
@@ -68,9 +78,17 @@ export async function fetchGreenAssetsTablePaged(
 export async function fetchGreenAreasTablePaged(
   territoryQuery: string,
   params: GreenTableParams = {},
+  signal?: AbortSignal,
 ): Promise<GreenTablePage> {
   const url = buildTableUrl(`${API_URL}/api/territory/green-areas/table`, territoryQuery, params)
-  const res = await authFetch(url)
+  const t0 = Date.now()
+  // #region agent log
+  fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'pool-storm',hypothesisId:'H-table',location:'greenTable.api:areas',message:'table_http_start',data:{kind:'areas',url:url.slice(0,220)},timestamp:Date.now()})}).catch(()=>{})
+  // #endregion
+  const res = await authFetch(url, signal ? { signal } : undefined)
+  // #region agent log
+  fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'pool-storm',hypothesisId:'H-table',location:'greenTable.api:areas',message:'table_http_done',data:{kind:'areas',status:res.status,ms:Date.now()-t0},timestamp:Date.now()})}).catch(()=>{})
+  // #endregion
   if (!res.ok) throw new Error(`green-areas/table ${res.status}`)
   return res.json() as Promise<GreenTablePage>
 }

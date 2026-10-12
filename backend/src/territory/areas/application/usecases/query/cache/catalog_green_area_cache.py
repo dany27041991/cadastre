@@ -9,11 +9,19 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from core.cache import CompressedLRUCache
+from core.cache import CompressedTTLCache
+from territory.common.infrastructure.lakehouse.silver.bounded_cache import (
+    GREEN_CATALOG_CACHE_MAXSIZE,
+    GREEN_CATALOG_CACHE_TTL_SEC,
+)
 from territory.geo.domain.entities import GeoJSONFeatureCollection
 
 _EMPTY: GeoJSONFeatureCollection = {"type": "FeatureCollection", "features": []}
-_green_area_cache: CompressedLRUCache = CompressedLRUCache(maxsize=2048)
+# Bounded + TTL: was LRU maxsize=2048 with no expiry (OOM risk under multi-user).
+_green_area_cache: CompressedTTLCache = CompressedTTLCache(
+    maxsize=GREEN_CATALOG_CACHE_MAXSIZE,
+    ttl=GREEN_CATALOG_CACHE_TTL_SEC,
+)
 
 
 def _date_key(repository: Any) -> tuple[str | None, str | None]:

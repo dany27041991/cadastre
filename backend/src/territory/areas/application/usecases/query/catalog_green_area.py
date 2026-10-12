@@ -94,10 +94,48 @@ class CatalogGreenArea:
     ) -> GeoJSONFeatureCollection:
         """Root green areas intersecting the viewport bbox (full geometry).
 
-        Below VIEWPORT_AREAS_MIN_ZOOM areas are not rendered (admin/grid
-        clusters cover those bands), so return an empty collection cheaply.
+        Below VIEWPORT_AREAS_MIN_ZOOM areas are never rendered (admin/grid
+        clusters cover those bands) — including Cerca with attribute filters
+        (debug 4fe799: filters bypass left polygons at z6 + held the loader).
         """
         if zoom < VIEWPORT_AREAS_MIN_ZOOM:
+            # #region agent log
+            try:
+                import json as _json
+                import time as _time
+                import urllib.request as _urlreq
+
+                _payload = _json.dumps(
+                    {
+                        "sessionId": "4fe799",
+                        "runId": "areas-zoom-gate",
+                        "hypothesisId": "H-areas-min-zoom",
+                        "location": "catalog_green_area.viewport_green_areas",
+                        "message": "areas_viewport_skip_zoom",
+                        "data": {
+                            "zoom": zoom,
+                            "min_zoom": VIEWPORT_AREAS_MIN_ZOOM,
+                            "has_filters": bool(filters),
+                            "filter_keys": sorted((filters or {}).keys()),
+                        },
+                        "timestamp": int(_time.time() * 1000),
+                    }
+                ).encode("utf-8")
+                _urlreq.urlopen(
+                    _urlreq.Request(
+                        "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
+                        data=_payload,
+                        headers={
+                            "Content-Type": "application/json",
+                            "X-Debug-Session-Id": "4fe799",
+                        },
+                        method="POST",
+                    ),
+                    timeout=1.5,
+                )
+            except Exception:
+                pass
+            # #endregion
             return _EMPTY_COLLECTION
         result = self._repository.get_roots_in_bbox(
             bbox,
@@ -110,6 +148,57 @@ class CatalogGreenArea:
             clip_wkt=clip_wkt,
             filters=filters,
         )
+        # #region agent log
+        try:
+            import json as _json
+            import time as _time
+            import urllib.request as _urlreq
+
+            _feats = result.get("features") or []
+            _payload = _json.dumps(
+                {
+                    "sessionId": "4fe799",
+                    "runId": "survey-exclude",
+                    "hypothesisId": "H-survey-exclude",
+                    "location": "catalog_green_area.viewport_green_areas",
+                    "message": "areas_viewport_result",
+                    "data": {
+                        "zoom": zoom,
+                        "n_features": len(_feats),
+                        "filter_keys": sorted((filters or {}).keys()),
+                        "filters": {
+                            k: str(v)[:80] for k, v in (filters or {}).items()
+                        },
+                        "survey_date_from": (filters or {}).get("survey_date_from"),
+                        "survey_date_to": (filters or {}).get("survey_date_to"),
+                        "sample_names": [
+                            str((f.get("properties") or {}).get("name") or "")
+                            for f in _feats[:3]
+                        ],
+                        "empty_reason": (
+                            "no_match_filters"
+                            if filters and not _feats
+                            else ("ok" if _feats else "empty_bbox")
+                        ),
+                    },
+                    "timestamp": int(_time.time() * 1000),
+                }
+            ).encode("utf-8")
+            _urlreq.urlopen(
+                _urlreq.Request(
+                    "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
+                    data=_payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Debug-Session-Id": "4fe799",
+                    },
+                    method="POST",
+                ),
+                timeout=1.5,
+            )
+        except Exception:
+            pass
+        # #endregion
         return result
 
     @log_invocation(log_args=True, log_result=False)
@@ -121,8 +210,7 @@ class CatalogGreenArea:
         province_id: int,
         municipality_id: int | None = None,
     ) -> GreenDetailOut:
-        import time
-
+        # Local area ids restart per municipality (id=3 → ZRIL-1-3 vs ZRIL-156-3).
         row = self._repository.get_detail_by_pk(
             area_id,
             region_id,
@@ -136,6 +224,52 @@ class CatalogGreenArea:
         bbox = silver_read.read_asset_bbox(row)
         geometry = silver_read.read_asset_geometry(row)
         out = build_area_detail(row, bbox=bbox, geometry=geometry)
+        # #region agent log
+        try:
+            import json as _json
+            import time as _time
+            import urllib.request as _urlreq
+
+            _payload = _json.dumps(
+                {
+                    "sessionId": "4fe799",
+                    "runId": "id-collision",
+                    "hypothesisId": "H-detail-muni",
+                    "location": "catalog_green_area.get_green_area_detail",
+                    "message": "area_detail_resolved",
+                    "data": {
+                        "req_area_id": area_id,
+                        "req_region_id": region_id,
+                        "req_province_id": province_id,
+                        "req_municipality_id": municipality_id,
+                        "row_municipality_id": row.get("municipality_id"),
+                        "zril": row.get("zril_identifier"),
+                        "name": row.get("name"),
+                        "muni_omitted": municipality_id is None,
+                        "muni_mismatch": (
+                            municipality_id is not None
+                            and int(row.get("municipality_id") or -1)
+                            != int(municipality_id)
+                        ),
+                    },
+                    "timestamp": int(_time.time() * 1000),
+                }
+            ).encode("utf-8")
+            _urlreq.urlopen(
+                _urlreq.Request(
+                    "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
+                    data=_payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Debug-Session-Id": "4fe799",
+                    },
+                    method="POST",
+                ),
+                timeout=1.5,
+            )
+        except Exception:
+            pass
+        # #endregion
         return out
 
     def list_green_areas_table_paged(
@@ -155,7 +289,7 @@ class CatalogGreenArea:
         sort_dir: Literal["asc", "desc"] = "asc",
         filters: dict[str, Any] | None = None,
     ) -> GreenTablePageOut:
-        rows, total = self._repository.list_table_rows_paged(
+        rows, total, total_exact = self._repository.list_table_rows_paged(
             region_id,
             province_id,
             municipality_id,
@@ -177,4 +311,5 @@ class CatalogGreenArea:
             total=total,
             page=page,
             page_size=page_size,
+            total_exact=total_exact,
         )

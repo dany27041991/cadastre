@@ -126,6 +126,59 @@ def get_green_areas_viewport(
         clip_wkt=_clip_wkt_or_400(clip_wkt),
         filters=filters or None,
     )
+    # #region agent log
+    try:
+        import json as _json
+        import time as _time
+        import urllib.request as _urlreq
+
+        _feats = result.get("features") or []
+        _samples = []
+        for _f in _feats[:5]:
+            _p = (_f.get("properties") or {}) if isinstance(_f, dict) else {}
+            _g = (_f.get("geometry") or {}) if isinstance(_f, dict) else {}
+            _samples.append(
+                {
+                    "id": _p.get("id") or _f.get("id"),
+                    "name": _p.get("name"),
+                    "muni": _p.get("municipality_id"),
+                    "gtype": _g.get("type"),
+                    "has_coords": bool(_g.get("coordinates")),
+                }
+            )
+        _payload = _json.dumps(
+            {
+                "sessionId": "4fe799",
+                "runId": "persist",
+                "hypothesisId": "H-viewport-be",
+                "location": "green_area_ctrl.get_green_areas_viewport",
+                "message": "viewport_ctrl_out",
+                "data": {
+                    "zoom": zoom,
+                    "bbox": parts,
+                    "n_features": len(_feats),
+                    "filter_keys": sorted(filters.keys()),
+                    "filters": {k: str(v)[:80] for k, v in filters.items()},
+                    "samples": _samples,
+                },
+                "timestamp": int(_time.time() * 1000),
+            }
+        ).encode("utf-8")
+        _urlreq.urlopen(
+            _urlreq.Request(
+                "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
+                data=_payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Debug-Session-Id": "4fe799",
+                },
+                method="POST",
+            ),
+            timeout=1.5,
+        )
+    except Exception:
+        pass
+    # #endregion
     if not result.get("features"):
         return _empty_response(output_format)
     if output_format == "geobuf":
@@ -134,6 +187,7 @@ def get_green_areas_viewport(
 
 @router.get("/green-areas/table", response_model=GreenTablePageOut)
 def get_green_areas_table(
+    request: Request,
     region_id: int | None = None,
     province_id: int | None = None,
     municipality_id: int | None = None,
@@ -146,48 +200,58 @@ def get_green_areas_table(
     page_size: int = Query(50, ge=1, le=500),
     sort_by: str | None = None,
     sort_dir: Literal["asc", "desc"] = "asc",
-    q: str | None = None,
-    geometry_type: str | None = None,
-    administrative_status: str | None = None,
-    operational_status: str | None = None,
-    survey_status: str | None = None,
-    level: int | None = None,
-    name: str | None = None,
-    zril_identifier: str | None = None,
-    area_code: str | None = None,
-    perimeter_type: str | None = None,
-    intensity_of_fruition: str | None = None,
-    area_classification: str | None = None,
-    istat_classification: str | None = None,
-    survey_date: str | None = None,
-    surface_area_m2: str | None = None,
     date_from: date = _DATE_FROM,
     date_to: date = _DATE_TO,
 ) -> GreenTablePageOut:
-    """Paginated, filtered and sorted green-areas table (no geometry)."""
-    filters = {
-        k: v
-        for k, v in {
-            "q": q,
-            "geometry_type": geometry_type,
-            "perimeter_type": perimeter_type,
-            "administrative_status": administrative_status,
-            "operational_status": operational_status,
-            "survey_status": survey_status,
-            "intensity_of_fruition": intensity_of_fruition,
-            "area_classification": area_classification,
-            "istat_classification": istat_classification,
-            "level": level,
-            "name": name,
-            "zril_identifier": zril_identifier,
-            "area_code": area_code,
-            "survey_date": survey_date,
-            "surface_area_m2": surface_area_m2,
-        }.items()
-        if v is not None
-    }
+    """Paginated, filtered and sorted green-areas table (no geometry).
+
+    Attribute filters use the same product keys as /viewport (``AREA_FILTER_KEYS``),
+    including range ends ``survey_date_from``/``to`` and ``surface_area_m2_min``/``max``.
+    A hand-built Query param list previously dropped those range keys so the table
+    could return rows the map correctly filtered out (debug 4fe799).
+    """
+    filters = collect_filters(request.query_params, AREA_FILTER_KEYS)
+    # #region agent log
+    try:
+        import json as _json
+        import time as _time
+        import urllib.request as _urlreq
+
+        _payload = _json.dumps(
+            {
+                "sessionId": "4fe799",
+                "runId": "survey-exclude",
+                "hypothesisId": "H-survey-exclude",
+                "location": "green_area_ctrl.get_green_areas_table",
+                "message": "table_filters_collected",
+                "data": {
+                    "filter_keys": sorted(filters.keys()),
+                    "filters": {k: str(v)[:80] for k, v in filters.items()},
+                    "raw_query": str(request.url.query)[:400],
+                },
+                "timestamp": int(_time.time() * 1000),
+            }
+        ).encode("utf-8")
+        _urlreq.urlopen(
+            _urlreq.Request(
+                "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
+                data=_payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Debug-Session-Id": "4fe799",
+                },
+                method="POST",
+            ),
+            timeout=1.5,
+        )
+    except Exception:
+        pass
+    # #endregion
     # National (unscoped) table is allowed — same rationale as green-assets/table.
-    return _uc(date_from, date_to).list_green_areas_table_paged(
+    import time as _time_tbl
+
+    _t_tbl = _time_tbl.monotonic()
+    out = _uc(date_from, date_to).list_green_areas_table_paged(
         region_id,
         province_id,
         municipality_id,
@@ -200,8 +264,53 @@ def get_green_areas_table(
         page_size=page_size,
         sort_by=sort_by,
         sort_dir=sort_dir,
-        filters=filters,
+        filters=filters or None,
     )
+    _ms_tbl = int((_time_tbl.monotonic() - _t_tbl) * 1000)
+    # #region agent log
+    try:
+        import json as _json
+        import time as _time
+        import urllib.request as _urlreq
+
+        _rows = getattr(out, "data", None) or []
+        _payload = _json.dumps(
+            {
+                "sessionId": "4fe799",
+                "runId": "perf",
+                "hypothesisId": "H-perf-areas-table",
+                "location": "green_area_ctrl.get_green_areas_table",
+                "message": "table_response",
+                "data": {
+                    "total": getattr(out, "total", None),
+                    "nrows": len(_rows),
+                    "ms_wall": _ms_tbl,
+                    "filter_keys": sorted(filters.keys()),
+                    "survey_date_from": filters.get("survey_date_from"),
+                    "survey_date_to": filters.get("survey_date_to"),
+                    "row_survey_dates": [
+                        str(r.get("survey_date")) for r in _rows[:5] if isinstance(r, dict)
+                    ],
+                },
+                "timestamp": int(_time.time() * 1000),
+            }
+        ).encode("utf-8")
+        _urlreq.urlopen(
+            _urlreq.Request(
+                "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
+                data=_payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Debug-Session-Id": "4fe799",
+                },
+                method="POST",
+            ),
+            timeout=1.5,
+        )
+    except Exception:
+        pass
+    # #endregion
+    return out
 
 # After static paths (viewport/table): otherwise {area_id} steals those segments → 422.
 @router.get("/green-areas/{area_id}", response_model=GreenDetailOut)

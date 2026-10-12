@@ -120,6 +120,7 @@ class GreenAreasLakehouseRepository:
             area_id,
             region_id,
             province_id,
+            municipality_id=municipality_id,
         )
 
     def get_detail_by_pk(
@@ -176,6 +177,106 @@ class GreenAreasLakehouseRepository:
         )
         if municipality_id is None and view_muni_ids is not None and not view_muni_ids:
             return _EMPTY_FC
+
+        # Attribute filters: pin municipality files via silver match (same as
+        # assets filtered_ladder). National bbox + name ILIKE used to open
+        # ~8k parquet and never draw polygons while gold clusters still showed.
+        filter_mode = "none"
+        if filters:
+            catalog = self._resolutions(
+                region_id=region_id,
+                province_id=province_id,
+                municipality_id=municipality_id,
+            )
+            match_munis, filter_mode = silver_read.resolve_matching_municipality_ids(
+                catalog,
+                filters,
+                allow_widespread_shortcircuit=True,
+                date_from=self._date_from,
+                date_to=self._date_to,
+            )
+            if filter_mode == "empty" or match_munis == []:
+                return _EMPTY_FC
+            if match_munis is not None:
+                match_set = set(match_munis)
+                if view_muni_ids is not None:
+                    intersected = [m for m in view_muni_ids if m in match_set]
+                    # Cerca often starts from a prior camera (e.g. Area boost at
+                    # z19) that does not cover matches — empty intersect used to
+                    # drop all villa polygons (debug 4fe799: fit nBboxes=0).
+                    view_muni_ids = (
+                        intersected if intersected else list(match_munis)
+                    )
+                elif municipality_id is None:
+                    view_muni_ids = list(match_munis)
+                if municipality_id is None and not view_muni_ids:
+                    return _EMPTY_FC
+            elif (
+                # probe_wide: still avoid opening every muni in a national bbox
+                view_muni_ids is not None
+                and len(view_muni_ids) > 80
+            ):
+                # perf-opt: pin match_areas to bbox munis (not full catalog).
+                view_set = {int(m) for m in view_muni_ids}
+                catalog_scoped = [
+                    r for r in catalog if int(r.municipality_id) in view_set
+                ]
+                import time as _t_pin
+
+                _t0_pin = _t_pin.monotonic()
+                matches = silver_read.resolve_matching_areas(
+                    catalog_scoped or catalog,
+                    filters,
+                    limit=max(int(limit), 1),
+                    date_from=self._date_from,
+                    date_to=self._date_to,
+                )
+                _ms_pin = int((_t_pin.monotonic() - _t0_pin) * 1000)
+                # #region agent log
+                try:
+                    import json as _json
+                    import urllib.request as _urlreq
+
+                    _payload = _json.dumps(
+                        {
+                            "sessionId": "4fe799",
+                            "runId": "perf-opt",
+                            "hypothesisId": "H-opt-areas-bbox-pin",
+                            "location": "green_areas_lakehouse_repository:bbox",
+                            "message": "areas_probe_wide_pin",
+                            "data": {
+                                "n_catalog": len(catalog),
+                                "n_catalog_scoped": len(catalog_scoped),
+                                "n_view_munis": len(view_muni_ids),
+                                "n_matches": len(matches),
+                                "ms_areas": _ms_pin,
+                                "opt_path": "bbox_scoped_match_areas",
+                            },
+                            "timestamp": int(_t_pin.time() * 1000),
+                        }
+                    ).encode("utf-8")
+                    _urlreq.urlopen(
+                        _urlreq.Request(
+                            "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
+                            data=_payload,
+                            headers={
+                                "Content-Type": "application/json",
+                                "X-Debug-Session-Id": "4fe799",
+                            },
+                            method="POST",
+                        ),
+                        timeout=1.5,
+                    )
+                except Exception:
+                    pass
+                # #endregion
+                if not matches:
+                    return _EMPTY_FC
+                pin = sorted({m[1] for m in matches})
+                pin_set = set(pin)
+                view_muni_ids = [m for m in view_muni_ids if m in pin_set] or pin
+                filter_mode = f"probe_wide_pin:{len(view_muni_ids)}"
+
         resolutions = self._resolutions(
             region_id=region_id,
             province_id=province_id,
@@ -200,7 +301,49 @@ class GreenAreasLakehouseRepository:
             simplify_tolerance_deg=simplify_tolerance_deg,
             filters=filters,
         )
-        return build_green_area_feature_collection(rows)
+        fc = build_green_area_feature_collection(rows)
+        # #region agent log
+        try:
+            import json as _json
+            import time as _time
+            import urllib.request as _urlreq
+
+            _payload = _json.dumps(
+                {
+                    "sessionId": "4fe799",
+                    "runId": "areas-map",
+                    "hypothesisId": "H-areas-scope",
+                    "location": "green_areas_lakehouse_repository.get_roots_in_bbox",
+                    "message": "areas_viewport_done",
+                    "data": {
+                        "n_features": len(fc.get("features") or []),
+                        "n_resolutions": len(resolutions),
+                        "n_view_munis": (
+                            None if view_muni_ids is None else len(view_muni_ids)
+                        ),
+                        "filter_keys": sorted((filters or {}).keys()),
+                        "filter_mode": filter_mode,
+                        "limit": limit,
+                    },
+                    "timestamp": int(_time.time() * 1000),
+                }
+            ).encode("utf-8")
+            _urlreq.urlopen(
+                _urlreq.Request(
+                    "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
+                    data=_payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Debug-Session-Id": "4fe799",
+                    },
+                    method="POST",
+                ),
+                timeout=1.5,
+            )
+        except Exception:
+            pass
+        # #endregion
+        return fc
 
     def get_by_parent(
         self,
@@ -315,7 +458,7 @@ class GreenAreasLakehouseRepository:
         sort_by: str | None = None,
         sort_dir: Literal["asc", "desc"] = "asc",
         filters: dict[str, Any] | None = None,
-    ) -> tuple[list[dict], int]:
+    ) -> tuple[list[dict], int, bool]:
         resolutions = self._resolutions(
             region_id=region_id,
             province_id=province_id,
@@ -336,10 +479,10 @@ class GreenAreasLakehouseRepository:
             if sub_municipal_area_id is not None:
                 sub = self._load_sub_municipal_geom(municipality_id, sub_municipal_area_id)
                 if sub is None:
-                    return [], 0
+                    return [], 0, True
                 clip_geom = sub if clip_geom is None else clip_geom.intersection(sub)
                 if clip_geom is None or clip_geom.is_empty:
-                    return [], 0
+                    return [], 0, True
             if clip_geom is not None:
                 rows = silver_read.read_area_roots_intersecting_geom(
                     resolutions,
@@ -360,7 +503,7 @@ class GreenAreasLakehouseRepository:
             # Without clip_wkt this branch is skipped → national roots (Area Italia unchanged).
             clip_geom = silver_read._parse_clip_geom(clip_wkt)
             if clip_geom is None or clip_geom.is_empty:
-                return [], 0
+                return [], 0, True
             minx, miny, maxx, maxy = clip_geom.bounds
             view_muni_ids = self._municipality_ids_for_view(
                 bbox=(minx, miny, maxx, maxy),
@@ -370,7 +513,7 @@ class GreenAreasLakehouseRepository:
                 province_id=province_id,
             )
             if not view_muni_ids:
-                return [], 0
+                return [], 0, True
             resolutions = self._resolutions(
                 region_id=region_id,
                 province_id=province_id,
@@ -378,7 +521,7 @@ class GreenAreasLakehouseRepository:
                 municipality_ids=view_muni_ids,
             )
             if not resolutions:
-                return [], 0
+                return [], 0, True
             rows = silver_read.read_area_roots_intersecting_clip(
                 resolutions,
                 clip_geom=clip_geom,
@@ -398,4 +541,6 @@ class GreenAreasLakehouseRepository:
             province_id=province_id,
             municipality_id=municipality_id,
             id_allowlist=id_allowlist,
+            date_from=self._date_from,
+            date_to=self._date_to,
         )

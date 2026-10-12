@@ -17,8 +17,10 @@ from territory.common.infrastructure.dto.green_detail_out import GreenDetailOut
 from territory.common.infrastructure.green_table_page_out import GreenTablePageOut
 from territory.common.infrastructure.lakehouse.http_dates import parse_lakehouse_date_range
 from territory.common.infrastructure.lakehouse.table_filters import (
+    AREA_FILTER_KEYS,
     ASSET_FILTER_KEYS,
     collect_filters,
+    collect_prefixed_filters,
 )
 
 router = APIRouter(tags=["territory-assets"])
@@ -119,6 +121,10 @@ def get_green_assets_viewport(
         raise HTTPException(status_code=422, detail="bbox must be minLon,minLat,maxLon,maxLat")
     reset_cluster_over_cap()
     filters = collect_filters(request.query_params, ASSET_FILTER_KEYS)
+    area_filters = collect_prefixed_filters(request.query_params, AREA_FILTER_KEYS)
+    import time as _time_wall
+
+    _t_wall = _time_wall.monotonic()
     result = _uc(date_from, date_to).viewport_green_assets(
         (parts[0], parts[1], parts[2], parts[3]),
         zoom,
@@ -129,7 +135,90 @@ def get_green_assets_viewport(
         green_area_id=green_area_id,
         clip_wkt=_clip_wkt_or_400(clip_wkt),
         filters=filters or None,
+        area_filters=area_filters or None,
     )
+    _ms_wall = int((_time_wall.monotonic() - _t_wall) * 1000)
+    # #region agent log
+    try:
+        import json as _json
+        import time as _time
+        import urllib.request as _urlreq
+
+        _feats = result.get("features") or []
+        _n_cluster = 0
+        _sum_cc = 0
+        _n_raw = 0
+        _sample_cc: list[dict] = []
+        for _f in _feats:
+            _p = (_f or {}).get("properties") or {}
+            if _p.get("cluster") is True:
+                _n_cluster += 1
+                _c = int(_p.get("cluster_count") or 0)
+                _sum_cc += _c
+                if len(_sample_cc) < 5:
+                    _sample_cc.append(
+                        {
+                            "key": _p.get("cluster_key"),
+                            "count": _c,
+                        }
+                    )
+            else:
+                _n_raw += 1
+        _payload = _json.dumps(
+            {
+                "sessionId": "4fe799",
+                "runId": "perf-opt",
+                "hypothesisId": "H-opt-viewport-wall",
+                "location": "green_asset_ctrl.get_green_assets_viewport",
+                "message": "assets_viewport_out",
+                "data": {
+                    "zoom": zoom,
+                    "bbox": parts,
+                    "filter_keys": sorted(filters.keys()),
+                    "filters": {k: str(v)[:80] for k, v in filters.items()},
+                    "area_filter_keys": sorted(area_filters.keys()),
+                    "area_filters": {
+                        k: str(v)[:80] for k, v in area_filters.items()
+                    },
+                    "n_features": len(_feats),
+                    "n_cluster": _n_cluster,
+                    "n_raw": _n_raw,
+                    "sum_cluster_count": _sum_cc,
+                    "sample_clusters": _sample_cc,
+                    "ms_wall": _ms_wall,
+                    "baseline_cold_filtered_ms": 14259,
+                    "kind": (
+                        "clusters"
+                        if _n_cluster and not _n_raw
+                        else (
+                            "raw"
+                            if _n_raw and not _n_cluster
+                            else (
+                                "mixed"
+                                if _n_cluster or _n_raw
+                                else "empty"
+                            )
+                        )
+                    ),
+                },
+                "timestamp": int(_time.time() * 1000),
+            }
+        ).encode("utf-8")
+        _urlreq.urlopen(
+            _urlreq.Request(
+                "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
+                data=_payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Debug-Session-Id": "4fe799",
+                },
+                method="POST",
+            ),
+            timeout=1.5,
+        )
+    except Exception:
+        pass
+    # #endregion
     over_headers = (
         {"X-Cadastre-Cluster-Over-Cap": "1"} if is_cluster_over_cap() else None
     )
@@ -152,94 +241,74 @@ def get_green_assets_viewport(
 
 @router.get("/green-assets/table", response_model=GreenTablePageOut)
 def get_green_assets_table(
+    request: Request,
     region_id: int | None = None,
     province_id: int | None = None,
     municipality_id: int | None = None,
     green_area_id: int | None = None,
     sub_municipal_area_id: int | None = None,
     clip_wkt: str | None = Query(None, description="EPSG:4326 POLYGON/MULTIPOLYGON WKT clip"),
-    # Pagination
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
-    # Sorting
     sort_by: str | None = None,
     sort_dir: Literal["asc", "desc"] = "asc",
-    # Generic free-text search (species / family / genus / variety)
-    q: str | None = None,
-    # Exact-match column filters (non-catalog)
-    asset_type: str | None = None,
-    geometry_type: str | None = None,
-    stability_status: str | None = None,
-    structural_defect: str | None = None,
-    risk_level: str | None = None,
-    maintenance_priority: str | None = None,
-    intervention_type: str | None = None,
-    origin: str | None = None,
-    asset_status: str | None = None,
-    monitoring_required: str | None = None,
-    priority_level_evaluation: str | None = None,
-    managing_entity: str | None = None,
-    # Catalog / ILIKE column filters
-    species: str | None = None,
-    family: str | None = None,
-    genus: str | None = None,
-    variety: str | None = None,
-    plant_code: str | None = None,
-    species_code: str | None = None,
-    area_code: str | None = None,
-    latitude: str | None = None,
-    longitude: str | None = None,
-    survey_date: str | None = None,
-    trunk_diameter_cm: str | None = None,
-    plant_height_m: str | None = None,
-    crown_diameter_m: str | None = None,
-    growth_stage: str | None = None,
-    protection_status: str | None = None,
-    health_status: str | None = None,
     date_from: date = _DATE_FROM,
     date_to: date = _DATE_TO,
 ) -> GreenTablePageOut:
-    """Paginated, filtered and sorted green-assets table (no geometry)."""
-    # Only pass non-None values so the repository iterates a compact dict.
-    filters = {
-        k: v
-        for k, v in {
-            "q": q,
-            "asset_type": asset_type,
-            "geometry_type": geometry_type,
-            "health_status": health_status,
-            "stability_status": stability_status,
-            "structural_defect": structural_defect,
-            "risk_level": risk_level,
-            "maintenance_priority": maintenance_priority,
-            "intervention_type": intervention_type,
-            "growth_stage": growth_stage,
-            "origin": origin,
-            "protection_status": protection_status,
-            "asset_status": asset_status,
-            "monitoring_required": monitoring_required,
-            "priority_level_evaluation": priority_level_evaluation,
-            "managing_entity": managing_entity,
-            "species": species,
-            "family": family,
-            "genus": genus,
-            "variety": variety,
-            "plant_code": plant_code,
-            "species_code": species_code,
-            "area_code": area_code,
-            "latitude": latitude,
-            "longitude": longitude,
-            "survey_date": survey_date,
-            "trunk_diameter_cm": trunk_diameter_cm,
-            "plant_height_m": plant_height_m,
-            "crown_diameter_m": crown_diameter_m,
-        }.items()
-        if v is not None
-    }
+    """Paginated, filtered and sorted green-assets table (no geometry).
+
+    Uses ``ASSET_FILTER_KEYS`` via ``collect_filters`` (same as viewport) so range
+    ends like ``survey_date_from``/``to`` and ``*_min``/``*_max`` are not dropped.
+    """
+    filters = collect_filters(request.query_params, ASSET_FILTER_KEYS)
     # National (unscoped) table is allowed: lakehouse resolves all ingest prefixes
     # in the date window and DuckDB paginates. Concurrent viewport+table can be
     # heavy at full Italy scale — callers use small page_size from the FE.
-    return _uc(date_from, date_to).list_green_assets_table_paged(
+    # #region agent log
+    try:
+        import json as _json
+        import time as _time
+        import urllib.request as _urlreq
+
+        _payload = _json.dumps(
+            {
+                "sessionId": "4fe799",
+                "runId": "asset-cluster-count",
+                "hypothesisId": "H-table",
+                "location": "green_asset_ctrl.get_green_assets_table",
+                "message": "assets_table_in",
+                "data": {
+                    "filter_keys": sorted(filters.keys()),
+                    "filters": {k: str(v)[:80] for k, v in filters.items()},
+                    "page": page,
+                    "page_size": page_size,
+                    "region_id": region_id,
+                    "province_id": province_id,
+                    "municipality_id": municipality_id,
+                    "has_clip": bool(clip_wkt),
+                },
+                "timestamp": int(_time.time() * 1000),
+            }
+        ).encode("utf-8")
+        _urlreq.urlopen(
+            _urlreq.Request(
+                "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
+                data=_payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Debug-Session-Id": "4fe799",
+                },
+                method="POST",
+            ),
+            timeout=1.5,
+        )
+    except Exception:
+        pass
+    # #endregion
+    import time as _time_tbl
+
+    _t_tbl = _time_tbl.monotonic()
+    _page = _uc(date_from, date_to).list_green_assets_table_paged(
         region_id,
         municipality_id,
         province_id=province_id,
@@ -250,8 +319,50 @@ def get_green_assets_table(
         page_size=page_size,
         sort_by=sort_by,
         sort_dir=sort_dir,
-        filters=filters,
+        filters=filters or None,
     )
+    _ms_tbl = int((_time_tbl.monotonic() - _t_tbl) * 1000)
+    # #region agent log
+    try:
+        import json as _json
+        import time as _time
+        import urllib.request as _urlreq
+
+        _payload = _json.dumps(
+            {
+                "sessionId": "4fe799",
+                "runId": "perf",
+                "hypothesisId": "H-perf-table",
+                "location": "green_asset_ctrl.get_green_assets_table",
+                "message": "assets_table_out",
+                "data": {
+                    "filter_keys": sorted(filters.keys()),
+                    "filters": {k: str(v)[:80] for k, v in filters.items()},
+                    "total": getattr(_page, "total", None),
+                    "nrows": len(getattr(_page, "data", None) or []),
+                    "page": page,
+                    "page_size": page_size,
+                    "ms_wall": _ms_tbl,
+                },
+                "timestamp": int(_time.time() * 1000),
+            }
+        ).encode("utf-8")
+        _urlreq.urlopen(
+            _urlreq.Request(
+                "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
+                data=_payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Debug-Session-Id": "4fe799",
+                },
+                method="POST",
+            ),
+            timeout=1.5,
+        )
+    except Exception:
+        pass
+    # #endregion
+    return _page
 
 # After static paths (viewport/table): otherwise {asset_id} steals those segments → 422.
 @router.get("/green-assets/{asset_id}", response_model=GreenDetailOut)

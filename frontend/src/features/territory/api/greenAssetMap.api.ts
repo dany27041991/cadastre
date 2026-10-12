@@ -3,7 +3,10 @@
  * Endpoint: GET /api/territory/green-assets/viewport
  */
 import { API_URL } from '@/shared/config/map'
-import { appendAppliedFilters } from '../lib/appendAppliedFilters'
+import {
+  AREA_FILTER_QUERY_PREFIX,
+  appendAppliedFilters,
+} from '../lib/appendAppliedFilters'
 import {
   createFetcher,
   EMPTY_GEOJSON,
@@ -28,8 +31,13 @@ export type GreenAssetViewportParams = {
   /** Ingest window (ISO YYYY-MM-DD); required by BE (lakehouse-only). */
   dateFrom?: string
   dateTo?: string
-  /** Applied InfoPanel column filters (Cerca commit). */
+  /** Applied InfoPanel asset column filters (Cerca commit). */
   filters?: Readonly<Record<string, string>>
+  /**
+   * Applied area column filters — constrain assets to matching managed areas
+   * (serialized as ``area__*`` query params).
+   */
+  areaFilters?: Readonly<Record<string, string>>
 }
 
 export function buildGreenAssetViewportQuery(
@@ -51,6 +59,7 @@ export function buildGreenAssetViewportQuery(
   if (params.dateFrom) search.set('date_from', params.dateFrom)
   if (params.dateTo) search.set('date_to', params.dateTo)
   appendAppliedFilters(search, params.filters)
+  appendAppliedFilters(search, params.areaFilters, AREA_FILTER_QUERY_PREFIX)
   search.set('format', 'geobuf')
   return search.toString()
 }
@@ -58,7 +67,8 @@ export function buildGreenAssetViewportQuery(
 export interface GreenAssetsApi {
   /** Viewport-sized response: raw assets or server-side grid clusters (bbox+zoom). */
   getGreenAssetsViewport: (
-    params: GreenAssetViewportParams
+    params: GreenAssetViewportParams,
+    init?: RequestInit,
   ) => Promise<GeoJSONFeatureCollection>
 }
 
@@ -72,14 +82,21 @@ export function createGreenAssetsApi(
 
   return {
     getGreenAssetsViewport: async (
-      params: GreenAssetViewportParams
+      params: GreenAssetViewportParams,
+      init?: RequestInit,
     ): Promise<GeoJSONFeatureCollection> => {
       try {
         const path = `/api/territory/green-assets/viewport?${buildGreenAssetViewportQuery(params)}`
-        const collection = await fetchGeobufOrEmpty(path)
+        const collection = await fetchGeobufOrEmpty(path, init)
         return collection
       } catch (err) {
-        // 500 / pool exhausted: keep map usable; next settle refresh retries.
+        if (init?.signal?.aborted) throw err
+        // #region agent log
+        fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'villa-clusters',hypothesisId:'H-api-swallow',location:'greenAssetMap.api:viewport',message:'assets_viewport_api_err',data:{err:String(err),zoom:params.zoom,hasAreaFilters:!!params.areaFilters},timestamp:Date.now()})}).catch(()=>{})
+        // #endregion
+        // NetworkError must surface as transportFail (debug 4fe799 name=area).
+        if (/NetworkError|Failed to fetch/i.test(String(err))) throw err
+        // Other 500 / pool: keep map usable; next settle refresh retries.
         return EMPTY_GEOJSON
       }
     },

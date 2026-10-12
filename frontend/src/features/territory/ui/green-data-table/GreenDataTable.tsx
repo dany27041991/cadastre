@@ -10,7 +10,7 @@ import './green-data-table.css'
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Box, Button, CustomTable, Text, icons } from 'dxc-webkit'
-import { LoadingState } from '@/shared/ui'
+import { TableLoadingState } from '@/shared/ui'
 import { useGreenTablePanel } from '../../context/GreenTablePanelContext'
 import { GreenTableColumnPicker } from './GreenTableColumnPicker'
 import type { GreenTableRawRow } from './GreenTableRowActions'
@@ -111,7 +111,7 @@ export function GreenDataTable({
 
   const tableLoader = (
     <Box as="div" className="green-data-table-body__loader">
-      <LoadingState size="l" label={t('territory.loading')} />
+      <TableLoadingState ariaLabel={t('territory.loading')} />
     </Box>
   )
 
@@ -155,6 +155,9 @@ export function GreenDataTable({
   }
 
   if (!loading && total === 0) {
+    // #region agent log
+    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'empty-table',hypothesisId:'H-empty-ui',location:'GreenDataTable.tsx:empty',message:'table_ui_empty',data:{tableKind,showGreenAssets,total,hasPageData:pageData!=null,nrows:pageData?.data?.length??0,baseQuery:(baseQuery??'').slice(0,180),filters:activeColumnFilters,filterKeys:Object.keys(activeColumnFilters??{})},timestamp:Date.now()})}).catch(()=>{})
+    // #endregion
     return (
       <Box as="div" className="green-data-table" padding="m" style={{ width: '100%' }}>
         {drillHeader}

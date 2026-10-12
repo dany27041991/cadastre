@@ -19,6 +19,7 @@ import {
   setPanCurrentViewportIds,
 } from './panStalePrune'
 import type { GeoinsightGreenClusterHost } from './types'
+import { markPerfScan } from '@/features/territory/lib/perfScan'
 
 function registerPayloadEntries(
   host: GeoinsightGreenClusterHost,
@@ -26,10 +27,12 @@ function registerPayloadEntries(
 ): void {
   for (const entry of payload.registryEntries) {
     host.registry.register(entry)
+    // Alias for any labeled cluster (incl. count=1) so hide/clear removes
+    // "N\u200BGC_…" vendor geoms (debug 4fe799 toggle left orphan counts).
     if (
       payload.showClusterCountLabels &&
       entry.isCluster &&
-      (entry.memberCount ?? 0) > 1
+      (entry.memberCount ?? 0) >= 1
     ) {
       host.registry.registerAlias(
         clusterLabelGeomId(entry.memberCount ?? 0, entry.geomId),
@@ -62,8 +65,15 @@ export function appendGreenAreaViewportFeatures(
         buildGreenAreaGeomId(id, municipalityIdFromProperties(properties)),
     }
   )
+  // Thin/sliver MultiPolygons are easy to miss without a stroke.
+  for (const geometry of geometries) {
+    geometry.stroke_width = 3
+  }
   // Areas first: polygons render under asset points/clusters (add order = z-order).
   payload.geometries.unshift(...geometries)
+  // #region agent log
+  fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'persist',hypothesisId:'H-wkt',location:'mountPayload.appendGreenAreaViewportFeatures',message:'areas_appended',data:{nIn:areasCollection.features?.length??0,nGeom:geometries.length,nMeta:metas.length,sample:metas.slice(0,3).map((m,i)=>({geomId:m.geomId,id:m.id,label:m.label,bbox:m.bbox,wktLen:(geometries[i]?.data??'').length,wktHead:String(geometries[i]?.data??'').slice(0,100)}))},timestamp:Date.now()})}).catch(()=>{})
+  // #endregion
   for (const meta of metas) {
     const source = areasCollection.features?.find((f) => {
       const props = (f.properties ?? {}) as Record<string, unknown>
@@ -91,8 +101,15 @@ export function mountGreenPayload(
   host: GeoinsightGreenClusterHost,
   payload: GreenClusterLayerPayload,
   zoom: number,
-  meta: { rawMode: boolean; fullReplace?: boolean; reason?: string }
+  meta: {
+    rawMode: boolean
+    fullReplace?: boolean
+    reason?: string
+    /** Keep GC_/GS_ while mounting areas-only (zoom flash — debug 4fe799). */
+    preserveAssets?: boolean
+  }
 ): void {
+  const tMount0 = performance.now()
   const rawMode = meta.rawMode
   // Zoom / mode changes must replace asset+cluster geometries (stale GC_ among
   // raw GS_ otherwise linger). Area polygons (GA_) keep stable ids — wipe+remount
@@ -101,7 +118,11 @@ export function mountGreenPayload(
     host.lastAppliedGreenAssetZoom == null ||
     Math.abs(zoom - host.lastAppliedGreenAssetZoom) > 1e-6
   const replaceAssets =
-    meta.fullReplace === true || rawMode !== host.lastAppliedRawMode || zoomChanged
+    meta.preserveAssets === true
+      ? false
+      : meta.fullReplace === true ||
+        rawMode !== host.lastAppliedRawMode ||
+        zoomChanged
 
   const prevAreaCountBeforeClear = host.lastGreenGeometries.filter(isAreaGeom).length
   if (replaceAssets) {
@@ -114,16 +135,25 @@ export function mountGreenPayload(
   const prevIdSet = new Set(prevGeometries.map((geometry) => geometry.geom_id))
   const payloadHasAreas = payload.geometries.some(isAreaGeom)
   const prevAreas = prevGeometries.filter(isAreaGeom)
+  const prevAssets = prevGeometries.filter((geometry) => !isAreaGeom(geometry))
   let toAdd = payload.geometries.filter((geometry) => !prevIdSet.has(geometry.geom_id))
   const stale = prevGeometries.filter((geometry) => !nextIds.has(geometry.geom_id))
   let toRemove: string[] = []
   let mountedGeometries = payload.geometries
   let branch = 'full-diff'
 
-  // Payload is source of truth for GA_. Empty payload (zoom < min, areas off,
-  // or no areas in bbox) MUST drop previously mounted areas — re-queueing them
-  // left polygons stuck on screen after zoom-out below GREEN_AREAS_VIEWPORT_MIN_ZOOM.
-  if (!payloadHasAreas && prevAreas.length > 0) {
+  // Areas-only mount during zoom/pan: update GA_ but keep existing GC_/GS_
+  // until the assets fetch completes (debug 4fe799 cluster flash).
+  if (meta.preserveAssets === true) {
+    const staleAreas = stale.filter(isAreaGeom)
+    toRemove = staleAreas.map((geometry) => geometry.geom_id)
+    for (const id of toRemove) {
+      host.registry.removeByGeomId(id)
+    }
+    toAdd = payload.geometries.filter((geometry) => !prevIdSet.has(geometry.geom_id))
+    mountedGeometries = [...prevAssets, ...payload.geometries]
+    branch = 'preserve-assets'
+  } else if (!payloadHasAreas && prevAreas.length > 0) {
     toRemove = prevAreas.map((geometry) => geometry.geom_id)
     for (const id of toRemove) {
       host.registry.removeByGeomId(id)
@@ -211,20 +241,72 @@ export function mountGreenPayload(
   }
 
   const mountedAreaCount = mountedGeometries.filter(isAreaGeom).length
+  const toAddAreas = toAdd.filter(isAreaGeom)
+  const gaSample = toAddAreas.slice(0, 3).map((g) => ({
+    id: g.geom_id,
+    wktLen: (g.data ?? '').length,
+    wktHead: String(g.data ?? '').slice(0, 80),
+    color: g.color,
+  }))
 
   registerPayloadEntries(host, payload)
   setPanCurrentViewportIds(
     host,
     new Set(mountedGeometries.map((geometry) => geometry.geom_id))
   )
+  // Areas-early / preserveAssets payloads often have no clusters →
+  // showClusterCountLabels=false. Must NOT turn vendor labels off while GC_
+  // circles are still mounted (debug 4fe799: zoom kills the count number).
+  const prevShowLabels = host.lastGreenShowClusterCountLabels
+  const effectiveShowLabels =
+    payload.showClusterCountLabels ||
+    (meta.preserveAssets === true &&
+      prevShowLabels === true &&
+      prevAssets.length > 0)
   host.lastGreenGeometries = mountedGeometries
-  host.lastGreenShowClusterCountLabels = payload.showClusterCountLabels
+  host.lastGreenShowClusterCountLabels = effectiveShowLabels
   host.lastAppliedGreenAssetZoom = zoom
   host.lastAppliedRawMode = rawMode
 
+  const willAdd =
+    host.greenLayerVisible === true && toAdd.length > 0
+  // Always sync label visibility after a replace that drops clusters — even
+  // when toAdd is empty (debug 4fe799: toggle off left "20" text on map).
+  const syncLabels =
+    replaceAssets || willAdd || effectiveShowLabels === false || meta.preserveAssets === true
+  // #region agent log
+  const mountedClusters = mountedGeometries.filter((g) => !isAreaGeom(g)).length
+  const payloadClusterEntries = (payload.registryEntries ?? []).filter(
+    (e) => e.layerKind === 'cluster' || e.isCluster === true,
+  )
+  const payloadSumClusterCount = payloadClusterEntries.reduce(
+    (s, e) => s + (Number(e.memberCount) || 0),
+    0,
+  )
+  const payloadRawAssets = (payload.registryEntries ?? []).filter(
+    (e) => e.layerKind === 'green_asset',
+  ).length
+  const labelIdsOnHost = mountedGeometries
+    .map((g) => g.geom_id)
+    .filter((id) => id.includes('\u200B'))
+  fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'toggle-labels',hypothesisId:'H-zoom-labels',location:'mountPayload.mountGreenPayload',message:'mount_diff',data:{zoom,reason:meta.reason??null,branch,greenLayerVisible:host.greenLayerVisible,willAdd,toAdd:toAdd.length,toAddAreas:toAddAreas.length,toRemove:toRemove.length,mountedAreaCount,mountedClusters,payloadHasAreas,prevAreaCountBeforeClear,gaSample,replaceAssets,preserveAssets:meta.preserveAssets===true,payloadNClusters:payloadClusterEntries.length,payloadSumClusterCount,payloadRawAssets,rawMode,syncLabels,showClusterCountLabels:payload.showClusterCountLabels,effectiveShowLabels,prevShowLabels,labelIdsOnHost:labelIdsOnHost.slice(0,5),sampleClusterCounts:payloadClusterEntries.slice(0,5).map(e=>({geomId:e.geomId,count:e.memberCount,label:e.label}))},timestamp:Date.now()})}).catch(()=>{})
+  // #endregion
+
   if (toRemove.length > 0) host.removeGeomIds(toRemove)
-  if (host.greenLayerVisible && toAdd.length > 0) {
-    host.addGeometries(toAdd, { showLabels: payload.showClusterCountLabels })
+  if (willAdd) {
+    host.addGeometries(toAdd, { showLabels: effectiveShowLabels })
+  } else if (syncLabels) {
+    host.addGeometries([], { showLabels: effectiveShowLabels })
   }
   reassertGreenDetailHighlight(host as unknown as GreenDetailHighlightHost)
+  markPerfScan('mount_payload', {
+    zoom,
+    reason: meta.reason ?? null,
+    branch,
+    ms: Math.round(performance.now() - tMount0),
+    toAdd: toAdd.length,
+    toRemove: toRemove.length,
+    mountedClusters,
+    mountedAreaCount,
+  })
 }

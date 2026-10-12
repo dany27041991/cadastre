@@ -3,7 +3,7 @@
  * Follows pan/zoom by reprojecting the geographic anchor to screen coords.
  */
 import type { CSSProperties, FC, ReactNode } from 'react'
-import { useLayoutEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Box, Button, FloatingPanel, Text } from 'dxc-webkit'
 import { Spinner } from '@/shared/ui'
@@ -124,6 +124,28 @@ export const GreenDetailModal: FC<GreenDetailModalProps> = ({
     selection?.anchorLat,
     (clientX, clientY) => setScreen({ clientX, clientY })
   )
+
+  // #region agent log
+  useEffect(() => {
+    if (!isOpen || !selection) return
+    const panelWidth = Math.min(560, window.innerWidth - 32)
+    const left = clampPanelLeft(screen.clientX, panelWidth)
+    const placeBelow = window.innerHeight - screen.clientY >= PREFER_BELOW_MIN_PX
+    const mapEl =
+      typeof document !== 'undefined'
+        ? document.querySelector('.ol-viewport') ??
+          document.querySelector('[aria-label="Map view"]')
+        : null
+    const mapRect = mapEl?.getBoundingClientRect()
+    const expect50_20 = mapRect
+      ? {
+          clientX: Math.round(mapRect.left + mapRect.width * 0.5),
+          clientY: Math.round(mapRect.top + mapRect.height * 0.2),
+        }
+      : null
+    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'asset-pos',hypothesisId:'H5-layout',location:'GreenDetailModal:layout',message:'panel_layout',data:{status,kind:selection.kind,id:selection.id,screen,selClientX:selection.clientX,selClientY:selection.clientY,anchorLon:selection.anchorLon,anchorLat:selection.anchorLat,left,placeBelow,arrow:placeBelow?'up':'down',topOrBottom:placeBelow?screen.clientY+ANCHOR_GAP_PX:-(window.innerHeight-screen.clientY+ANCHOR_GAP_PX),expect50_20,dxVsExpect:expect50_20?screen.clientX-expect50_20.clientX:null,dyVsExpect:expect50_20?screen.clientY-expect50_20.clientY:null,mapRect:mapRect?{l:mapRect.left,t:mapRect.top,w:mapRect.width,h:mapRect.height}:null,innerW:window.innerWidth,innerH:window.innerHeight},timestamp:Date.now()})}).catch(()=>{})
+  }, [isOpen, selection?.id, selection?.kind, selection?.clientX, selection?.clientY, selection?.anchorLon, selection?.anchorLat, status, screen.clientX, screen.clientY])
+  // #endregion
 
   if (!isOpen || !selection) return null
 

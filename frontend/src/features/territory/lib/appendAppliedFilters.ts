@@ -25,15 +25,19 @@ export const FILTER_SCOPE_DENYLIST: ReadonlySet<string> = new Set([
   'sort_dir',
 ])
 
+/** Prefix for area filters on asset /viewport (BE collect_prefixed_filters). */
+export const AREA_FILTER_QUERY_PREFIX = 'area__'
+
 export function appendAppliedFilters(
   search: URLSearchParams,
   filters: Readonly<Record<string, string>> | null | undefined,
+  prefix = '',
 ): void {
   if (!filters) return
   for (const [key, raw] of Object.entries(filters)) {
     if (FILTER_SCOPE_DENYLIST.has(key)) continue
     const value = raw?.trim()
     if (!value) continue
-    search.set(key, value)
+    search.set(`${prefix}${key}`, value)
   }
 }

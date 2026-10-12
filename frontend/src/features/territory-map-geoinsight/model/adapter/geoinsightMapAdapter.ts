@@ -198,8 +198,8 @@ export class GeoinsightMapAdapter implements GeoinsightMapRuntimeHost, Geoinsigh
       clearGreenLayer: () => clearGreenLayer(this),
       clearTerritoryLayer: () => clearTerritoryLayer(this),
       clearMapVectorLayers: () => clearAllVectorLayers(this),
-      fitToGreenExtent: (includeTerritoryBbox?: boolean) =>
-        fitGreenExtent(this, includeTerritoryBbox ?? true),
+      fitToGreenExtent: (includeTerritoryBbox?: boolean, options?) =>
+        fitGreenExtent(this, includeTerritoryBbox ?? true, options),
       setGreenLayerVisibleWhenMoveEnds: () => setGreenLayerVisibleWhenMoveEnds(this),
       ensureGreenLayerVisibleAfterFit: () => ensureGreenLayerVisibleAfterFit(this),
       setTerritoryFillVisible: (visible) => setTerritoryFillVisible(this, visible),
@@ -346,8 +346,11 @@ export class GeoinsightMapAdapter implements GeoinsightMapRuntimeHost, Geoinsigh
     clearAllVectorLayers(this)
   }
 
-  fitToGreenExtent(includeTerritoryBbox = true): void {
-    fitGreenExtent(this, includeTerritoryBbox)
+  fitToGreenExtent(
+    includeTerritoryBbox = true,
+    options?: { layerKinds?: ReadonlyArray<'green_area' | 'green_asset' | 'cluster'> }
+  ): void {
+    fitGreenExtent(this, includeTerritoryBbox, options)
   }
 
   setTerritoryFillVisible(visible: boolean): void {

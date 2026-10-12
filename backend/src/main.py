@@ -24,7 +24,7 @@ os.environ["TZ"] = settings.app_timezone
 if hasattr(time, "tzset"):
     time.tzset()
 from core.exceptions import register_exception_handlers
-from core.middleware import add_gzip_middleware
+from core.middleware import add_filter_test_headers_middleware, add_gzip_middleware
 
 app = FastAPI(
     title="Tree Cadastre API",
@@ -34,6 +34,7 @@ app = FastAPI(
 
 register_exception_handlers(app)
 add_gzip_middleware(app)
+add_filter_test_headers_middleware(app)
 
 if settings.auth_middleware_active:
     try:

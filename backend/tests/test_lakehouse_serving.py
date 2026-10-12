@@ -323,6 +323,78 @@ def test_wide_select_rows_skips_via_gold_counts(monkeypatch):
     assert "municipality_id=5" in executed[0] or "green_areas/municipality_id=5" in executed[0]
 
 
+def test_wide_select_rows_filtered_skips_empty_via_presence(monkeypatch):
+    """Attribute filters: presence>0 allowlist + one SELECT (no density ORDER BY)."""
+    from datetime import date
+
+    from territory.common.infrastructure.lakehouse.catalog import IngestResolution
+    from territory.common.infrastructure.lakehouse import silver_read
+
+    resolutions = [
+        IngestResolution(
+            municipality_id=i,
+            region_id=1,
+            province_id=1,
+            dataset="areas",
+            ingest_at=date(2024, 6, 1),
+            object_prefix=f"green_areas/municipality_id={i}",
+        )
+        for i in range(1, 6)
+    ]
+
+    def _fake_gold(_r, where: str, require_complete: bool = True):
+        # Exact filtered where → no gold; presence: muni 3 stub (8), 5 dense (30).
+        # Floor 0 keeps both nonempty munis so national search stays complete.
+        if "ILIKE" in where:
+            return None
+        return {1: 0, 2: 0, 3: 8, 4: 0, 5: 30}
+
+    monkeypatch.setattr(silver_read, "_muni_counts_from_gold", _fake_gold)
+    monkeypatch.setattr(silver_read, "_allowlist_mid_cache", {})
+
+    executed: list[str] = []
+
+    class _FakeCon:
+        def execute(self, sql: str):
+            executed.append(" ".join(sql.split()))
+
+            class _R:
+                def fetchall(self_inner):
+                    return [(99,), (100,)]
+
+                def fetchone(self_inner):
+                    raise AssertionError("COUNT(*) must not run on filtered wide path")
+
+            return _R()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(silver_read, "connect_lakehouse", lambda: _FakeCon())
+
+    rows = silver_read._wide_select_rows(
+        resolutions,
+        where_sql="1=1 AND parent_id IS NULL AND CAST(name AS VARCHAR) ILIKE '%Parco%'",
+        select_cols="id",
+        order_col="id",
+        order_dir="ASC",
+        offset=0,
+        page_size=5,
+        stub="areas",
+    )
+    assert rows == [(99,), (100,)]
+    assert len(executed) == 1
+    sql = executed[0]
+    assert "count(*)" not in sql.lower()
+    assert "LIMIT 5" in sql
+    assert "OFFSET 0" in sql
+    assert "municipality_id=5" in sql
+    assert "municipality_id=3" in sql  # stub presence>0 included (floor 0)
+    assert "municipality_id=1" not in sql  # empty excluded
+    assert "ORDER BY id ASC" in sql
+    assert "municipality_id ASC" not in sql
+
+
 def test_lakehouse_gold_admin_clusters_from_minio():
     """Requires MinIO fixture with gold (run_seed_fixture_lakehouse.sh)."""
     import os

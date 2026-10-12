@@ -12,20 +12,18 @@
  */
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import type { GeoJSONFeatureCollection } from '@/shared/types'
-import { territoryApi } from '../../api/territory.api'
-import type { BreadcrumbCrumb, GreenContext } from '../../types'
+import type { BreadcrumbCrumb } from '../../types'
 import {
   getGreenContext,
   greenContextKey,
   isGreenMapLevel,
 } from '../../lib/greenMapContext'
-import { fetchGreenAreasForDrillScope } from '../../lib/greenAreaDrill'
 import { LEVEL_SUB_AREAS } from '../constants'
-
-const EMPTY_FEATURE_COLLECTION: GeoJSONFeatureCollection = {
-  type: 'FeatureCollection',
-  features: [],
-}
+import {
+  startViewportMode,
+  startAreasOnlyViewportMode,
+} from '../fetchers/greenAssetsViewportFetch'
+import { cancelScheduledFilterFits, hasAppliedFilters } from './fitAfterFilter'
 
 export interface UseGreenAssetsLayerOptions {
   readonly breadcrumb: BreadcrumbCrumb[]
@@ -44,7 +42,10 @@ export interface UseGreenAssetsLayerOptions {
   readonly setGreenLayerVisible: (visible: boolean) => void
   readonly clearGreenLayer: () => void
   readonly restoreGreenAreas?: (options?: { skipFit?: boolean }) => Promise<void>
-  readonly fitToGreenExtent: () => void
+  readonly fitToGreenExtent: (
+    includeTerritoryBbox?: boolean,
+    options?: { layerKinds?: ReadonlyArray<'green_area' | 'green_asset' | 'cluster'> }
+  ) => void
   readonly setTerritoryFillVisible: (visible: boolean) => void
   readonly onBeforeLoadingAssets?: () => void
   readonly assetsLayerActive: boolean
@@ -72,117 +73,6 @@ export interface UseGreenAssetsLayerResult {
   readonly available: boolean
   readonly setAssetsActive: (active: boolean) => void
   readonly setAreasActive: (active: boolean) => void
-}
-
-type ViewportFetcher = UseGreenAssetsLayerOptions['loadGreenLayerViewport']
-
-function scopeFromContext(context: GreenContext) {
-  return {
-    regionId: context.regionId,
-    provinceId: context.provinceId,
-    municipalityId: context.municipalityId,
-    subMunicipalAreaId: context.subMunicipalAreaId,
-  }
-}
-
-type AppliedFilters = Readonly<Record<string, string>> | null | undefined
-
-function filtersOrUndef(filters: AppliedFilters): AppliedFilters {
-  if (!filters || Object.keys(filters).length === 0) return undefined
-  return filters
-}
-
-function areasFetcherFor(
-  context: GreenContext,
-  clipWkt?: string | null,
-  dateFrom?: string | null,
-  dateTo?: string | null,
-  areaFilters?: AppliedFilters,
-) {
-  const scope = scopeFromContext(context)
-  const greenAreaId = context.greenAreaId
-  const filters = filtersOrUndef(areaFilters)
-  // After Esplodi / Seleziona: keep companion areas inside the drilled scope
-  // (viewport roots would re-show every municipality area).
-  if (
-    greenAreaId != null &&
-    scope.regionId != null &&
-    scope.provinceId != null
-  ) {
-    const fetchAreas = (params: Parameters<typeof territoryApi.getGreenAreas>[0]) =>
-      territoryApi.getGreenAreas({
-        ...params,
-        ...(dateFrom ? { dateFrom } : {}),
-        ...(dateTo ? { dateTo } : {}),
-        ...(filters ? { filters } : {}),
-      })
-    return async () =>
-      fetchGreenAreasForDrillScope(
-        fetchAreas,
-        greenAreaId,
-        scope.regionId as number,
-        scope.provinceId as number,
-        scope.municipalityId
-      )
-  }
-  return (bbox: [number, number, number, number], zoom: number) =>
-    territoryApi.getGreenAreasViewport({
-      bbox,
-      zoom,
-      ...scope,
-      ...(clipWkt ? { clipWkt } : {}),
-      ...(dateFrom ? { dateFrom } : {}),
-      ...(dateTo ? { dateTo } : {}),
-      ...(filters ? { filters } : {}),
-    })
-}
-
-function startViewportMode(
-  context: GreenContext,
-  loadGreenLayerViewport: ViewportFetcher,
-  includeAreas: boolean,
-  clipWkt?: string | null,
-  dateFrom?: string | null,
-  dateTo?: string | null,
-  areaFilters?: AppliedFilters,
-  assetFilters?: AppliedFilters,
-): void {
-  const scope = scopeFromContext(context)
-  const greenAreaId = context.greenAreaId
-  const filters = filtersOrUndef(assetFilters)
-  const assetsFetcher = (bbox: [number, number, number, number], zoom: number) =>
-    territoryApi.getGreenAssetsViewport({
-      bbox,
-      zoom,
-      greenAreaId,
-      ...scope,
-      ...(clipWkt ? { clipWkt } : {}),
-      ...(dateFrom ? { dateFrom } : {}),
-      ...(dateTo ? { dateTo } : {}),
-      ...(filters ? { filters } : {}),
-    })
-  loadGreenLayerViewport(
-    assetsFetcher,
-    includeAreas
-      ? areasFetcherFor(context, clipWkt, dateFrom, dateTo, areaFilters)
-      : undefined,
-  )
-}
-
-/** Assets off + areas on: keep area polygons via empty assets + areas companion. */
-function startAreasOnlyViewportMode(
-  context: GreenContext,
-  loadGreenLayerViewport: ViewportFetcher,
-  clipWkt?: string | null,
-  dateFrom?: string | null,
-  dateTo?: string | null,
-  areaFilters?: AppliedFilters,
-): void {
-  const emptyAssets = async () => EMPTY_FEATURE_COLLECTION
-  loadGreenLayerViewport(
-    emptyAssets,
-    areasFetcherFor(context, clipWkt, dateFrom, dateTo, areaFilters),
-  )
 }
 
 export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGreenAssetsLayerResult {
@@ -228,6 +118,9 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     // restart viewport while assetsLayerActive prop is still true.
     assetsLayerActiveRef.current = false
     onAssetsLayerActiveChange(false)
+    // #region agent log
+    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'toggle-labels',hypothesisId:'H-toggle-labels',location:'useGreenAssetsLayer.turnOffAssetsLayer',message:'assets_toggle_off',data:{areasStillOn:areasLayerActiveRef.current,clipReady},timestamp:Date.now()})}).catch(()=>{})
+    // #endregion
     if (areasLayerActiveRef.current) {
       if (!clipReady) {
         setGreenLayerVisible(false)
@@ -236,6 +129,8 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
         return
       }
       setLoading(true)
+      // Areas-only remount fullReplace + showLabels:false (vendorOps) drops
+      // GC_/count text without wiping GA_ via clearGreenLayer.
       startAreasOnlyViewportMode(
         context,
         loadGreenLayerViewport,
@@ -323,6 +218,9 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     }
     setLoading(true)
     // Includes sub_areas: greenAreaId scopes clusters/trees to the drilled area.
+    // #region agent log
+    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'persist',hypothesisId:'H-toggle',location:'useGreenAssetsLayer.ts:assetsFollow',message:'toggle_state',data:{assetsLayerActive,areasLayerActive,includeAreas:areasLayerActiveRef.current,areaFilterKeys:Object.keys(areaFilters??{}),assetFilterKeys:Object.keys(assetFilters??{}),filtersRevision,contextKey:contextKey.slice(0,120)},timestamp:Date.now()})}).catch(()=>{})
+    // #endregion
     startViewportMode(
       context,
       loadGreenLayerViewport,
@@ -335,8 +233,14 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     )
     setGreenLayerVisible(true)
     // Preserve zoom on sub-area drill — fitting children bbox often zooms out.
+    // Cerca must NOT move the camera (debug 4fe799: fit on gold-20 then villa areas).
     if (greenLevel && level !== LEVEL_SUB_AREAS) {
       fitToGreenExtent()
+    } else if (hasAppliedFilters(areaFilters, assetFilters)) {
+      cancelScheduledFilterFits('cerca-no-camera')
+      // #region agent log
+      fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'cerca-no-cam',hypothesisId:'H-no-fit',location:'useGreenAssetsLayer.ts:assetsFollow',message:'cerca_camera_skip',data:{why:'no-fit-after-cerca',areaFilterKeys:Object.keys(areaFilters??{}),assetFilterKeys:Object.keys(assetFilters??{})},timestamp:Date.now()})}).catch(()=>{})
+      // #endregion
     }
     setLoading(false)
   }, [

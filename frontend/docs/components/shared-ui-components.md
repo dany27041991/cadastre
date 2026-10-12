@@ -10,25 +10,30 @@ Il modulo espone wrapper comuni su **dxc-webkit** per riuso e stile uniforme. Pr
 | **ButtonInv** | Pulsante in stile “invertito” (titolo, iconName, onClick, danger, style). |
 | **Line** | Separatore orizzontale (hr con stile tema). |
 | **Spinner** | `Loader` circle dxc-webkit (verde). Props: `size`, `ariaLabel`. |
-| **LoadingState** | Spinner + label opzionale (blocco caricamento riusabile). |
+| **LoadingState** | Spinner circle verde + label (overlay mappa). |
+| **TableLoadingState** | Tre `Spinner` grow `color="primary"` (blu) + label — distinto dal loader mappa. |
 | **BackNavHeader** | Chip outlined a destra + titolo/hint (navigazione indietro). Props: `titleLabel` (es. «Nome area gestita»). |
 | **DummyIcon** | Icona placeholder (SVG grigio). |
 
 ## Import
 
 ```tsx
-import { Button, Line, Spinner, LoadingState, BackNavHeader } from '@/shared/ui'
+import { Button, Line, Spinner, LoadingState, TableLoadingState, BackNavHeader } from '@/shared/ui'
 ```
 
 ## Esempi
 
 ```tsx
-import { Button, Line, LoadingState, BackNavHeader } from '@/shared/ui'
+import { Button, Line, LoadingState, TableLoadingState, BackNavHeader } from '@/shared/ui'
 
 <Button title="Salva" iconName="SaveIcon" onClick={handleSave} />
 <Line />
 
+{/* Mappa: cerchio verde */}
 <LoadingState size="l" label={t('territory.loading')} />
+
+{/* Tabella: grow blu a “punti” */}
+<TableLoadingState label={t('territory.loading')} />
 
 <BackNavHeader
   backLabel={t('territory.table.backToAreas')}

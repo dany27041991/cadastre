@@ -28,38 +28,47 @@ function maybeToastClusterOverCap(res: Response): void {
 }
 
 export type Fetcher = {
-  fetchGeoJson: (path: string) => Promise<GeoJSONFeatureCollection>
-  fetchGeoJsonOrEmpty: (path: string) => Promise<GeoJSONFeatureCollection>
-  fetchGeobufOrEmpty: (path: string) => Promise<GeoJSONFeatureCollection>
+  fetchGeoJson: (
+    path: string,
+    init?: RequestInit,
+  ) => Promise<GeoJSONFeatureCollection>
+  fetchGeoJsonOrEmpty: (
+    path: string,
+    init?: RequestInit,
+  ) => Promise<GeoJSONFeatureCollection>
+  fetchGeobufOrEmpty: (
+    path: string,
+    init?: RequestInit,
+  ) => Promise<GeoJSONFeatureCollection>
 }
 
 /** Options for API clients that use this fetcher (baseUrl, fetchFn). */
 export type FetcherOptions = {
   baseUrl?: string
-  fetchFn?: (url: string) => Promise<Response>
+  fetchFn?: (url: string, init?: RequestInit) => Promise<Response>
 }
 
 export function createFetcher(
   baseUrl: string,
-  fetchFn: (url: string) => Promise<Response> = fetch
+  fetchFn: (url: string, init?: RequestInit) => Promise<Response> = fetch
 ): Fetcher {
   const fullUrl = (path: string) =>
     path.startsWith('http') ? path : `${baseUrl.replace(/\/$/, '')}${path}`
 
   return {
-    fetchGeoJson: async (path: string) => {
-      const res = await fetchFn(fullUrl(path))
+    fetchGeoJson: async (path: string, init?: RequestInit) => {
+      const res = await fetchFn(fullUrl(path), init)
       if (!res.ok) throw new Error(normalizeApiError(res).message)
       return res.json()
     },
-    fetchGeoJsonOrEmpty: async (path: string) => {
-      const res = await fetchFn(fullUrl(path))
+    fetchGeoJsonOrEmpty: async (path: string, init?: RequestInit) => {
+      const res = await fetchFn(fullUrl(path), init)
       if (res.status === 404) return EMPTY_GEOJSON
       if (!res.ok) throw new Error(normalizeApiError(res).message)
       return res.json()
     },
-    fetchGeobufOrEmpty: async (path: string) => {
-      const res = await fetchFn(fullUrl(path))
+    fetchGeobufOrEmpty: async (path: string, init?: RequestInit) => {
+      const res = await fetchFn(fullUrl(path), init)
       if (res.status === 404) return EMPTY_GEOJSON
       if (!res.ok) throw new Error(normalizeApiError(res).message)
       maybeToastClusterOverCap(res)

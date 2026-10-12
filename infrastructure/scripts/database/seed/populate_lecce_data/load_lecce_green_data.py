@@ -260,6 +260,41 @@ def parse_survey_date(value: object) -> datetime | None:
     return py if py.tzinfo else py.replace(tzinfo=timezone.utc)
 
 
+# Deterministic mock cycles so table filters (enum + numeric ranges) are testable.
+_INTENSITY_CYCLE = ("NONE", "LOW", "MEDIUM", "HIGH")
+_PERIMETER_CYCLE = ("REAL", "FICTITIOUS")
+_HEALTH_CYCLE = ("UNKNOWN", "HEALTHY", "DEGRADED", "DECLINING", "SICK")
+_GROWTH_CYCLE = ("YOUNG", "SEMI_MATURE", "MATURE", "OVERMATURE")
+_PROT_CYCLE = ("NONE", "PROTECTED", "MONUMENTAL", "HISTORICAL")
+
+
+def _mock_survey_date(seed: int, *candidates: object) -> datetime:
+    """Prefer a real survey date from candidates; otherwise a deterministic mock."""
+    for value in candidates:
+        parsed = parse_survey_date(value)
+        if parsed is not None:
+            return parsed
+    year = 2018 + (seed % 7)
+    month = 1 + (seed % 12)
+    day = 1 + (seed % 28)
+    return datetime(year, month, day, tzinfo=timezone.utc)
+
+
+def _mock_species_code(genus: str | None, species: str | None, asset_id: int) -> str:
+    g = (genus or "UNK")[:3].upper().ljust(3, "X")
+    s = (species or "X")[:3].upper().ljust(3, "X")
+    return f"{g}{s}"[:40]
+
+
+def _as_float(value: object) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def get_database_url() -> str | None:
     return os.environ.get(
         "DATABASE_DIRECT_URL",
@@ -431,18 +466,14 @@ def load_areas_table(
         if name is None or (isinstance(name, float) and str(name) == "nan"):
             name = DEFAULT_AREA_NAME
         name = str(name).strip() or DEFAULT_AREA_NAME
-        classification = map_tipologia2_to_istat(row.get("tipologia2"))
-        survey_date = parse_survey_date(row.get("data_rilie"))
+        classification = map_tipologia2_to_istat(row.get("tipologia2")) or "OTHER"
         attrs = build_english_attributes(row, _AREA_ATTR_KEY_MAP, exclude=_AREA_ATTRS_PROMOTED)
         wkb, lon, lat = _geom_to_wkb_lon_lat(row.geometry)
         area_id = int(row["_lh_id"])
+        survey_date = _mock_survey_date(area_id, row.get("data_rilie"))
         zril = attrs.get("survey_number") or attrs.get("management_code")
         zril_s = str(zril).strip()[:80] if zril is not None else f"ZRIL-{area_id}"
-        surf = attrs.get("surface_area_m2")
-        try:
-            surf_f = float(surf) if surf is not None else None
-        except (TypeError, ValueError):
-            surf_f = None
+        surf_f = _as_float(attrs.get("surface_area_m2"))
         if surf_f is None:
             surf_f = approx_surface_area_m2(row.geometry, lon, lat)
 
@@ -462,8 +493,11 @@ def load_areas_table(
         survey_dates.append(survey_date)
         zril_ids.append(zril_s)
         istat_classifications.append(classification)
-        intensity_l.append("MEDIUM")
-        perimeter_l.append("REAL")
+        # Independent cycles so enum AND-filters (e.g. HIGH + REAL) stay hittable.
+        intensity_l.append(_INTENSITY_CYCLE[area_id % len(_INTENSITY_CYCLE)])
+        perimeter_l.append(
+            _PERIMETER_CYCLE[(area_id // len(_INTENSITY_CYCLE)) % len(_PERIMETER_CYCLE)]
+        )
         surface_l.append(surf_f)
 
     table = pa.table(
@@ -569,24 +603,27 @@ def load_assets_table(
                 row, _ASSET_ATTR_KEY_MAP, exclude=_ASSET_ATTRS_PROMOTED
             )
             wkb, lon, lat = _geom_to_wkb_lon_lat(row.geometry)
+            asset_id = next_id
             sc = attrs.get("species_code")
             sc_s = str(sc).strip()[:40] if sc is not None else None
-            circ = attrs.get("trunk_circumference_cm")
-            try:
-                circ_f = float(circ) if circ is not None else None
-            except (TypeError, ValueError):
-                circ_f = None
+            if not sc_s:
+                sc_s = _mock_species_code(genus, species, asset_id)
+            circ_f = _as_float(attrs.get("trunk_circumference_cm"))
             trunk = (circ_f / 3.141592653589793) if circ_f and circ_f > 0 else None
-            try:
-                height = float(attrs["first_branch_height_m"]) if "first_branch_height_m" in attrs else None
-            except (TypeError, ValueError):
-                height = None
-            try:
-                crown = float(attrs["crown_diameter_m"]) if "crown_diameter_m" in attrs else None
-            except (TypeError, ValueError):
-                crown = None
+            if trunk is None:
+                trunk = round(8.0 + (asset_id % 72), 1)
+            # GeoJSON has first-branch height, not plant height — mock plant_height_m.
+            height = round(2.0 + (asset_id % 23), 1)
+            crown = _as_float(attrs.get("crown_diameter_m"))
+            if crown is None:
+                crown = round(1.0 + (asset_id % 14), 1)
+            survey = _mock_survey_date(
+                asset_id,
+                attrs.get("point_survey_date"),
+                attrs.get("quality_survey_date"),
+            )
 
-            ids.append(next_id)
+            ids.append(asset_id)
             next_id += 1
             green_area_ids.append(green_area_id)
             region_ids.append(region_id)
@@ -602,15 +639,18 @@ def load_assets_table(
             family_l.append(family[:80] if family else None)
             genus_l.append(genus[:50] if genus else None)
             variety_l.append(None)
-            health_l.append("UNKNOWN")
+            health_l.append(_HEALTH_CYCLE[asset_id % len(_HEALTH_CYCLE)])
             status_l.append("ACTIVE")
-            survey_l.append(None)
+            survey_l.append(survey)
             species_code_l.append(sc_s)
             trunk_l.append(trunk)
             height_l.append(height)
             crown_l.append(crown)
-            growth_l.append("MATURE" if asset_type == "tree" else "SEMI_MATURE")
-            protection_l.append("NONE")
+            # Stagger enum cycles so combined filters remain testable.
+            growth_l.append(_GROWTH_CYCLE[asset_id % len(_GROWTH_CYCLE)])
+            protection_l.append(
+                _PROT_CYCLE[(asset_id // len(_GROWTH_CYCLE)) % len(_PROT_CYCLE)]
+            )
             n_file += 1
         print(f"  Built {n_file} green_assets from {filename} (asset_type={asset_type})")
 

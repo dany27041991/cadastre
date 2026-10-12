@@ -205,6 +205,9 @@ export function useGreenFeatureDetail({
       // null until we have a real lon/lat — avoids follow-map projecting (0,0) off-viewport
       const anchorLon = anchor?.lon ?? null
       const anchorLat = anchor?.lat ?? null
+      // #region agent log
+      fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'asset-pos',hypothesisId:'H1-race',location:'useGreenFeatureDetail:openCoords',message:'open_initial_screen',data:{kind,id,pointer,clientX,clientY,anchorLon,anchorLat,anchorScreen:anchor?.screen??null},timestamp:Date.now()})}).catch(()=>{})
+      // #endregion
 
       if (!scope) {
         setSelection({
@@ -229,8 +232,12 @@ export function useGreenFeatureDetail({
       }
 
       const { regionId, provinceId, municipalityId } = scope
-      const key = `${kind}:${id}:${regionId}:${provinceId}`
+      // Include municipality: local area/asset ids collide across comuni.
+      const key = `${kind}:${id}:${regionId}:${provinceId}:${municipalityId ?? ''}`
       activeKeyRef.current = key
+      // #region agent log
+      fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'villa-detail',hypothesisId:'H1-muni',location:'useGreenFeatureDetail:openStart',message:'detail_open_start',data:{kind,id,regionId,provinceId,municipalityId:municipalityId??null,propMuni:toPositiveInt(feature.properties?.municipality_id),primaryLabel,hasGeom:!!(feature.geometry&&Object.keys(feature.geometry as object).length),featKeys:Object.keys(feature.properties??{}).slice(0,20)},timestamp:Date.now()})}).catch(()=>{})
+      // #endregion
       setSelection({
         kind,
         id,
@@ -279,6 +286,10 @@ export function useGreenFeatureDetail({
       )
         .then((dto) => {
           if (activeKeyRef.current !== key) return
+          // #region agent log
+          const metaCode = dto.metadata?.find((m) => m.key === 'area_code')?.value
+          fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'id-collision',hypothesisId:'H-detail-muni',location:'useGreenFeatureDetail:detailOk',message:'detail_fetch_ok',data:{kind,id,regionId,provinceId,municipalityId:municipalityId??null,dtoMuni:dto.summary?.municipalityId??null,areaCode:metaCode??null,primary:dto.summary?.primaryLabel??null},timestamp:Date.now()})}).catch(()=>{})
+          // #endregion
           setDetail(dto)
           if (dto.geometry || (dto.bbox && dto.bbox.length === 4)) {
             setSelection((prev) => {
@@ -308,6 +319,9 @@ export function useGreenFeatureDetail({
         .catch((err: unknown) => {
           if (ac.signal.aborted) return
           if (activeKeyRef.current !== key) return
+          // #region agent log
+          fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'villa-detail',hypothesisId:'H4-detail-err',location:'useGreenFeatureDetail:detailCatch',message:'detail_fetch_err',data:{kind,id,regionId,provinceId,municipalityId:municipalityId??null,status:err instanceof GreenDetailHttpError?err.status:null,err:String(err),name:(err as {name?:string})?.name??null},timestamp:Date.now()})}).catch(()=>{})
+          // #endregion
           if (err instanceof GreenDetailHttpError && err.status === 404) {
             setErrorNotFound(true)
             setStatus(GREEN_DETAIL_STATUS_ERROR)

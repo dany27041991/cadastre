@@ -61,17 +61,31 @@ export function IngestDateRangeFields() {
     ensureIngestDatepickerPortal()
   }, [])
 
+  const areasOn = panel?.greenAssetsLayer?.areasActive === true
+  const assetsOn = panel?.greenAssetsLayer?.active === true
+  const blockedByLayers = areasOn || assetsOn
+  const adminTerritoryReady = panel?.adminTerritoryReady
+  const entryMode = panel?.entryMode
+  const datesDisabled =
+    (entryMode === 'admin' && adminTerritoryReady === false) || blockedByLayers
+
   useEffect(() => {
-    if (panel?.entryMode === 'admin' && panel.adminTerritoryReady === false) {
+    if (datesDisabled) {
       setOpenFrom(false)
       setOpenTo(false)
     }
-  }, [panel?.entryMode, panel?.adminTerritoryReady])
+  }, [datesDisabled])
+
+  // #region agent log
+  useEffect(() => {
+    if (!panel) return
+    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'territory-search-gate',hypothesisId:'H-dates-toggle',location:'IngestDateRangeFields:gate',message:'ingest_dates_gate',data:{areasOn,assetsOn,blockedByLayers,datesDisabled,adminReady:adminTerritoryReady??null},timestamp:Date.now()})}).catch(()=>{})
+  }, [panel, areasOn, assetsOn, blockedByLayers, datesDisabled, adminTerritoryReady])
+  // #endregion
 
   if (!panel) return null
 
-  const { dateFrom, dateTo, setDateFrom, setDateTo, entryMode, adminTerritoryReady } = panel
-  const datesDisabled = entryMode === 'admin' && !adminTerritoryReady
+  const { dateFrom, dateTo, setDateFrom, setDateTo } = panel
 
   const handleOutside = (bound: Bound, event?: { target?: EventTarget | null }) => {
     if (datesDisabled) return
@@ -83,14 +97,16 @@ export function IngestDateRangeFields() {
   const datePickerShared = {
     locale: 'it' as const,
     customDateFormat: 'dd/MM/yyyy',
-    isClearable: true,
+    isClearable: !blockedByLayers,
     portalId: INGEST_DATEPICKER_PORTAL_ID,
   }
 
   return (
     <div className={styles.wrap}>
       <Text font="f1-body-sm" color="text-body" className={styles.hint}>
-        {t('territory.panel.ingestPeriodHint')}
+        {blockedByLayers
+          ? t('territory.panel.ingestDatesDisabledByLayers')
+          : t('territory.panel.ingestPeriodHint')}
       </Text>
       <div className={styles.row}>
         <div className={styles.field}>

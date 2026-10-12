@@ -74,7 +74,21 @@ export function addGeoinsightGeometries(
   geometries: GeoinsightGeometryClip[],
   options?: { showLabels?: boolean }
 ): void {
-  if (geometries.length === 0) return
+  // Empty add must still apply showLabels (debug 4fe799: toggle off assets
+  // remounted areas with toAdd=0 and left cluster-count text on the map).
+  if (geometries.length === 0) {
+    if (options?.showLabels === undefined) return
+    runGeoinsightOrQueue(host, () => {
+      enqueueVendorOps([
+        () => {
+          const ref = getGeoinsightRef()
+          const mapId = getGeoinsightMapId()
+          ref?.setGeometryLabelVisibility?.(mapId, options.showLabels!)
+        },
+      ])
+    })
+    return
+  }
   runGeoinsightOrQueue(host, () => {
     const chunks = chunkItems(geometries, VENDOR_OP_CHUNK)
     enqueueVendorOps(

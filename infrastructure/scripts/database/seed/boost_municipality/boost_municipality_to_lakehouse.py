@@ -21,7 +21,7 @@ import math
 import os
 import random
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -201,6 +201,10 @@ def build_areas_table(
     perimeters = [rng.choice(["REAL", "FICTITIOUS"]) for _ in range(n)]
     surfaces = [float(rng.uniform(500.0, 50_000.0)) for _ in range(n)]
     zrils = [f"ZRIL-{mid}-{i}" for i in ids]
+    survey_dates = [
+        datetime(2018 + (i % 7), 1 + (i % 12), 1 + (i % 28), tzinfo=timezone.utc)
+        for i in ids
+    ]
     return pa.table(
         {
             "id": pa.array(ids, type=pa.int64()),
@@ -216,7 +220,7 @@ def build_areas_table(
             "geom_wkb": pa.array(wkbs, type=pa.binary()),
             "area_classification": pa.array(classifications, type=pa.string()),
             "administrative_status": pa.array(["ACTIVE"] * n, type=pa.string()),
-            "survey_date": pa.array([None] * n, type=pa.timestamp("us", tz="UTC")),
+            "survey_date": pa.array(survey_dates, type=pa.timestamp("us", tz="UTC")),
             "zril_identifier": pa.array(zrils, type=pa.string()),
             "istat_classification": pa.array(classifications, type=pa.string()),
             "intensity_of_fruition": pa.array(intensities, type=pa.string()),
@@ -306,6 +310,10 @@ def build_assets_table(
     trunk_l = [float(rng.uniform(8.0, 80.0)) for _ in range(n)]
     height_l = [float(rng.uniform(2.0, 25.0)) for _ in range(n)]
     crown_l = [float(rng.uniform(1.0, 15.0)) for _ in range(n)]
+    survey_dates = [
+        datetime(2018 + (i % 7), 1 + (i % 12), 1 + (i % 28), tzinfo=timezone.utc)
+        for i in ids
+    ]
     return pa.table(
         {
             "id": pa.array(ids, type=pa.int64()),
@@ -325,7 +333,7 @@ def build_assets_table(
             "variety": pa.array([None] * n, type=pa.string()),
             "health_status": pa.array(health_l, type=pa.string()),
             "asset_status": pa.array(["ACTIVE"] * n, type=pa.string()),
-            "survey_date": pa.array([None] * n, type=pa.timestamp("us", tz="UTC")),
+            "survey_date": pa.array(survey_dates, type=pa.timestamp("us", tz="UTC")),
             "species_code": pa.array(species_code_l, type=pa.string()),
             "trunk_diameter_cm": pa.array(trunk_l, type=pa.float64()),
             "plant_height_m": pa.array(height_l, type=pa.float64()),

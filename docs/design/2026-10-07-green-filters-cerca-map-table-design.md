@@ -160,7 +160,7 @@ Escaping: `'` → `''`; documentare che `%`/`_` restano wildcard LIKE (v1).
 ## Fuori scope
 
 - Persistenza `localStorage`.
-- Range min/max dedicati (oltre match numerico dove già previsto).
+- Range min/max dedicati — **superseded** by [2026-10-08-green-filters-range-national-speed-design.md](./2026-10-08-green-filters-range-national-speed-design.md).
 - Filtro testo globale `q` in UI.
 - Reimplementazione stub `green-*-explorer`.
 - Cambi al design system oltre ai componenti già ammessi.

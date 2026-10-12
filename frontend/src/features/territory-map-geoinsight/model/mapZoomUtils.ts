@@ -38,13 +38,18 @@ export function isValidBbox(
 /** OpenLayers buffer(extent, getWidth(extent) * 0.05) equivalent in WGS84 degrees. */
 export function bufferBbox(
   bbox: [number, number, number, number],
-  ratio = ZOOM_FIT_PADDING_RATIO
+  ratio = ZOOM_FIT_PADDING_RATIO,
+  /** Floor pad in degrees (default ~550 m). Use a smaller value for thin GA_ fits. */
+  minPadDegrees = MIN_BBOX_PAD_DEGREES
 ): [number, number, number, number] {
   const [minX, minY, maxX, maxY] = bbox
-  const padX = Math.max((maxX - minX) * ratio, MIN_BBOX_PAD_DEGREES)
-  const padY = Math.max((maxY - minY) * ratio, MIN_BBOX_PAD_DEGREES)
+  const padX = Math.max((maxX - minX) * ratio, minPadDegrees)
+  const padY = Math.max((maxY - minY) * ratio, minPadDegrees)
   return [minX - padX, minY - padY, maxX + padX, maxY + padY]
 }
+
+/** ~45 m — tight pad so sliver green areas fill more of the viewport after Cerca. */
+export const AREA_FIT_MIN_PAD_DEGREES = 0.0004
 
 export function bboxCenter(
   bbox: [number, number, number, number]

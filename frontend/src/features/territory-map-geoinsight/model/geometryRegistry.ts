@@ -118,13 +118,16 @@ export class GeometryRegistry {
   }
 
   getGreenBboxes(): Array<[number, number, number, number] | null> {
+    return this.getGreenBboxesByKinds(['green_area', 'green_asset', 'cluster'])
+  }
+
+  /** Bboxes for selected green layer kinds (fit framing after Cerca). */
+  getGreenBboxesByKinds(
+    kinds: readonly GeometryLayerKind[]
+  ): Array<[number, number, number, number] | null> {
+    const allow = new Set(kinds)
     return [...this.entries.values()]
-      .filter(
-        (e) =>
-          e.layerKind === 'green_area' ||
-          e.layerKind === 'green_asset' ||
-          e.layerKind === 'cluster'
-      )
+      .filter((e) => allow.has(e.layerKind))
       .map((e) => e.bbox)
   }
 
