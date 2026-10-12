@@ -60,7 +60,8 @@ function geometryToWkt(geometry: object): string | null {
 function findMountedGreenClip(
   host: GreenDetailHighlightHost,
   featureId: number,
-  feature?: TerritoryMapFeature | null
+  feature?: TerritoryMapFeature | null,
+  preferAsset = false
 ): GeoinsightGeometryClip | null {
   const geometries = host.lastGreenGeometries
   if (!geometries?.length) return null
@@ -69,20 +70,31 @@ function findMountedGreenClip(
   )
   const areaId = buildGreenAreaGeomId(featureId, muni)
   const assetId = buildGreenAssetGeomId(featureId, muni)
-  const exact =
-    geometries.find((g) => g.geom_id === areaId || g.geom_id === assetId) ?? null
-  if (exact) return exact
-  // Legacy GA_/GS_<id> or any GA_/GS_<muni>_<id> for this feature id.
-  return (
+  const byId = (gid: string) => geometries.find((g) => g.geom_id === gid) ?? null
+  // Never fall back to the other kind — GA_/GS_ share numeric ids per municipality
+  // (debug 4fe799: asset id=2 recolored GA_1_2, then GS_1_2 left GA orphaned red).
+  const preferredId = preferAsset ? assetId : areaId
+  const preferred = byId(preferredId)
+  const otherId = preferAsset ? areaId : assetId
+  const otherHit = Boolean(byId(otherId))
+  if (preferred) {
+    // #region agent log
+    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'asset-vs-area',hypothesisId:'H-clip-collision',location:'geoinsightDetailHighlight:findMounted',message:'highlight_clip_match',data:{featureId,muni,preferAsset,areaId,assetId,matched:preferred.geom_id,preferredHit:true,otherHit,wrongKind:false},timestamp:Date.now()})}).catch(()=>{})
+    // #endregion
+    return preferred
+  }
+  // Legacy only for the requested kind prefix.
+  const legacyPref = preferAsset ? GEOM_PREFIX.greenAsset : GEOM_PREFIX.greenArea
+  const legacy =
     geometries.find(
       (g) =>
-        g.geom_id === `${GEOM_PREFIX.greenArea}${featureId}` ||
-        g.geom_id === `${GEOM_PREFIX.greenAsset}${featureId}` ||
-        ((g.geom_id.startsWith(GEOM_PREFIX.greenArea) ||
-          g.geom_id.startsWith(GEOM_PREFIX.greenAsset)) &&
-          g.geom_id.endsWith(`_${featureId}`))
+        g.geom_id === `${legacyPref}${featureId}` ||
+        (g.geom_id.startsWith(legacyPref) && g.geom_id.endsWith(`_${featureId}`))
     ) ?? null
-  )
+  // #region agent log
+  fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'asset-vs-area',hypothesisId:'H-clip-collision',location:'geoinsightDetailHighlight:findMounted',message:'highlight_clip_match',data:{featureId,muni,preferAsset,areaId,assetId,matched:legacy?.geom_id??null,preferredHit:false,otherHit,wrongKind:false,miss:true},timestamp:Date.now()})}).catch(()=>{})
+  // #endregion
+  return legacy
 }
 
 function withRedSelection(clip: GeoinsightGeometryClip): GeoinsightGeometryClip {
@@ -137,18 +149,31 @@ function applySelectionRecolor(
   feature: TerritoryMapFeature,
   preferAsset = false
 ): { geomId: string; usedMounted: boolean; wktLen: number } | null {
-  const mounted = findMountedGreenClip(host, feature.id, feature)
+  const mounted = findMountedGreenClip(host, feature.id, feature, preferAsset)
   const redClip = mounted
     ? withRedSelection(mounted)
     : fallbackClipFromFeature(feature, preferAsset)
   if (!redClip) return null
+
+  const prevGeomId = host.detailHighlightGeomIds[0] ?? null
+  // Same feature id can switch GA_↔GS_ (or remount) — always restore the previous
+  // red clip first or it stays highlighted (debug 4fe799: GA_1_2 orphaned).
+  if (prevGeomId && prevGeomId !== redClip.geom_id) {
+    restoreSelectionColor(host)
+  }
 
   // Keep the first-captured green clip across reassert/re-set (cache is already red).
   const restore =
     host.detailHighlightRestoreClip?.geom_id === redClip.geom_id
       ? host.detailHighlightRestoreClip
       : mounted
-        ? { ...mounted }
+        ? {
+            ...mounted,
+            // Mounted may already be patched red — restore must use green default.
+            color: GREEN_AREA_GEOMETRY_COLOR,
+            stroke_width: undefined,
+            width: undefined,
+          }
         : {
             ...redClip,
             color: GREEN_AREA_GEOMETRY_COLOR,
@@ -166,6 +191,9 @@ function applySelectionRecolor(
 
   removeGeoinsightGeomIds([redClip.geom_id], host)
   addGeoinsightGeometries(host, [redClip])
+  // #region agent log
+  fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'asset-vs-area',hypothesisId:'H-orphan-red',location:'geoinsightDetailHighlight:apply',message:'highlight_apply',data:{featureId:feature.id,preferAsset,geomId:redClip.geom_id,prevGeomId,usedMounted:Boolean(mounted),switched:Boolean(prevGeomId&&prevGeomId!==redClip.geom_id)},timestamp:Date.now()})}).catch(()=>{})
+  // #endregion
   return {
     geomId: redClip.geom_id,
     usedMounted: Boolean(mounted),
@@ -228,8 +256,14 @@ export function setGreenDetailHighlight(
   options?: { preferAsset?: boolean }
 ): void {
   const preferAsset = options?.preferAsset === true
-  // Always clear previous selection before applying the new one.
-  if (host.detailHighlightFeature && host.detailHighlightFeature.id !== feature.id) {
+  const prev = host.detailHighlightFeature
+  // Clear whenever selection identity OR kind changes (id alone is not unique
+  // across area/asset). Same-id reassert is handled inside applySelectionRecolor.
+  if (
+    prev &&
+    (prev.id !== feature.id ||
+      prev.properties?.__greenKind !== feature.properties?.__greenKind)
+  ) {
     restoreSelectionColor(host)
   }
 

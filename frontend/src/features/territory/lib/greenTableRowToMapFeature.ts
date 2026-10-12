@@ -63,14 +63,39 @@ function findMountedForRow(
   mountedFeatures: readonly TerritoryMapFeature[],
   id: number,
   rowMunicipalityId: number | null,
+  kind: 'area' | 'asset',
 ): TerritoryMapFeature | undefined {
   // Without row municipality, never reuse a mounted feature by id alone
   // (id=3 is ZRIL-1-3 and ZRIL-156-3 in different comuni).
   if (rowMunicipalityId == null) return undefined
-  return mountedFeatures.find((f) => {
+  // Areas are listed before assets in getGreenLayerFeatures — matching by id+muni
+  // alone can bind an asset row to an area polygon with the same local id.
+  const sameScope = mountedFeatures.filter((f) => {
     if (f.id !== id) return false
     return municipalityIdFromProperties(f.properties) === rowMunicipalityId
   })
+  if (sameScope.length === 0) return undefined
+  const wantPoint = kind === 'asset'
+  const byGeom = sameScope.find((f) => {
+    const t = (f.geometry as { type?: string } | undefined)?.type
+    if (wantPoint) return t === 'Point' || t === 'MultiPoint'
+    return t === 'Polygon' || t === 'MultiPolygon' || t === 'LineString' || t === 'MultiLineString'
+  })
+  let picked = byGeom
+  if (!picked && sameScope.length === 1) {
+    const only = sameScope[0]
+    const t = (only.geometry as { type?: string } | undefined)?.type
+    const looksArea = t === 'Polygon' || t === 'MultiPolygon' || t === 'LineString' || t === 'MultiLineString'
+    const looksAsset = t === 'Point' || t === 'MultiPoint'
+    // Refuse cross-kind reuse (asset row → area polygon with same local id).
+    if (!(kind === 'asset' && looksArea) && !(kind === 'area' && looksAsset)) {
+      picked = only
+    }
+  }
+  // #region agent log
+  fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'asset-vs-area',hypothesisId:'H-mounted-kind',location:'greenTableRowToMapFeature:findMounted',message:'table_mounted_resolve',data:{kind,id,rowMunicipalityId,sameScopeN:sameScope.length,pickedGeom:(picked?.geometry as {type?:string})?.type??null,pickedByGeom:Boolean(byGeom),refusedCrossKind:!picked&&sameScope.length>0,candidates:sameScope.map(f=>({geom:(f.geometry as {type?:string})?.type??null,label:f.label}))},timestamp:Date.now()})}).catch(()=>{})
+  // #endregion
+  return picked
 }
 
 export function resolveGreenFeatureFromTableRow(
@@ -83,7 +108,7 @@ export function resolveGreenFeatureFromTableRow(
 
   const rowMunicipalityId = positiveIntFromUnknown(row.municipality_id)
   const rowProps = propertiesFromRow(row)
-  const mounted = findMountedForRow(mountedFeatures, id, rowMunicipalityId)
+  const mounted = findMountedForRow(mountedFeatures, id, rowMunicipalityId, kind)
   const label =
     kind === 'asset' ? labelFromAssetRow(row, id) : labelFromAreaRow(row, id)
 
@@ -98,6 +123,9 @@ export function resolveGreenFeatureFromTableRow(
     }
   }
 
+  // Table rows expose lon/lat scalars — build a Point so detail highlight/anchor
+  // do not fall back to a same-id area polygon (debug 4fe799 plant_code=2).
+  const geometry = pointGeometryFromRow(row) ?? {}
   return {
     id,
     label,
@@ -105,7 +133,14 @@ export function resolveGreenFeatureFromTableRow(
       id,
       label,
       properties: rowProps,
-      geometry: {},
+      geometry,
     },
   }
+}
+
+function pointGeometryFromRow(row: GreenTableRawRow): object | null {
+  const lon = Number(row.longitude ?? row.lon ?? row.lng)
+  const lat = Number(row.latitude ?? row.lat)
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null
+  return { type: 'Point', coordinates: [lon, lat] }
 }

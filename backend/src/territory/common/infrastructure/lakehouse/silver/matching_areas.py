@@ -56,6 +56,10 @@ _PROBE_PARALLEL_MIN = 80
 # First dense chunk: if this many munis hit, treat filter as near-national and
 # skip the full 7.9k scan (Area boost log: 6250 munis / 50k area ids ≈ 57s).
 _WIDESPREAD_PROBE_MIN_MUNIS = 80
+# When widespread shortcircuit is allowed, only probe this many densest munis
+# first (debug 4fe799: full 400-muni probe was 2.7s with probe_hits=400 — half
+# the MinIO work is enough to clear the ≥80 threshold).
+_WIDESPREAD_PROBE_N = 160
 # Selective early_stop can keep hitting for thousands of munis (debug 4fe799:
 # name+area_code → 1035 munis / 10.8s). Cap dense-first results — enough to
 # scope gold / area-id pin without scanning the whole nation.
@@ -354,8 +358,22 @@ def resolve_matching_municipality_ids(
             "probe_ms": 0,
         }
         probe: list[int] = []
-        if chunks:
-            probe, probe_meta = _probe_first_chunk(chunks[0], where_sql)
+        # Progressive widespread: sample densest N munis only when shortcircuit
+        # is allowed. Selective filters keep the full first chunk (scoping).
+        first_chunk = chunks[0] if chunks else []
+        probe_target = first_chunk
+        progressive_wide = False
+        if (
+            allow_widespread_shortcircuit
+            and len(chunks) > 1
+            and len(first_chunk) > _WIDESPREAD_PROBE_N
+        ):
+            probe_target = first_chunk[:_WIDESPREAD_PROBE_N]
+            progressive_wide = True
+        if probe_target:
+            probe, probe_meta = _probe_first_chunk(probe_target, where_sql)
+        probe_meta["progressive_wide"] = progressive_wide
+        probe_meta["probe_target_n"] = len(probe_target)
         if (
             allow_widespread_shortcircuit
             and len(chunks) > 1
@@ -370,7 +388,7 @@ def resolve_matching_municipality_ids(
                     "ms": int((time.monotonic() - t0) * 1000),
                     "mode": "probe_wide",
                     "coalesced": False,
-                    "opt": "probe_parallel_v1",
+                    "opt": "probe_progressive_v1",
                     **probe_meta,
                 },
                 hypothesis_id="H-widespread",
@@ -379,9 +397,16 @@ def resolve_matching_municipality_ids(
                 _match_muni_cache[cache_key] = _PROBE_WIDE
             return None, "probe_wide"
 
+        # Not widespread: finish remainder of first dense chunk via early_stop
+        # waves (prepend so dense-first order / empty-streak stay correct).
         found: set[int] = set(probe)
         chunks_scanned = 1 if chunks else 0
-        rest = chunks[1:]
+        rest: list[list[IngestResolution]] = list(chunks[1:]) if chunks else []
+        if progressive_wide and len(first_chunk) > _WIDESPREAD_PROBE_N:
+            remainder = first_chunk[_WIDESPREAD_PROBE_N :]
+            if remainder:
+                rest = [remainder, *rest]
+                probe_meta["remainder_n"] = len(remainder)
         stop_after_used = _EMPTY_CHUNK_STOP
 
         if len(ordered) <= _TABLE_SINGLE_SHOT_MAX:
@@ -489,9 +514,10 @@ def resolve_matching_municipality_ids(
                 "mode": mode,
                 "workers": _MATCH_MUNI_WORKERS,
                 "stop_after": stop_after_used,
-                "opt": "probe_parallel_v1",
+                "opt": "probe_progressive_v1",
                 "result_cap": _MATCH_MUNI_RESULT_CAP,
                 "baseline_cold_ms": 7180,
+                "baseline_probe_wide_ms": 2733,
                 "coalesced": False,
                 **probe_meta,
             },

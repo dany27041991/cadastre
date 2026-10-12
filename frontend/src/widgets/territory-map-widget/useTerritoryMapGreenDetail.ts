@@ -172,7 +172,8 @@ export function useTerritoryMapGreenDetail({
       const layerKind =
         kind === 'asset' ? LAYER_KIND_GREEN_ASSET : LAYER_KIND_GREEN_AREA
       // #region agent log
-      fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'id-collision',hypothesisId:'H-detail-muni',location:'useTerritoryMapGreenDetail:tableOpen',message:'table_open_detail',data:{kind,rowId:row.id,rowMuni:row.municipality_id,rowRegion:row.region_id,rowProvince:row.province_id,rowAreaCode:row.area_code??row.zril_identifier??null,resolvedId:resolved.id,featMuni:resolved.feature.properties?.municipality_id??null,mountedN:mounted.length},timestamp:Date.now()})}).catch(()=>{})
+      const rg=(resolved.feature.geometry as {type?:string;coordinates?:unknown}|undefined)
+      fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'asset-vs-area',hypothesisId:'H-mounted-kind',location:'useTerritoryMapGreenDetail:tableOpen',message:'table_open_detail',data:{kind,rowId:row.id,rowMuni:row.municipality_id,plantCode:row.plant_code??null,speciesCode:row.species_code??null,greenAreaId:row.green_area_id??null,rowAreaCode:row.area_code??row.zril_identifier??null,resolvedId:resolved.id,featMuni:resolved.feature.properties?.municipality_id??null,geomType:rg?.type??null,geomCoords:Array.isArray(rg?.coordinates)?(rg!.coordinates as unknown[]).slice(0,2):null,mountedN:mounted.length,preferAsset:kind==='asset'},timestamp:Date.now()})}).catch(()=>{})
       // #endregion
       const anchor = resolveGreenDetailAnchorLonLat(resolved.feature, null)
       if (anchor) {
