@@ -49,6 +49,9 @@ _SPARSE_FOUND_MAX = 20
 # workers=8 + pool=8 → duckdb_pool_exhausted during 2nd Cerca).
 _MATCH_MUNI_WORKERS = 2
 _MATCH_MUNI_CHUNK = 400
+# Split the dense-first probe chunk across workers (2×200) — sequential
+# 400-muni DISTINCT was ~1.8–2.0s cold (debug 4fe799 / multi-agent plan Fase 1).
+_PROBE_PARALLEL_MIN = 80
 
 # First dense chunk: if this many munis hit, treat filter as near-national and
 # skip the full 7.9k scan (Area boost log: 6250 munis / 50k area ids ≈ 57s).
@@ -205,6 +208,44 @@ def _distinct_munis_chunk(
     return out
 
 
+def _probe_first_chunk(
+    first: list[IngestResolution], where_sql: str
+) -> tuple[list[int], dict[str, Any]]:
+    """Dense-first probe: split large first chunk across ≤_MATCH_MUNI_WORKERS.
+
+    Hit-rate semantics unchanged (union of DISTINCT munis) so probe_wide still
+    fires when ≥_WIDESPREAD_PROBE_MIN_MUNIS. Returns (probe_munis, meta).
+    """
+    meta: dict[str, Any] = {
+        "probe_parallel": False,
+        "probe_subchunks": 1,
+        "probe_n_in": len(first),
+    }
+    if not first:
+        return [], meta
+    if len(first) < _PROBE_PARALLEL_MIN or _MATCH_MUNI_WORKERS <= 1:
+        t_p = time.monotonic()
+        hits = _distinct_munis_chunk(first, where_sql)
+        meta["probe_ms"] = int((time.monotonic() - t_p) * 1000)
+        return hits, meta
+
+    n = len(first)
+    workers = min(_MATCH_MUNI_WORKERS, n)
+    # Even slices (e.g. 400 → 2×200) — preserve dense-first order within each.
+    step = (n + workers - 1) // workers
+    slices = [first[i : i + step] for i in range(0, n, step) if first[i : i + step]]
+    meta["probe_parallel"] = True
+    meta["probe_subchunks"] = len(slices)
+    t_p = time.monotonic()
+    found: set[int] = set()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(slices)) as pool:
+        futs = [pool.submit(_distinct_munis_chunk, sl, where_sql) for sl in slices]
+        for fut in concurrent.futures.as_completed(futs):
+            found.update(fut.result())
+    meta["probe_ms"] = int((time.monotonic() - t_p) * 1000)
+    return sorted(found), meta
+
+
 def resolve_matching_municipality_ids(
     resolutions: list[IngestResolution],
     filters: dict[str, Any] | None,
@@ -305,8 +346,16 @@ def resolve_matching_municipality_ids(
             ordered[i : i + chunk_size] for i in range(0, len(ordered), chunk_size)
         ]
 
-        # Probe first dense chunk — widespread filters exit here.
-        probe = _distinct_munis_chunk(chunks[0], where_sql) if chunks else []
+        # Probe first dense chunk (parallel sub-slices) — widespread exits here.
+        probe_meta: dict[str, Any] = {
+            "probe_parallel": False,
+            "probe_subchunks": 0,
+            "probe_n_in": 0,
+            "probe_ms": 0,
+        }
+        probe: list[int] = []
+        if chunks:
+            probe, probe_meta = _probe_first_chunk(chunks[0], where_sql)
         if (
             allow_widespread_shortcircuit
             and len(chunks) > 1
@@ -321,6 +370,8 @@ def resolve_matching_municipality_ids(
                     "ms": int((time.monotonic() - t0) * 1000),
                     "mode": "probe_wide",
                     "coalesced": False,
+                    "opt": "probe_parallel_v1",
+                    **probe_meta,
                 },
                 hypothesis_id="H-widespread",
             )
@@ -438,10 +489,11 @@ def resolve_matching_municipality_ids(
                 "mode": mode,
                 "workers": _MATCH_MUNI_WORKERS,
                 "stop_after": stop_after_used,
-                "opt": "early_stop_cap_v2",
+                "opt": "probe_parallel_v1",
                 "result_cap": _MATCH_MUNI_RESULT_CAP,
                 "baseline_cold_ms": 7180,
                 "coalesced": False,
+                **probe_meta,
             },
             hypothesis_id="H-opt-match-muni",
         )
