@@ -75,12 +75,7 @@ function findMountedGreenClip(
   // (debug 4fe799: asset id=2 recolored GA_1_2, then GS_1_2 left GA orphaned red).
   const preferredId = preferAsset ? assetId : areaId
   const preferred = byId(preferredId)
-  const otherId = preferAsset ? areaId : assetId
-  const otherHit = Boolean(byId(otherId))
   if (preferred) {
-    // #region agent log
-    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'asset-vs-area',hypothesisId:'H-clip-collision',location:'geoinsightDetailHighlight:findMounted',message:'highlight_clip_match',data:{featureId,muni,preferAsset,areaId,assetId,matched:preferred.geom_id,preferredHit:true,otherHit,wrongKind:false},timestamp:Date.now()})}).catch(()=>{})
-    // #endregion
     return preferred
   }
   // Legacy only for the requested kind prefix.
@@ -91,9 +86,6 @@ function findMountedGreenClip(
         g.geom_id === `${legacyPref}${featureId}` ||
         (g.geom_id.startsWith(legacyPref) && g.geom_id.endsWith(`_${featureId}`))
     ) ?? null
-  // #region agent log
-  fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'asset-vs-area',hypothesisId:'H-clip-collision',location:'geoinsightDetailHighlight:findMounted',message:'highlight_clip_match',data:{featureId,muni,preferAsset,areaId,assetId,matched:legacy?.geom_id??null,preferredHit:false,otherHit,wrongKind:false,miss:true},timestamp:Date.now()})}).catch(()=>{})
-  // #endregion
   return legacy
 }
 
@@ -191,9 +183,6 @@ function applySelectionRecolor(
 
   removeGeoinsightGeomIds([redClip.geom_id], host)
   addGeoinsightGeometries(host, [redClip])
-  // #region agent log
-  fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'asset-vs-area',hypothesisId:'H-orphan-red',location:'geoinsightDetailHighlight:apply',message:'highlight_apply',data:{featureId:feature.id,preferAsset,geomId:redClip.geom_id,prevGeomId,usedMounted:Boolean(mounted),switched:Boolean(prevGeomId&&prevGeomId!==redClip.geom_id)},timestamp:Date.now()})}).catch(()=>{})
-  // #endregion
   return {
     geomId: redClip.geom_id,
     usedMounted: Boolean(mounted),

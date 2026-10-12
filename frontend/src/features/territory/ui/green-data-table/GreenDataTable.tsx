@@ -155,9 +155,6 @@ export function GreenDataTable({
   }
 
   if (!loading && total === 0) {
-    // #region agent log
-    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'empty-table',hypothesisId:'H-empty-ui',location:'GreenDataTable.tsx:empty',message:'table_ui_empty',data:{tableKind,showGreenAssets,total,hasPageData:pageData!=null,nrows:pageData?.data?.length??0,baseQuery:(baseQuery??'').slice(0,180),filters:activeColumnFilters,filterKeys:Object.keys(activeColumnFilters??{})},timestamp:Date.now()})}).catch(()=>{})
-    // #endregion
     return (
       <Box as="div" className="green-data-table" padding="m" style={{ width: '100%' }}>
         {drillHeader}

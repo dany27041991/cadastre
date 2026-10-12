@@ -15,7 +15,6 @@ from territory.common.infrastructure.lakehouse.table_filters import area_filter_
 
 from .geom import _wkb_to_geojson
 
-
 def read_areas_in_bbox(
     resolutions: list[IngestResolution],
     bbox: tuple[float, float, float, float],
@@ -167,47 +166,7 @@ def read_areas_in_bbox(
         n_features=len(out),
         where_sql=where_sql,
     )
-    # #region agent log
-    try:
-        import time as _time
-        import urllib.request as _urlreq
-
-        _payload = json.dumps(
-            {
-                "sessionId": "4fe799",
-                "runId": "areas-map",
-                "hypothesisId": "H-centroid",
-                "location": "silver.areas_bbox.read_areas_in_bbox",
-                "message": "areas_bbox_scan",
-                "data": {
-                    "n_sql": len(rows),
-                    "n_scored": len(scored),
-                    "n_out": len(out),
-                    "n_resolutions": len(resolutions),
-                    "skip_centroid_window": skip_centroid_window,
-                    "has_filters": bool(filter_clauses),
-                    "bbox": [minx, miny, maxx, maxy],
-                },
-                "timestamp": int(_time.time() * 1000),
-            }
-        ).encode("utf-8")
-        _urlreq.urlopen(
-            _urlreq.Request(
-                "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                data=_payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "X-Debug-Session-Id": "4fe799",
-                },
-                method="POST",
-            ),
-            timeout=1.5,
-        )
-    except Exception:
-        pass
-    # #endregion
     return out
-
 
 def read_area_by_pk(
     resolutions: list[IngestResolution],

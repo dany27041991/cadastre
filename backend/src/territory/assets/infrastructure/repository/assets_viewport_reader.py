@@ -45,12 +45,10 @@ _WEB_MERCATOR_BASE = 156543.03392804097
 _GRID_REF_LAT = 41.9
 _CLUSTER_DISTANCE_AT_16 = 80.0
 
-
 def _grid_cell_size_m(zoom: float) -> float:
     z = min(max(int(zoom), CLUSTER_MAX_ZOOM_THRESHOLD), CLUSTER_GRID_MAX_REFINE_ZOOM)
     scale = _WEB_MERCATOR_BASE * math.cos(math.radians(_GRID_REF_LAT))
     return (scale / 2**z) * _CLUSTER_DISTANCE_AT_16
-
 
 def _zoom_level_for_cell_size(cell_size_m: float) -> int:
     """Best-effort map of live-grid cell size back to a gold zoom band."""
@@ -62,7 +60,6 @@ def _zoom_level_for_cell_size(cell_size_m: float) -> int:
             best_delta = delta
             best_z = z
     return best_z
-
 
 def exact_clusters_for_clip(
     session_factory: Callable[[], Session],
@@ -128,7 +125,6 @@ def exact_clusters_for_clip(
         cell_size_m=cell_size_m,
         view_bbox=bbox,
     )
-
 
 def get_admin_clusters_in_bbox(
     session_factory: Callable[[], Session],
@@ -218,7 +214,6 @@ def get_admin_clusters_in_bbox(
         return []
     return filter_clusters_by_clip(clusters, clip_geom)
 
-
 def get_raw_in_bbox(
     session_factory: Callable[[], Session],
     resolutions_callback,
@@ -296,7 +291,6 @@ def get_raw_in_bbox(
         return _EMPTY_FC
     return build_green_asset_feature_collection(rows)
 
-
 def get_grid_clusters_from_gold(
     session_factory: Callable[[], Session],
     resolutions_callback,
@@ -362,9 +356,7 @@ def get_grid_clusters_from_gold(
     clip_geom = silver_read._parse_clip_geom(clip_wkt)
     return filter_clusters_by_clip(clusters, clip_geom)
 
-
 _WORLD_BBOX: tuple[float, float, float, float] = (-180.0, -90.0, 180.0, 90.0)
-
 
 def _live_ga_cache_key(
     green_area_ids: list[int],
@@ -394,7 +386,6 @@ def _live_ga_cache_key(
         bool(has_clip),
     )
 
-
 def _filter_clusters_by_view_bbox(
     clusters: list[ViewportCluster],
     bbox: tuple[float, float, float, float],
@@ -407,7 +398,6 @@ def _filter_clusters_by_view_bbox(
             continue
         out.append(c)
     return out
-
 
 def get_clusters_for_green_area_ids(
     session_factory: Callable[[], Session],
@@ -443,44 +433,6 @@ def get_clusters_for_green_area_ids(
         hit = _live_ga_cache.get(cache_key)
         if hit is not None:
             filtered = _filter_clusters_by_view_bbox(list(hit), bbox)
-            # #region agent log
-            try:
-                import json as _json
-                import urllib.request as _urlreq
-
-                _payload = _json.dumps(
-                    {
-                        "sessionId": "4fe799",
-                        "runId": "perf-opt",
-                        "hypothesisId": "H-opt-live-cache",
-                        "location": "assets_viewport_reader:live_ga",
-                        "message": "ga_ids_live_clusters_cache",
-                        "data": {
-                            "cache": True,
-                            "n_area_ids": len(green_area_ids),
-                            "n_cached": len(hit),
-                            "n_clusters": len(filtered),
-                            "ms": 0,
-                            "code_ver": "live-cache-v2-no-bbox-key",
-                        },
-                        "timestamp": int(time.time() * 1000),
-                    }
-                ).encode("utf-8")
-                _urlreq.urlopen(
-                    _urlreq.Request(
-                        "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                        data=_payload,
-                        headers={
-                            "Content-Type": "application/json",
-                            "X-Debug-Session-Id": "4fe799",
-                        },
-                        method="POST",
-                    ),
-                    timeout=1.5,
-                )
-            except Exception:
-                pass
-            # #endregion
             return filtered
 
     resolutions = resolutions_callback(
@@ -518,47 +470,7 @@ def get_clusters_for_green_area_ids(
     with _live_ga_lock:
         _live_ga_cache[cache_key] = list(clusters_full)
     filtered = _filter_clusters_by_view_bbox(clusters_full, bbox)
-    # #region agent log
-    try:
-        import json as _json
-        import urllib.request as _urlreq
-
-        _payload = _json.dumps(
-            {
-                "sessionId": "4fe799",
-                "runId": "perf-opt",
-                "hypothesisId": "H-opt-live-cache",
-                "location": "assets_viewport_reader:live_ga",
-                "message": "ga_ids_live_clusters_cache",
-                "data": {
-                    "cache": False,
-                    "n_area_ids": len(green_area_ids),
-                    "n_cached": len(clusters_full),
-                    "n_clusters": len(filtered),
-                    "ms": ms,
-                    "baseline_cold_ms": 786,
-                    "code_ver": "live-cache-v2-no-bbox-key",
-                },
-                "timestamp": int(time.time() * 1000),
-            }
-        ).encode("utf-8")
-        _urlreq.urlopen(
-            _urlreq.Request(
-                "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                data=_payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "X-Debug-Session-Id": "4fe799",
-                },
-                method="POST",
-            ),
-            timeout=1.5,
-        )
-    except Exception:
-        pass
-    # #endregion
     return filtered
-
 
 def get_clusters_in_bbox(
     session_factory: Callable[[], Session],

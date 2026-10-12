@@ -36,11 +36,6 @@ export function useGreenDetailFollowMap(
       if (prev && prev.clientX === point.clientX && prev.clientY === point.clientY) return
       lastScreenRef.current = point
       projectCount += 1
-      // #region agent log
-      if (projectCount <= 8) {
-        fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'asset-pos',hypothesisId:'H1-race',location:'useGreenDetailFollowMap:project',message:'follow_map_screen',data:{n:projectCount,anchorLon,anchorLat,point,prev,innerW:window.innerWidth,innerH:window.innerHeight},timestamp:Date.now()})}).catch(()=>{})
-      }
-      // #endregion
       onScreenRef.current(point.clientX, point.clientY)
     }
 

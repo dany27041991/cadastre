@@ -18,7 +18,6 @@ from territory.assets.application.usecases.query.viewport_cluster_geojson import
     admin_features_collection,
 )
 
-
 def admin_clusters_response(
     repository: GreenAssetsLakehouseRepository,
     bbox: tuple[float, float, float, float],
@@ -132,66 +131,4 @@ def admin_clusters_response(
     # when gold has no rows for the resolved ingest window (multi-snapshot).
     if not clusters:
         return None
-    # #region agent log
-    try:
-        import json as _json
-        import time as _time
-        import urllib.request as _urlreq
-
-        small = [
-            {
-                "key": c.admin_key,
-                "count": c.count,
-                "lon": c.lon,
-                "lat": c.lat,
-            }
-            for c in clusters
-            if c.count <= 5 or (c.admin_key or "").startswith("R999") or "5998" in (c.admin_key or "")
-        ]
-        payload = _json.dumps(
-            {
-                "sessionId": "4fe799",
-                "runId": "asset-cluster-count",
-                "hypothesisId": "H-B-admin-counts",
-                "location": "catalog_green_asset._admin_clusters_response",
-                "message": "admin_clusters",
-                "data": {
-                    "level": level,
-                    "n": len(clusters),
-                    "sum_cluster_count": sum(int(c.count) for c in clusters),
-                    "n_municipality_ids": (
-                        len(municipality_ids) if municipality_ids is not None else None
-                    ),
-                    "scope": {
-                        "region_id": region_id,
-                        "province_id": province_id,
-                        "municipality_id": municipality_id,
-                    },
-                    "zoom": zoom,
-                    "interesting": small[:20],
-                    "top": [
-                        {"key": c.admin_key, "count": c.count}
-                        for c in sorted(
-                            clusters, key=lambda x: int(x.count), reverse=True
-                        )[:5]
-                    ],
-                },
-                "timestamp": int(_time.time() * 1000),
-            }
-        ).encode("utf-8")
-        _urlreq.urlopen(
-            _urlreq.Request(
-                "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                data=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "X-Debug-Session-Id": "4fe799",
-                },
-                method="POST",
-            ),
-            timeout=1.5,
-        )
-    except Exception:
-        pass
-    # #endregion
     return admin_features_collection(clusters)

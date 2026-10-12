@@ -21,10 +21,6 @@ import {
   MUNICIPALITY_FRAME_ZOOM_OFFSET,
 } from '../mapZoomUtils'
 import { fitGeoinsightToBboxViaPoint } from './geoinsightMapViewport'
-import {
-  getGeoinsightMapId,
-  getGeoinsightRef,
-} from './geoinsightMapRuntime'
 import { reassertGreenDetailHighlight } from './geoinsightDetailHighlight'
 import type { GreenDetailHighlightHost } from './geoinsightDetailHighlight'
 
@@ -87,10 +83,6 @@ export function fitGreenExtent(
     bboxes.push(host.lastTerritoryFitBbox)
   }
   const fitBbox = unionBboxes(bboxes)
-  // #region agent log
-  const stack = new Error().stack?.split('\n').slice(1, 6).map((s) => s.trim()) ?? []
-  fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'cerca-no-cam',hypothesisId:'H-no-fit',location:'geoinsightGreenLayers.fitGreenExtent',message:'fit_bbox',data:{includeTerritoryBbox,layerKinds:kinds??null,areaOnly,nBboxes:bboxes.filter(Boolean).length,fitBbox,center:fitBbox?[(fitBbox[0]+fitBbox[2])/2,(fitBbox[1]+fitBbox[3])/2]:null,greenLayerVisible:host.greenLayerVisible,nGa:areaEntries.length,stack,ga:areaEntries.slice(0,5).map(e=>({geomId:e.geomId,label:e.label,bbox:e.bbox,largest:largestComponentBbox(e.geometry),name:(e.properties as {name?:string})?.name}))},timestamp:Date.now()})}).catch(()=>{})
-  // #endregion
   // Race before filtered GA_ mount (debug 4fe799 villa: nBboxes=0 at 1.4s).
   if (!fitBbox) return
   // Via zoomToPoint: zoomToBBOX silently ignored requests, leaving the view at
@@ -107,20 +99,6 @@ export function fitGreenExtent(
         : 0,
     ...(areaOnly ? { minPadDegrees: AREA_FIT_MIN_PAD_DEGREES } : {}),
   })
-  // Post-fit camera probe (vendor zoom is async).
-  window.setTimeout(() => {
-    try {
-      const status = getGeoinsightRef()?.getCenterAndScale?.(getGeoinsightMapId()) as
-        | { center?: number[]; scale?: number }
-        | undefined
-      const zoomNow = readCurrentGreenClusterZoom()
-      // #region agent log
-      fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'persist',hypothesisId:'H-fit',location:'geoinsightGreenLayers.fitGreenExtent:after',message:'fit_camera_after',data:{zoomNow,center:status?.center??null,scale:status?.scale??null,fitBbox,expectedCenter:fitBbox?[(fitBbox[0]+fitBbox[2])/2,(fitBbox[1]+fitBbox[3])/2]:null,nGaOnHost:host.lastGreenGeometries.filter(g=>g.geom_id.startsWith(GEOM_PREFIX.greenArea)).length,greenLayerVisible:host.greenLayerVisible},timestamp:Date.now()})}).catch(()=>{})
-      // #endregion
-    } catch {
-      /* ignore */
-    }
-  }, 600)
 }
 
 /**
@@ -168,10 +146,6 @@ export function loadGreenLayerViewport(
   // Do NOT clearGreenLayerPrefixes here: Cerca wiped the map for 10–70s, then
   // NetworkError left it blank (debug 4fe799). Keep prior GA_/GC_ until the new
   // viewport mounts (fullReplace / preserveAssets handles the swap).
-  const kept = host.lastGreenGeometries.length
-  // #region agent log
-  fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'pool-storm',hypothesisId:'H-no-wipe',location:'geoinsightGreenLayers.loadGreenLayerViewport',message:'viewport_load_keep',data:{kept},timestamp:Date.now()})}).catch(()=>{})
-  // #endregion
   cancelRawClusterApply(host)
   cancelPanStalePrune(host)
   host.greenAssetClusteringActive = true
@@ -223,9 +197,6 @@ export function setGreenLayerVisible(host: GeoinsightGreenLayerHost, visible: bo
   host.removeGeomIds(toRemove)
   // Hide orphan cluster-count label text (debug 4fe799 toggle off).
   host.addGeometries([], { showLabels: false })
-  // #region agent log
-  fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'toggle-labels',hypothesisId:'H-toggle-labels',location:'geoinsightGreenLayers.setGreenLayerVisible',message:'green_visible',data:{visible:false,removed:toRemove.length,labelsForcedOff:true},timestamp:Date.now()})}).catch(()=>{})
-  // #endregion
 }
 
 export function setGreenLayerVisibleWhenMoveEnds(host: GeoinsightGreenLayerHost): void {
@@ -245,11 +216,8 @@ export function clearGreenLayer(host: GeoinsightGreenLayerHost): void {
   // Remove from the vendor map BEFORE reset: reset clears lastGreenGeometries,
   // which is the only place that still lists cluster-count label geom_ids
   // (aliases like "12\u200BGC_…", not GC_/GS_/GA_ prefixes).
-  const removed = clearGreenLayerPrefixes(host)
+  clearGreenLayerPrefixes(host)
   resetGreenAssetClusterState(host)
   host.greenLayerVisible = false
   host.addGeometries([], { showLabels: false })
-  // #region agent log
-  fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'toggle-labels',hypothesisId:'H-toggle-labels',location:'geoinsightGreenLayers.clearGreenLayer',message:'green_cleared',data:{removed:removed.length,labelsForcedOff:true},timestamp:Date.now()})}).catch(()=>{})
-  // #endregion
 }

@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Literal
 if TYPE_CHECKING:
     from territory.common.infrastructure.lakehouse.catalog import IngestResolution
 
-
 def _wide_select_rows(
     resolutions: list[IngestResolution],
     *,
@@ -65,53 +64,6 @@ def _wide_select_rows(
             if attribute_filtered and presence_counts
             else ("presence_select" if presence_counts is not None else "select")
         )
-
-    # #region agent log
-    try:
-        import json as _json
-        import urllib.request as _urlreq
-
-        _payload = _json.dumps(
-            {
-                "sessionId": "4fe799",
-                "runId": "villa-load",
-                "hypothesisId": "H-villa",
-                "location": "silver_read._wide_select_rows",
-                "message": "wide_select_enter",
-                "data": {
-                    "n_muni": len(ordered),
-                    "skip_mode": skip_mode,
-                    "offset": offset,
-                    "page_size": page_size,
-                    "attribute_filtered": attribute_filtered,
-                    "where_prefix": where_sql[:160],
-                    "presence_nonempty": (
-                        sum(1 for v in presence_counts.values() if v > 0)
-                        if presence_counts is not None
-                        else None
-                    ),
-                    "presence_max": (
-                        max(presence_counts.values()) if presence_counts else None
-                    ),
-                },
-                "timestamp": int(time.time() * 1000),
-            }
-        ).encode("utf-8")
-        _urlreq.urlopen(
-            _urlreq.Request(
-                "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                data=_payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "X-Debug-Session-Id": "4fe799",
-                },
-                method="POST",
-            ),
-            timeout=1.5,
-        )
-    except Exception:
-        pass
-    # #endregion
 
     # Attribute filters: larger chunks (fewer MinIO round-trips). Unfiltered gold
     # skip keeps per-muni walks for exact offset math.
@@ -178,51 +130,6 @@ def _wide_select_rows(
                     allowlist = _non_stub_allowlist(candidates, presence_counts)
                     ms_resolve = int((time.monotonic() - _t_allow) * 1000)
                     oneshot = len(allowlist) <= _TABLE_SINGLE_SHOT_MAX
-                    # #region agent log
-                    try:
-                        import json as _json
-                        import urllib.request as _urlreq
-
-                        _payload = _json.dumps(
-                            {
-                                "sessionId": "4fe799",
-                                "runId": "filter-only",
-                                "hypothesisId": "H-filter",
-                                "location": "silver_read._wide_select_rows:allowlist",
-                                "message": "allowlist_resolved",
-                                "data": {
-                                    "n_muni_in": len(ordered),
-                                    "n_candidates": len(candidates),
-                                    "allowlist_size": len(allowlist),
-                                    "ms_resolve": ms_resolve,
-                                    "floor": _FILTER_DENSE_FLOOR,
-                                    "offset": offset,
-                                    "page_size": page_size,
-                                    "mode": "oneshot" if oneshot else "chunked",
-                                    "filter_chunk": filter_chunk,
-                                    "where_prefix": where_sql[:160],
-                                    "allowlist_mids": [
-                                        int(r.municipality_id) for r in allowlist[:8]
-                                    ],
-                                },
-                                "timestamp": int(time.time() * 1000),
-                            }
-                        ).encode("utf-8")
-                        _urlreq.urlopen(
-                            _urlreq.Request(
-                                "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                                data=_payload,
-                                headers={
-                                    "Content-Type": "application/json",
-                                    "X-Debug-Session-Id": "4fe799",
-                                },
-                                method="POST",
-                            ),
-                            timeout=1.5,
-                        )
-                    except Exception:
-                        pass
-                    # #endregion
                     if not allowlist:
                         collected = []
                     elif oneshot:
@@ -244,45 +151,6 @@ def _wide_select_rows(
 
                         rows = _with_con(_oneshot_q)
                         ms_select = int((time.monotonic() - _t_q) * 1000)
-                        # #region agent log
-                        try:
-                            import json as _json
-                            import urllib.request as _urlreq
-
-                            _payload = _json.dumps(
-                                {
-                                    "sessionId": "4fe799",
-                                    "runId": "allowlist-b",
-                                    "hypothesisId": "H-slow",
-                                    "location": "silver_read._wide_select_rows:select",
-                                    "message": "allowlist_select_done",
-                                    "data": {
-                                        "allowlist_size": len(allowlist),
-                                        "nrows": len(rows),
-                                        "ms_resolve": ms_resolve,
-                                        "ms_select": ms_select,
-                                        "mode": "oneshot",
-                                        "order_col": order_col,
-                                        "order_dir": order_dir,
-                                    },
-                                    "timestamp": int(time.time() * 1000),
-                                }
-                            ).encode("utf-8")
-                            _urlreq.urlopen(
-                                _urlreq.Request(
-                                    "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                                    data=_payload,
-                                    headers={
-                                        "Content-Type": "application/json",
-                                        "X-Debug-Session-Id": "4fe799",
-                                    },
-                                    method="POST",
-                                ),
-                                timeout=1.5,
-                            )
-                        except Exception:
-                            pass
-                        # #endregion
                         collected = list(rows)
                         remaining_skip = 0
                     else:
@@ -332,47 +200,6 @@ def _wide_select_rows(
                                 ).fetchall()
 
                             rows = _with_con(_chunk_q)
-                            # #region agent log
-                            if chunks_scanned <= 3 or (chunks_scanned % 5 == 0) or rows:
-                                try:
-                                    import json as _json
-                                    import urllib.request as _urlreq
-
-                                    _urlreq.urlopen(
-                                        _urlreq.Request(
-                                            "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                                            data=_json.dumps(
-                                                {
-                                                    "sessionId": "4fe799",
-                                                    "runId": "stuck-loader",
-                                                    "hypothesisId": "H-chunk",
-                                                    "location": "wide_select:chunk",
-                                                    "message": "wide_chunk",
-                                                    "data": {
-                                                        "i": chunks_scanned,
-                                                        "chunk_n": len(chunk),
-                                                        "nrows": len(rows),
-                                                        "collected": len(collected),
-                                                        "n_scan": len(scan_list),
-                                                        "loop_ms": int(
-                                                            (time.monotonic() - _t_q)
-                                                            * 1000
-                                                        ),
-                                                    },
-                                                    "timestamp": int(time.time() * 1000),
-                                                }
-                                            ).encode("utf-8"),
-                                            headers={
-                                                "Content-Type": "application/json",
-                                                "X-Debug-Session-Id": "4fe799",
-                                            },
-                                            method="POST",
-                                        ),
-                                        timeout=1.0,
-                                    )
-                                except Exception:
-                                    pass
-                            # #endregion
                             if remaining_skip >= len(rows):
                                 remaining_skip -= len(rows)
                                 continue
@@ -381,48 +208,6 @@ def _wide_select_rows(
                             if len(collected) > page_size:
                                 collected = collected[:page_size]
                         ms_select = int((time.monotonic() - _t_q) * 1000)
-                        # #region agent log
-                        try:
-                            import json as _json
-                            import urllib.request as _urlreq
-
-                            _payload = _json.dumps(
-                                {
-                                    "sessionId": "4fe799",
-                                    "runId": "allowlist-b",
-                                    "hypothesisId": "H-slow",
-                                    "location": "silver_read._wide_select_rows:select",
-                                    "message": "allowlist_select_done",
-                                    "data": {
-                                        "allowlist_size": len(allowlist),
-                                        "nrows": len(collected),
-                                        "ms_resolve": ms_resolve,
-                                        "ms_select": ms_select,
-                                        "mode": "chunked",
-                                        "scan_mode": scan_mode,
-                                        "chunks_scanned": chunks_scanned,
-                                        "filter_chunk": filter_chunk,
-                                        "order_col": order_col,
-                                        "order_dir": order_dir,
-                                    },
-                                    "timestamp": int(time.time() * 1000),
-                                }
-                            ).encode("utf-8")
-                            _urlreq.urlopen(
-                                _urlreq.Request(
-                                    "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                                    data=_payload,
-                                    headers={
-                                        "Content-Type": "application/json",
-                                        "X-Debug-Session-Id": "4fe799",
-                                    },
-                                    method="POST",
-                                ),
-                                timeout=1.5,
-                            )
-                        except Exception:
-                            pass
-                        # #endregion
                 else:
                     # Unfiltered presence/select: chunk walk, stable muni order.
                     _t_loop = time.monotonic()
@@ -451,46 +236,6 @@ def _wide_select_rows(
                                 ).fetchall()
 
                             rows = _with_con(_pres_q)
-                            # #region agent log
-                            if i < 3 or rows:
-                                try:
-                                    import json as _json
-                                    import urllib.request as _urlreq
-
-                                    _payload = _json.dumps(
-                                        {
-                                            "sessionId": "4fe799",
-                                            "runId": "allowlist-b",
-                                            "hypothesisId": "H-allowlist",
-                                            "location": "silver_read._wide_select_rows:chunk",
-                                            "message": "presence_chunk",
-                                            "data": {
-                                                "i": i,
-                                                "chunk_n": len(chunk),
-                                                "nrows": len(rows),
-                                                "loop_ms": int(
-                                                    (time.monotonic() - _t_loop)
-                                                    * 1000
-                                                ),
-                                            },
-                                            "timestamp": int(time.time() * 1000),
-                                        }
-                                    ).encode("utf-8")
-                                    _urlreq.urlopen(
-                                        _urlreq.Request(
-                                            "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                                            data=_payload,
-                                            headers={
-                                                "Content-Type": "application/json",
-                                                "X-Debug-Session-Id": "4fe799",
-                                            },
-                                            method="POST",
-                                        ),
-                                        timeout=1.5,
-                                    )
-                                except Exception:
-                                    pass
-                            # #endregion
                             if remaining_skip >= len(rows):
                                 remaining_skip -= len(rows)
                                 continue

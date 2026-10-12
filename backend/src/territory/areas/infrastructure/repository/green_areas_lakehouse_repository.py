@@ -16,7 +16,6 @@ from territory.geo.domain.entities.sub_municipal_area_model import SubMunicipalA
 
 _EMPTY_FC: GeoJSONFeatureCollection = {"type": "FeatureCollection", "features": []}
 
-
 class GreenAreasLakehouseRepository:
     def __init__(
         self,
@@ -232,44 +231,6 @@ class GreenAreasLakehouseRepository:
                     date_to=self._date_to,
                 )
                 _ms_pin = int((_t_pin.monotonic() - _t0_pin) * 1000)
-                # #region agent log
-                try:
-                    import json as _json
-                    import urllib.request as _urlreq
-
-                    _payload = _json.dumps(
-                        {
-                            "sessionId": "4fe799",
-                            "runId": "perf-opt",
-                            "hypothesisId": "H-opt-areas-bbox-pin",
-                            "location": "green_areas_lakehouse_repository:bbox",
-                            "message": "areas_probe_wide_pin",
-                            "data": {
-                                "n_catalog": len(catalog),
-                                "n_catalog_scoped": len(catalog_scoped),
-                                "n_view_munis": len(view_muni_ids),
-                                "n_matches": len(matches),
-                                "ms_areas": _ms_pin,
-                                "opt_path": "bbox_scoped_match_areas",
-                            },
-                            "timestamp": int(_t_pin.time() * 1000),
-                        }
-                    ).encode("utf-8")
-                    _urlreq.urlopen(
-                        _urlreq.Request(
-                            "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                            data=_payload,
-                            headers={
-                                "Content-Type": "application/json",
-                                "X-Debug-Session-Id": "4fe799",
-                            },
-                            method="POST",
-                        ),
-                        timeout=1.5,
-                    )
-                except Exception:
-                    pass
-                # #endregion
                 if not matches:
                     return _EMPTY_FC
                 pin = sorted({m[1] for m in matches})
@@ -302,47 +263,6 @@ class GreenAreasLakehouseRepository:
             filters=filters,
         )
         fc = build_green_area_feature_collection(rows)
-        # #region agent log
-        try:
-            import json as _json
-            import time as _time
-            import urllib.request as _urlreq
-
-            _payload = _json.dumps(
-                {
-                    "sessionId": "4fe799",
-                    "runId": "areas-map",
-                    "hypothesisId": "H-areas-scope",
-                    "location": "green_areas_lakehouse_repository.get_roots_in_bbox",
-                    "message": "areas_viewport_done",
-                    "data": {
-                        "n_features": len(fc.get("features") or []),
-                        "n_resolutions": len(resolutions),
-                        "n_view_munis": (
-                            None if view_muni_ids is None else len(view_muni_ids)
-                        ),
-                        "filter_keys": sorted((filters or {}).keys()),
-                        "filter_mode": filter_mode,
-                        "limit": limit,
-                    },
-                    "timestamp": int(_time.time() * 1000),
-                }
-            ).encode("utf-8")
-            _urlreq.urlopen(
-                _urlreq.Request(
-                    "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                    data=_payload,
-                    headers={
-                        "Content-Type": "application/json",
-                        "X-Debug-Session-Id": "4fe799",
-                    },
-                    method="POST",
-                ),
-                timeout=1.5,
-            )
-        except Exception:
-            pass
-        # #endregion
         return fc
 
     def get_by_parent(

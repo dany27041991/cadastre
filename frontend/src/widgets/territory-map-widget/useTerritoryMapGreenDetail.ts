@@ -118,18 +118,8 @@ export function useTerritoryMapGreenDetail({
 
   useEffect(() => {
     map.setOnGreenDetailSelect((id, label, feature, layerKind) => {
-      // #region agent log
-      const geom = feature.geometry as { type?: string; coordinates?: unknown } | undefined
-      const geomCoords = Array.isArray(geom?.coordinates)
-        ? (geom!.coordinates as unknown[]).slice(0, 2)
-        : null
-      fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'asset-pos',hypothesisId:'H2-geom',location:'useTerritoryMapGreenDetail:mapSelect',message:'map_open_detail',data:{id,label,layerKind,featMuni:feature.properties?.municipality_id??null,geomType:geom?.type??null,geomCoords,hasGeom:!!(geom&&geom.type)},timestamp:Date.now()})}).catch(()=>{})
-      // #endregion
       const pointer = lastMapPointerRef.current
       const anchor = resolveGreenDetailAnchorLonLat(feature, pointer)
-      // #region agent log
-      fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'asset-pos',hypothesisId:'H1-race',location:'useTerritoryMapGreenDetail:anchor',message:'detail_anchor_resolved',data:{id,layerKind,pointer,anchorLon:anchor?.lon??null,anchorLat:anchor?.lat??null,anchorScreen:anchor?.screen??null,forceMaxZoom:layerKind===LAYER_KIND_GREEN_ASSET},timestamp:Date.now()})}).catch(()=>{})
-      // #endregion
       if (anchor) {
         frameGreenDetailOnMap(feature, anchor.lon, anchor.lat, {
           forceMaxZoom: layerKind === LAYER_KIND_GREEN_ASSET,
@@ -137,10 +127,7 @@ export function useTerritoryMapGreenDetail({
       }
       greenDetail.openFromSelection(id, label, feature, layerKind, pointer)
       if (anchor) {
-        const framed = placeDetailPanelAtMapFraction()
-        // #region agent log
-        fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'asset-pos',hypothesisId:'H3-zoom-frac',location:'useTerritoryMapGreenDetail:framed',message:'detail_panel_framed_50_20',data:{id,layerKind,framed,pointerBefore:pointer},timestamp:Date.now()})}).catch(()=>{})
-        // #endregion
+        placeDetailPanelAtMapFraction()
       }
     })
   }, [
@@ -171,10 +158,6 @@ export function useTerritoryMapGreenDetail({
       if (!resolved) return
       const layerKind =
         kind === 'asset' ? LAYER_KIND_GREEN_ASSET : LAYER_KIND_GREEN_AREA
-      // #region agent log
-      const rg=(resolved.feature.geometry as {type?:string;coordinates?:unknown}|undefined)
-      fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'asset-vs-area',hypothesisId:'H-mounted-kind',location:'useTerritoryMapGreenDetail:tableOpen',message:'table_open_detail',data:{kind,rowId:row.id,rowMuni:row.municipality_id,plantCode:row.plant_code??null,speciesCode:row.species_code??null,greenAreaId:row.green_area_id??null,rowAreaCode:row.area_code??row.zril_identifier??null,resolvedId:resolved.id,featMuni:resolved.feature.properties?.municipality_id??null,geomType:rg?.type??null,geomCoords:Array.isArray(rg?.coordinates)?(rg!.coordinates as unknown[]).slice(0,2):null,mountedN:mounted.length,preferAsset:kind==='asset'},timestamp:Date.now()})}).catch(()=>{})
-      // #endregion
       const anchor = resolveGreenDetailAnchorLonLat(resolved.feature, null)
       if (anchor) {
         frameGreenDetailOnMap(resolved.feature, anchor.lon, anchor.lat, {

@@ -118,9 +118,6 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     // restart viewport while assetsLayerActive prop is still true.
     assetsLayerActiveRef.current = false
     onAssetsLayerActiveChange(false)
-    // #region agent log
-    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'toggle-labels',hypothesisId:'H-toggle-labels',location:'useGreenAssetsLayer.turnOffAssetsLayer',message:'assets_toggle_off',data:{areasStillOn:areasLayerActiveRef.current,clipReady},timestamp:Date.now()})}).catch(()=>{})
-    // #endregion
     if (areasLayerActiveRef.current) {
       if (!clipReady) {
         setGreenLayerVisible(false)
@@ -218,9 +215,6 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
     }
     setLoading(true)
     // Includes sub_areas: greenAreaId scopes clusters/trees to the drilled area.
-    // #region agent log
-    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'persist',hypothesisId:'H-toggle',location:'useGreenAssetsLayer.ts:assetsFollow',message:'toggle_state',data:{assetsLayerActive,areasLayerActive,includeAreas:areasLayerActiveRef.current,areaFilterKeys:Object.keys(areaFilters??{}),assetFilterKeys:Object.keys(assetFilters??{}),filtersRevision,contextKey:contextKey.slice(0,120)},timestamp:Date.now()})}).catch(()=>{})
-    // #endregion
     startViewportMode(
       context,
       loadGreenLayerViewport,
@@ -238,9 +232,6 @@ export function useGreenAssetsLayer(options: UseGreenAssetsLayerOptions): UseGre
       fitToGreenExtent()
     } else if (hasAppliedFilters(areaFilters, assetFilters)) {
       cancelScheduledFilterFits('cerca-no-camera')
-      // #region agent log
-      fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'cerca-no-cam',hypothesisId:'H-no-fit',location:'useGreenAssetsLayer.ts:assetsFollow',message:'cerca_camera_skip',data:{why:'no-fit-after-cerca',areaFilterKeys:Object.keys(areaFilters??{}),assetFilterKeys:Object.keys(assetFilters??{})},timestamp:Date.now()})}).catch(()=>{})
-      // #endregion
     }
     setLoading(false)
   }, [

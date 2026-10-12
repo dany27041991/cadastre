@@ -127,9 +127,6 @@ export function createGreenAreasApi(
         return collection
       } catch (err) {
         if (init?.signal?.aborted) throw err
-        // #region agent log
-        fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'villa-clusters',hypothesisId:'H-api-swallow',location:'greenAreaMap.api:viewport',message:'areas_viewport_api_err',data:{err:String(err),zoom:params.zoom,filterKeys:Object.keys(params.filters??{})},timestamp:Date.now()})}).catch(()=>{})
-        // #endregion
         // Re-throw so refreshViewport sets transportFail (debug 4fe799:
         // swallowed NetworkError → empty-ok for name=area).
         throw err

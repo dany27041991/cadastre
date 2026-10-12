@@ -13,7 +13,6 @@ import { toast } from 'react-toastify'
 import { Button, InfoPanel, icons } from 'dxc-webkit'
 import { useGreenTablePanelOptional } from '@/features/territory/context/GreenTablePanelContext'
 import { findInvalidFilterRange } from '@/features/territory/lib/greenTableFilterFields'
-import { startPerfScan } from '@/features/territory/lib/perfScan'
 import { GreenTablePanelSections } from './GreenTablePanelSections'
 import { LayersPanel } from './LayersPanel'
 import { DrawPromptPanel } from './DrawPromptPanel'
@@ -207,12 +206,6 @@ export function InfoPanelContent() {
       toast.error(t('territory.panel.filterRangeInvalid', { field: fieldLabel }))
       return
     }
-    const areaKeys = Object.keys(panel.columnFiltersByKind.area)
-    const assetKeys = Object.keys(panel.columnFiltersByKind.asset)
-    // #region agent log
-    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'range-filters',hypothesisId:'H-range',location:'InfoPanelContent.tsx:handleSearch',message:'cerca_range_ok',data:{areaKeys,assetKeys},timestamp:Date.now()})}).catch(()=>{})
-    // #endregion
-    startPerfScan('cerca', { areaKeys, assetKeys })
     panel.applyFiltersAndShowResults()
   }
 
@@ -303,9 +296,6 @@ export function InfoPanelContent() {
   }
 
   if (step === 'filters') {
-    // #region agent log
-    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'post-fix',hypothesisId:'H3',location:'InfoPanelContent.tsx:filters',message:'filters_step_footer',data:{clearLabel:'Pulisci',clearLeftOfSearch:true,hasClearButton:true,hasSearchButton:true,hasDraftOrAppliedFilters,draftAreaKeys:Object.keys(panel?.columnFiltersByKind.area??{}),draftAssetKeys:Object.keys(panel?.columnFiltersByKind.asset??{}),appliedAreaKeys:Object.keys(panel?.appliedFiltersByKind.area??{}),appliedAssetKeys:Object.keys(panel?.appliedFiltersByKind.asset??{})},timestamp:Date.now()})}).catch(()=>{})
-    // #endregion
     return (
       <PanelShell
         footer={

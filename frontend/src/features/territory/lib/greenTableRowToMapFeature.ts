@@ -92,9 +92,6 @@ function findMountedForRow(
       picked = only
     }
   }
-  // #region agent log
-  fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'asset-vs-area',hypothesisId:'H-mounted-kind',location:'greenTableRowToMapFeature:findMounted',message:'table_mounted_resolve',data:{kind,id,rowMunicipalityId,sameScopeN:sameScope.length,pickedGeom:(picked?.geometry as {type?:string})?.type??null,pickedByGeom:Boolean(byGeom),refusedCrossKind:!picked&&sameScope.length>0,candidates:sameScope.map(f=>({geom:(f.geometry as {type?:string})?.type??null,label:f.label}))},timestamp:Date.now()})}).catch(()=>{})
-  // #endregion
   return picked
 }
 

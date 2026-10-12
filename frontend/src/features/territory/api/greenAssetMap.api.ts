@@ -91,9 +91,6 @@ export function createGreenAssetsApi(
         return collection
       } catch (err) {
         if (init?.signal?.aborted) throw err
-        // #region agent log
-        fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'villa-clusters',hypothesisId:'H-api-swallow',location:'greenAssetMap.api:viewport',message:'assets_viewport_api_err',data:{err:String(err),zoom:params.zoom,hasAreaFilters:!!params.areaFilters},timestamp:Date.now()})}).catch(()=>{})
-        // #endregion
         // NetworkError must surface as transportFail (debug 4fe799 name=area).
         if (/NetworkError|Failed to fetch/i.test(String(err))) throw err
         // Other 500 / pool: keep map usable; next settle refresh retries.

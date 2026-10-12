@@ -16,12 +16,10 @@ _table_count_lock = threading.Lock()
 _table_count_cache = new_table_count_cache(_TABLE_COUNT_TTL_SEC)
 _table_count_inflight: set[tuple[str, str]] = set()
 
-
 def _count_cache_key(where_sql: str, fingerprint: str) -> tuple[str, str]:
     # Bound key RAM: full WHERE can be long with many ILIKE clauses.
     w = where_sql if len(where_sql) <= 240 else hashlib.sha1(where_sql.encode()).hexdigest()
     return (w, fingerprint)
-
 
 def _count_cache_get(where_sql: str, fingerprint: str) -> int | None:
     key = _count_cache_key(where_sql, fingerprint)
@@ -29,7 +27,6 @@ def _count_cache_get(where_sql: str, fingerprint: str) -> int | None:
         if key in _table_count_cache:
             return int(_table_count_cache[key])
     return None
-
 
 def _wide_count(
     resolutions: list[IngestResolution],
@@ -72,7 +69,6 @@ def _wide_count(
         _table_count_cache[_count_cache_key(where_sql, fingerprint)] = total
     return total
 
-
 def _schedule_wide_count(
     resolutions: list[IngestResolution],
     where_sql: str,
@@ -98,45 +94,7 @@ def _schedule_wide_count(
         # assets and amplified pool contention). Rows already returned approx.
         _time_delay.sleep(2.5)
         try:
-            _t0 = _time_delay.monotonic()
             _wide_count(resolutions, where_sql, stub=stub)
-            _ms = int((_time_delay.monotonic() - _t0) * 1000)
-            # #region agent log
-            try:
-                import json as _json
-                import urllib.request as _urlreq
-
-                _payload = _json.dumps(
-                    {
-                        "sessionId": "4fe799",
-                        "runId": "perf-table-p2",
-                        "hypothesisId": "H-count-defer",
-                        "location": "counts._schedule_wide_count",
-                        "message": "table_count_bg_done",
-                        "data": {
-                            "ms": _ms,
-                            "stub": stub,
-                            "defer_sec": 2.5,
-                            "n_res": len(resolutions),
-                        },
-                        "timestamp": int(_time_delay.time() * 1000),
-                    }
-                ).encode("utf-8")
-                _urlreq.urlopen(
-                    _urlreq.Request(
-                        "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                        data=_payload,
-                        headers={
-                            "Content-Type": "application/json",
-                            "X-Debug-Session-Id": "4fe799",
-                        },
-                        method="POST",
-                    ),
-                    timeout=1.5,
-                )
-            except Exception:
-                pass
-            # #endregion
         except Exception:
             pass
         finally:
@@ -144,7 +102,6 @@ def _schedule_wide_count(
                 _table_count_inflight.discard(key)
 
     threading.Thread(target=_run, daemon=True, name="lakehouse-table-count").start()
-
 
 def _asset_total_from_gold(resolutions: list[IngestResolution]) -> int | None:
     """Unfiltered asset total from municipality gold (same ingest set as silver)."""
@@ -158,7 +115,6 @@ def _asset_total_from_gold(resolutions: list[IngestResolution]) -> int | None:
         return None
     return sum(int(r[6] or 0) for r in rows)
 
-
 def _area_total_from_gold(resolutions: list[IngestResolution]) -> int | None:
     """Root areas total (parent_id IS NULL) from green_areas_stats gold."""
     try:
@@ -170,7 +126,6 @@ def _area_total_from_gold(resolutions: list[IngestResolution]) -> int | None:
     if not rows:
         return None
     return sum(int(r[6] or 0) for r in rows)
-
 
 def _resolve_wide_total(
     resolutions: list[IngestResolution],

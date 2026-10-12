@@ -138,87 +138,6 @@ def get_green_assets_viewport(
         area_filters=area_filters or None,
     )
     _ms_wall = int((_time_wall.monotonic() - _t_wall) * 1000)
-    # #region agent log
-    try:
-        import json as _json
-        import time as _time
-        import urllib.request as _urlreq
-
-        _feats = result.get("features") or []
-        _n_cluster = 0
-        _sum_cc = 0
-        _n_raw = 0
-        _sample_cc: list[dict] = []
-        for _f in _feats:
-            _p = (_f or {}).get("properties") or {}
-            if _p.get("cluster") is True:
-                _n_cluster += 1
-                _c = int(_p.get("cluster_count") or 0)
-                _sum_cc += _c
-                if len(_sample_cc) < 5:
-                    _sample_cc.append(
-                        {
-                            "key": _p.get("cluster_key"),
-                            "count": _c,
-                        }
-                    )
-            else:
-                _n_raw += 1
-        _payload = _json.dumps(
-            {
-                "sessionId": "4fe799",
-                "runId": "perf-opt",
-                "hypothesisId": "H-opt-viewport-wall",
-                "location": "green_asset_ctrl.get_green_assets_viewport",
-                "message": "assets_viewport_out",
-                "data": {
-                    "zoom": zoom,
-                    "bbox": parts,
-                    "filter_keys": sorted(filters.keys()),
-                    "filters": {k: str(v)[:80] for k, v in filters.items()},
-                    "area_filter_keys": sorted(area_filters.keys()),
-                    "area_filters": {
-                        k: str(v)[:80] for k, v in area_filters.items()
-                    },
-                    "n_features": len(_feats),
-                    "n_cluster": _n_cluster,
-                    "n_raw": _n_raw,
-                    "sum_cluster_count": _sum_cc,
-                    "sample_clusters": _sample_cc,
-                    "ms_wall": _ms_wall,
-                    "baseline_cold_filtered_ms": 14259,
-                    "kind": (
-                        "clusters"
-                        if _n_cluster and not _n_raw
-                        else (
-                            "raw"
-                            if _n_raw and not _n_cluster
-                            else (
-                                "mixed"
-                                if _n_cluster or _n_raw
-                                else "empty"
-                            )
-                        )
-                    ),
-                },
-                "timestamp": int(_time.time() * 1000),
-            }
-        ).encode("utf-8")
-        _urlreq.urlopen(
-            _urlreq.Request(
-                "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                data=_payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "X-Debug-Session-Id": "4fe799",
-                },
-                method="POST",
-            ),
-            timeout=1.5,
-        )
-    except Exception:
-        pass
-    # #endregion
     over_headers = (
         {"X-Cadastre-Cluster-Over-Cap": "1"} if is_cluster_over_cap() else None
     )
@@ -264,47 +183,6 @@ def get_green_assets_table(
     # National (unscoped) table is allowed: lakehouse resolves all ingest prefixes
     # in the date window and DuckDB paginates. Concurrent viewport+table can be
     # heavy at full Italy scale — callers use small page_size from the FE.
-    # #region agent log
-    try:
-        import json as _json
-        import time as _time
-        import urllib.request as _urlreq
-
-        _payload = _json.dumps(
-            {
-                "sessionId": "4fe799",
-                "runId": "asset-cluster-count",
-                "hypothesisId": "H-table",
-                "location": "green_asset_ctrl.get_green_assets_table",
-                "message": "assets_table_in",
-                "data": {
-                    "filter_keys": sorted(filters.keys()),
-                    "filters": {k: str(v)[:80] for k, v in filters.items()},
-                    "page": page,
-                    "page_size": page_size,
-                    "region_id": region_id,
-                    "province_id": province_id,
-                    "municipality_id": municipality_id,
-                    "has_clip": bool(clip_wkt),
-                },
-                "timestamp": int(_time.time() * 1000),
-            }
-        ).encode("utf-8")
-        _urlreq.urlopen(
-            _urlreq.Request(
-                "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                data=_payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "X-Debug-Session-Id": "4fe799",
-                },
-                method="POST",
-            ),
-            timeout=1.5,
-        )
-    except Exception:
-        pass
-    # #endregion
     import time as _time_tbl
 
     _t_tbl = _time_tbl.monotonic()
@@ -322,46 +200,6 @@ def get_green_assets_table(
         filters=filters or None,
     )
     _ms_tbl = int((_time_tbl.monotonic() - _t_tbl) * 1000)
-    # #region agent log
-    try:
-        import json as _json
-        import time as _time
-        import urllib.request as _urlreq
-
-        _payload = _json.dumps(
-            {
-                "sessionId": "4fe799",
-                "runId": "perf",
-                "hypothesisId": "H-perf-table",
-                "location": "green_asset_ctrl.get_green_assets_table",
-                "message": "assets_table_out",
-                "data": {
-                    "filter_keys": sorted(filters.keys()),
-                    "filters": {k: str(v)[:80] for k, v in filters.items()},
-                    "total": getattr(_page, "total", None),
-                    "nrows": len(getattr(_page, "data", None) or []),
-                    "page": page,
-                    "page_size": page_size,
-                    "ms_wall": _ms_tbl,
-                },
-                "timestamp": int(_time.time() * 1000),
-            }
-        ).encode("utf-8")
-        _urlreq.urlopen(
-            _urlreq.Request(
-                "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                data=_payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "X-Debug-Session-Id": "4fe799",
-                },
-                method="POST",
-            ),
-            timeout=1.5,
-        )
-    except Exception:
-        pass
-    # #endregion
     return _page
 
 # After static paths (viewport/table): otherwise {asset_id} steals those segments → 422.

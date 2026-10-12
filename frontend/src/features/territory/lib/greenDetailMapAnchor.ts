@@ -296,9 +296,6 @@ export function resolveGreenDetailAnchorLonLat(
           : lonIsInsideFeatureBbox(lon, lat, bbox)
       if (onFeature || center == null) {
         path = 'click_on_feature'
-        // #region agent log
-        fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'asset-pos',hypothesisId:'H2-geom',location:'greenDetailMapAnchor:resolve',message:'anchor_path',data:{path,pointer,clickLonLat:fromClick,center,bbox,onFeature,featId:feature.id},timestamp:Date.now()})}).catch(()=>{})
-        // #endregion
         return {
           lon,
           lat,
@@ -310,9 +307,6 @@ export function resolveGreenDetailAnchorLonLat(
   }
 
   if (!center) {
-    // #region agent log
-    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'asset-pos',hypothesisId:'H2-geom',location:'greenDetailMapAnchor:resolve',message:'anchor_path',data:{path:'null',pointer,center,bbox,featId:feature.id},timestamp:Date.now()})}).catch(()=>{})
-    // #endregion
     return null
   }
   const screen =
@@ -322,10 +316,6 @@ export function resolveGreenDetailAnchorLonLat(
       clientY: Math.round(window.innerHeight * 0.35),
     }
   if (path === 'null') path = 'center_only'
-  // #region agent log
-  const projectedBack = lonLatToClientPoint(center[0], center[1])
-  fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'asset-pos',hypothesisId:'H4-ol-proj',location:'greenDetailMapAnchor:resolve',message:'anchor_path',data:{path,pointer,center,bbox,screen,projectedBack,dx:pointer&&projectedBack?projectedBack.clientX-pointer.clientX:null,dy:pointer&&projectedBack?projectedBack.clientY-pointer.clientY:null,featId:feature.id},timestamp:Date.now()})}).catch(()=>{})
-  // #endregion
   return { lon: center[0], lat: center[1], screen }
 }
 

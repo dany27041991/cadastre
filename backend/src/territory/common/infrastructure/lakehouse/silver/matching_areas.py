@@ -76,7 +76,6 @@ MatchMunisMode = Literal[
     "oneshot",
 ]
 
-
 def _resolutions_fingerprint(
     resolutions: list[IngestResolution],
     *,
@@ -84,7 +83,6 @@ def _resolutions_fingerprint(
 ) -> str:
     """Full muni:ingest snapshot + widespread flag."""
     return f"{_sql_resolutions_fingerprint(resolutions)}|wide={int(wide)}"
-
 
 def _match_scope_key(
     filters: dict[str, Any],
@@ -103,41 +101,6 @@ def _match_scope_key(
         filter_cache_key(filters),
         f"{catalog_window_key(date_from, date_to)}|{_resolutions_fingerprint(resolutions, wide=wide)}",
     )
-
-
-def _log_match_munis_done(data: dict[str, Any], *, hypothesis_id: str) -> None:
-    # #region agent log
-    try:
-        import json as _json
-        import urllib.request as _urlreq
-
-        _payload = _json.dumps(
-            {
-                "sessionId": "4fe799",
-                "runId": "perf-opt",
-                "hypothesisId": hypothesis_id,
-                "location": "silver.matching_areas:resolve_matching_municipality_ids",
-                "message": "match_munis_done",
-                "data": data,
-                "timestamp": int(time.time() * 1000),
-            }
-        ).encode("utf-8")
-        _urlreq.urlopen(
-            _urlreq.Request(
-                "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                data=_payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "X-Debug-Session-Id": "4fe799",
-                },
-                method="POST",
-            ),
-            timeout=1.5,
-        )
-    except Exception:
-        pass
-    # #endregion
-
 
 def _ordered_candidates(
     resolutions: list[IngestResolution],
@@ -185,7 +148,6 @@ def _ordered_candidates(
         )
     return ordered, presence, where_sql
 
-
 def _distinct_munis_chunk(
     chunk: list[IngestResolution], where_sql: str
 ) -> list[int]:
@@ -210,7 +172,6 @@ def _distinct_munis_chunk(
         if r[0] is not None:
             out.append(int(r[0]))
     return out
-
 
 def _probe_first_chunk(
     first: list[IngestResolution], where_sql: str
@@ -248,7 +209,6 @@ def _probe_first_chunk(
             found.update(fut.result())
     meta["probe_ms"] = int((time.monotonic() - t_p) * 1000)
     return sorted(found), meta
-
 
 def resolve_matching_municipality_ids(
     resolutions: list[IngestResolution],
@@ -293,15 +253,6 @@ def resolve_matching_municipality_ids(
     with _match_muni_lock:
         if cache_key in _match_muni_cache:
             cached = _match_muni_cache[cache_key]
-            _log_match_munis_done(
-                {
-                    "n_munis": None if cached is _PROBE_WIDE else len(cached),
-                    "ms": 0,
-                    "mode": "cache",
-                    "coalesced": False,
-                },
-                hypothesis_id="H-match-muni-cache",
-            )
             if cached is _PROBE_WIDE:
                 return None, "cache"
             return list(cached), "cache"
@@ -319,15 +270,6 @@ def resolve_matching_municipality_ids(
         with _match_muni_lock:
             if cache_key in _match_muni_cache:
                 cached2 = _match_muni_cache[cache_key]
-                _log_match_munis_done(
-                    {
-                        "n_munis": None if cached2 is _PROBE_WIDE else len(cached2),
-                        "ms": 0,
-                        "mode": "cache",
-                        "coalesced": True,
-                    },
-                    hypothesis_id="H-match-muni-coalesce",
-                )
                 if cached2 is _PROBE_WIDE:
                     return None, "cache"
                 return list(cached2), "cache"
@@ -345,18 +287,11 @@ def resolve_matching_municipality_ids(
             if len(ordered) <= _TABLE_SINGLE_SHOT_MAX
             else _MATCH_MUNI_CHUNK
         )
-        t0 = time.monotonic()
         chunks = [
             ordered[i : i + chunk_size] for i in range(0, len(ordered), chunk_size)
         ]
 
         # Probe first dense chunk (parallel sub-slices) — widespread exits here.
-        probe_meta: dict[str, Any] = {
-            "probe_parallel": False,
-            "probe_subchunks": 0,
-            "probe_n_in": 0,
-            "probe_ms": 0,
-        }
         probe: list[int] = []
         # Progressive widespread: sample densest N munis only when shortcircuit
         # is allowed. Selective filters keep the full first chunk (scoping).
@@ -371,28 +306,12 @@ def resolve_matching_municipality_ids(
             probe_target = first_chunk[:_WIDESPREAD_PROBE_N]
             progressive_wide = True
         if probe_target:
-            probe, probe_meta = _probe_first_chunk(probe_target, where_sql)
-        probe_meta["progressive_wide"] = progressive_wide
-        probe_meta["probe_target_n"] = len(probe_target)
+            probe, _ = _probe_first_chunk(probe_target, where_sql)
         if (
             allow_widespread_shortcircuit
             and len(chunks) > 1
             and len(probe) >= _WIDESPREAD_PROBE_MIN_MUNIS
         ):
-            _log_match_munis_done(
-                {
-                    "n_ordered": len(ordered),
-                    "chunks_scanned": 1,
-                    "n_munis": None,
-                    "probe_hits": len(probe),
-                    "ms": int((time.monotonic() - t0) * 1000),
-                    "mode": "probe_wide",
-                    "coalesced": False,
-                    "opt": "probe_progressive_v1",
-                    **probe_meta,
-                },
-                hypothesis_id="H-widespread",
-            )
             with _match_muni_lock:
                 _match_muni_cache[cache_key] = _PROBE_WIDE
             return None, "probe_wide"
@@ -400,14 +319,11 @@ def resolve_matching_municipality_ids(
         # Not widespread: finish remainder of first dense chunk via early_stop
         # waves (prepend so dense-first order / empty-streak stay correct).
         found: set[int] = set(probe)
-        chunks_scanned = 1 if chunks else 0
         rest: list[list[IngestResolution]] = list(chunks[1:]) if chunks else []
         if progressive_wide and len(first_chunk) > _WIDESPREAD_PROBE_N:
             remainder = first_chunk[_WIDESPREAD_PROBE_N :]
             if remainder:
                 rest = [remainder, *rest]
-                probe_meta["remainder_n"] = len(remainder)
-        stop_after_used = _EMPTY_CHUNK_STOP
 
         if len(ordered) <= _TABLE_SINGLE_SHOT_MAX:
             mode: MatchMunisMode = "oneshot"
@@ -422,7 +338,6 @@ def resolve_matching_municipality_ids(
                 if len(found) <= _SPARSE_FOUND_MAX
                 else _EMPTY_CHUNK_STOP
             )
-            stop_after_used = stop_after
             empty_streak = 0
             ri = 0
             while (
@@ -443,7 +358,6 @@ def resolve_matching_municipality_ids(
                     # Preserve chunk order for consecutive-empty semantics.
                     ordered_hits = [fut.result() for fut in futs]
                 for hits in ordered_hits:
-                    chunks_scanned += 1
                     if not hits:
                         empty_streak += 1
                         if empty_streak >= stop_after:
@@ -478,7 +392,6 @@ def resolve_matching_municipality_ids(
                     ]
                     ordered_hits = [fut.result() for fut in futs]
                 for hits in ordered_hits:
-                    chunks_scanned += 1
                     if not hits:
                         empty_streak += 1
                         if empty_streak >= _EMPTY_CHUNK_STOP:
@@ -499,30 +412,10 @@ def resolve_matching_municipality_ids(
                     pool.submit(_distinct_munis_chunk, ch, where_sql) for ch in rest
                 ]
                 for fut in concurrent.futures.as_completed(futs):
-                    chunks_scanned += 1
                     for mid in fut.result():
                         found.add(mid)
 
         out = sorted(found)
-        _log_match_munis_done(
-            {
-                "n_ordered": len(ordered),
-                "chunks_scanned": chunks_scanned,
-                "n_munis": len(out),
-                "probe_hits": len(probe),
-                "ms": int((time.monotonic() - t0) * 1000),
-                "mode": mode,
-                "workers": _MATCH_MUNI_WORKERS,
-                "stop_after": stop_after_used,
-                "opt": "probe_progressive_v1",
-                "result_cap": _MATCH_MUNI_RESULT_CAP,
-                "baseline_cold_ms": 7180,
-                "baseline_probe_wide_ms": 2733,
-                "coalesced": False,
-                **probe_meta,
-            },
-            hypothesis_id="H-opt-match-muni",
-        )
 
         with _match_muni_lock:
             _match_muni_cache[cache_key] = tuple(out)
@@ -533,7 +426,6 @@ def resolve_matching_municipality_ids(
         with _match_muni_lock:
             _match_muni_inflight.pop(cache_key, None)
             wait_ev.set()
-
 
 def resolve_matching_areas(
     resolutions: list[IngestResolution],
@@ -567,41 +459,6 @@ def resolve_matching_areas(
     with _match_areas_lock:
         hit = _match_areas_cache.get(cache_key)
         if hit is not None:
-            # #region agent log
-            try:
-                import json as _json
-                import urllib.request as _urlreq
-
-                _payload = _json.dumps(
-                    {
-                        "sessionId": "4fe799",
-                        "runId": "zoom-fast",
-                        "hypothesisId": "H-match-cache",
-                        "location": "silver.matching_areas:resolve_matching_areas",
-                        "message": "match_areas_done",
-                        "data": {
-                            "cache": True,
-                            "n_matches": len(hit),
-                            "ms": 0,
-                        },
-                        "timestamp": int(time.time() * 1000),
-                    }
-                ).encode("utf-8")
-                _urlreq.urlopen(
-                    _urlreq.Request(
-                        "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                        data=_payload,
-                        headers={
-                            "Content-Type": "application/json",
-                            "X-Debug-Session-Id": "4fe799",
-                        },
-                        method="POST",
-                    ),
-                    timeout=1.5,
-                )
-            except Exception:
-                pass
-            # #endregion
             return list(hit)
         inflight = _match_areas_inflight.get(cache_key)
         if inflight is not None:
@@ -617,42 +474,6 @@ def resolve_matching_areas(
         with _match_areas_lock:
             hit2 = _match_areas_cache.get(cache_key)
             if hit2 is not None:
-                # #region agent log
-                try:
-                    import json as _json
-                    import urllib.request as _urlreq
-
-                    _payload = _json.dumps(
-                        {
-                            "sessionId": "4fe799",
-                            "runId": "pool-storm",
-                            "hypothesisId": "H-match-coalesce",
-                            "location": "silver.matching_areas:resolve_matching_areas",
-                            "message": "match_areas_done",
-                            "data": {
-                                "cache": True,
-                                "coalesced": True,
-                                "n_matches": len(hit2),
-                                "ms": 0,
-                            },
-                            "timestamp": int(time.time() * 1000),
-                        }
-                    ).encode("utf-8")
-                    _urlreq.urlopen(
-                        _urlreq.Request(
-                            "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                            data=_payload,
-                            headers={
-                                "Content-Type": "application/json",
-                                "X-Debug-Session-Id": "4fe799",
-                            },
-                            method="POST",
-                        ),
-                        timeout=1.5,
-                    )
-                except Exception:
-                    pass
-                # #endregion
                 return list(hit2)
             inflight2 = _match_areas_inflight.get(cache_key)
             if inflight2 is not None and inflight2[1] is not None:
@@ -683,8 +504,6 @@ def resolve_matching_areas(
             else max(_TABLE_WIDE_CHUNK, 200)
         )
         empty_streak = 0
-        chunks_scanned = 0
-        t0 = time.monotonic()
         con = connect_lakehouse()
         try:
             with timed_op(
@@ -696,7 +515,6 @@ def resolve_matching_areas(
                     if len(out) >= limit:
                         break
                     chunk = ordered[i : i + chunk_size]
-                    chunks_scanned += 1
                     need = limit - len(out)
                     files_sql = _files_sql_for(chunk, stub="areas")
                     rows = con.execute(
@@ -732,44 +550,4 @@ def resolve_matching_areas(
         with _match_areas_lock:
             _match_areas_inflight.pop(cache_key, None)
 
-        # #region agent log
-        try:
-            import json as _json
-            import urllib.request as _urlreq
-
-            _payload = _json.dumps(
-                {
-                    "sessionId": "4fe799",
-                    "runId": "perf-opt",
-                    "hypothesisId": "H-opt-match-areas",
-                    "location": "silver.matching_areas:resolve_matching_areas",
-                    "message": "match_areas_done",
-                    "data": {
-                        "cache": False,
-                        "coalesced": False,
-                        "n_resolutions_in": len(resolutions),
-                        "n_ordered": len(ordered),
-                        "chunks_scanned": chunks_scanned,
-                        "n_matches": len(out),
-                        "ms": int((time.monotonic() - t0) * 1000),
-                        "scoped_hint": len(resolutions) <= 40,
-                    },
-                    "timestamp": int(time.time() * 1000),
-                }
-            ).encode("utf-8")
-            _urlreq.urlopen(
-                _urlreq.Request(
-                    "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                    data=_payload,
-                    headers={
-                        "Content-Type": "application/json",
-                        "X-Debug-Session-Id": "4fe799",
-                    },
-                    method="POST",
-                ),
-                timeout=1.5,
-            )
-        except Exception:
-            pass
-        # #endregion
         return out

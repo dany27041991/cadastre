@@ -30,7 +30,6 @@ from territory.assets.application.usecases.query.viewport_cluster_geojson import
 )
 from core.logger import log_invocation
 
-
 @log_invocation(log_args=True, log_result=False)
 def viewport_green_assets(
     repository: GreenAssetsLakehouseRepository,
@@ -197,71 +196,6 @@ def viewport_green_assets(
                     clip_res, green_area_ids
                 )
                 _ms_clip = int((_time_match.monotonic() - _t_clip) * 1000)
-        # #region agent log
-        try:
-            import json as _json
-            import urllib.request as _urlreq
-
-            _ms_match_total = int((_time_match.monotonic() - _t_match) * 1000)
-            _payload = _json.dumps(
-                {
-                    "sessionId": "4fe799",
-                    "runId": "perf-opt",
-                    "hypothesisId": "H-opt-scoped-areas",
-                    "location": "viewport_green_assets:area_match",
-                    "message": "area_cross_filter",
-                    "data": {
-                        "match_mode": match_mode,
-                        "muni_resolve_mode": muni_resolve_mode,
-                        "opt_path": opt_path,
-                        "need_area_ids": need_area_ids,
-                        "n_matches": n_matches,
-                        "n_munis": (
-                            None
-                            if match_munis is None
-                            else len(match_munis)
-                        ),
-                        "sample_munis": (
-                            None
-                            if match_munis is None
-                            else match_munis[:5]
-                        ),
-                        "sample_pairs": match_pairs_sample,
-                        "n_area_ids": len(green_area_ids or []),
-                        "has_area_clip": area_clip_geom is not None,
-                        "zoom": zoom,
-                        "ms_match": _ms_match_total,
-                        "ms_prefixes": _ms_prefixes,
-                        "ms_munis": _ms_munis,
-                        "ms_areas": _ms_areas,
-                        "ms_clip": _ms_clip,
-                        "n_areas_res_in": n_areas_res_in,
-                        "n_areas_res_scoped": n_areas_res_scoped,
-                        "baseline_cold_ms_match_approx": 13500,
-                        "code_ver": "match-v8-asset-area-pin-capped",
-                        "probe_wide_asset_pin": probe_wide_asset_pin,
-                        "wide_selective_asset_pin": wide_selective_asset_pin,
-                        "asset_area_pin": asset_area_pin,
-                        "n_clip_res": n_clip_res,
-                    },
-                    "timestamp": int(_time_match.time() * 1000),
-                }
-            ).encode("utf-8")
-            _urlreq.urlopen(
-                _urlreq.Request(
-                    "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                    data=_payload,
-                    headers={
-                        "Content-Type": "application/json",
-                        "X-Debug-Session-Id": "4fe799",
-                    },
-                    method="POST",
-                ),
-                timeout=1.5,
-            )
-        except Exception:
-            pass
-        # #endregion
 
     # Asset-only filters (no area cross-filter): national silver raw.
     # Do NOT enter when area filters are probe_wide (match_munis is also None) —
@@ -274,56 +208,6 @@ def viewport_green_assets(
             filters=filters,
             **scope,
         )
-        # #region agent log
-        try:
-            import json as _json
-            import time as _time
-            import urllib.request as _urlreq
-
-            _n = len(fc.get("features") or [])
-            _payload = _json.dumps(
-                {
-                    "sessionId": "4fe799",
-                    "runId": "asset-area-cerca",
-                    "hypothesisId": "H-asset-area-path",
-                    "location": "catalog_green_asset.viewport_green_assets",
-                    "message": "viewport_assets_path",
-                    "data": {
-                        "has_filters": has_asset_filters,
-                        "has_area_filters": has_area_filters,
-                        "filter_keys": sorted((filters or {}).keys()),
-                        "filters": {
-                            k: str(v)[:80] for k, v in (filters or {}).items()
-                        },
-                        "area_filter_keys": sorted((area_filters or {}).keys()),
-                        "zoom": zoom,
-                        "path": path_name,
-                        "municipality_id": municipality_id,
-                        "region_id": region_id,
-                        "n_features": _n,
-                        "raw_hard_cap": LAST_ZOOM_RAW_HARD_CAP,
-                        "capped": _n >= LAST_ZOOM_RAW_HARD_CAP,
-                        "kind": "raw",
-                        "asset_filters_applied_to_counts": True,
-                    },
-                    "timestamp": int(_time.time() * 1000),
-                }
-            ).encode("utf-8")
-            _urlreq.urlopen(
-                _urlreq.Request(
-                    "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                    data=_payload,
-                    headers={
-                        "Content-Type": "application/json",
-                        "X-Debug-Session-Id": "4fe799",
-                    },
-                    method="POST",
-                ),
-                timeout=1.5,
-            )
-        except Exception:
-            pass
-        # #endregion
         return fc
 
     filter_scope_munis = match_munis
@@ -336,59 +220,6 @@ def viewport_green_assets(
         raw_kwargs["filters"] = filters
     if area_clip_geom is not None:
         raw_kwargs["clip_geom"] = area_clip_geom
-
-    # #region agent log
-    try:
-        import json as _json
-        import time as _time
-        import urllib.request as _urlreq
-
-        if green_area_ids is not None:
-            _path = "live_ga_or_raw"
-        elif filter_scope_munis is not None:
-            _path = "filtered_ladder"
-        else:
-            _path = "gold_or_grid"
-        _payload = _json.dumps(
-            {
-                "sessionId": "4fe799",
-                "runId": "asset-area-cerca",
-                "hypothesisId": "H-asset-area-path",
-                "location": "catalog_green_asset.viewport_green_assets",
-                "message": "viewport_assets_path",
-                "data": {
-                    "has_filters": has_asset_filters,
-                    "has_area_filters": has_area_filters,
-                    "filter_keys": sorted((filters or {}).keys()),
-                    "area_filter_keys": sorted((area_filters or {}).keys()),
-                    "zoom": zoom,
-                    "path": _path,
-                    "municipality_id": municipality_id,
-                    "region_id": region_id,
-                    "n_match_munis": (
-                        len(filter_scope_munis) if filter_scope_munis else 0
-                    ),
-                    "n_area_ids": len(green_area_ids or []),
-                    "skip_admin_for_asset_filters": bool(has_asset_filters),
-                },
-                "timestamp": int(_time.time() * 1000),
-            }
-        ).encode("utf-8")
-        _urlreq.urlopen(
-            _urlreq.Request(
-                "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                data=_payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "X-Debug-Session-Id": "4fe799",
-                },
-                method="POST",
-            ),
-            timeout=1.5,
-        )
-    except Exception:
-        pass
-    # #endregion
 
     # Admin gold (with optional clip on unit extent) for low zooms.
     # A green-area scope has no pre-aggregated admin rows; grid/raw only.
@@ -409,60 +240,6 @@ def viewport_green_assets(
             municipality_ids=filter_scope_munis,
         )
         if admin is not None:
-            # #region agent log
-            try:
-                import json as _json
-                import time as _time
-                import urllib.request as _urlreq
-
-                _feats = admin.get("features") or []
-                _sum = 0
-                for _f in _feats:
-                    _p = (_f or {}).get("properties") or {}
-                    _sum += int(_p.get("cluster_count") or 0)
-                _payload = _json.dumps(
-                    {
-                        "sessionId": "4fe799",
-                        "runId": "asset-cluster-count",
-                        "hypothesisId": "H-B-gold-ignores-asset-filters",
-                        "location": "viewport_green_assets:admin_return",
-                        "message": "assets_cluster_path",
-                        "data": {
-                            "path": "admin_gold",
-                            "zoom": zoom,
-                            "has_asset_filters": has_asset_filters,
-                            "has_area_filters": has_area_filters,
-                            "filter_keys": sorted((filters or {}).keys()),
-                            "area_filter_keys": sorted(
-                                (area_filters or {}).keys()
-                            ),
-                            "n_features": len(_feats),
-                            "sum_cluster_count": _sum,
-                            "n_match_munis": (
-                                len(filter_scope_munis)
-                                if filter_scope_munis is not None
-                                else None
-                            ),
-                            "asset_filters_applied_to_counts": False,
-                        },
-                        "timestamp": int(_time.time() * 1000),
-                    }
-                ).encode("utf-8")
-                _urlreq.urlopen(
-                    _urlreq.Request(
-                        "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                        data=_payload,
-                        headers={
-                            "Content-Type": "application/json",
-                            "X-Debug-Session-Id": "4fe799",
-                        },
-                        method="POST",
-                    ),
-                    timeout=1.5,
-                )
-            except Exception:
-                pass
-            # #endregion
             return admin
 
     # Raw only when the silver scan stays cheap (few municipality files).
@@ -503,99 +280,12 @@ def viewport_green_assets(
                 fc_raw = repository.get_raw_in_bbox(
                     bbox, LAST_ZOOM_RAW_HARD_CAP, **raw_kwargs
                 )
-                # #region agent log
-                try:
-                    import json as _json
-                    import time as _time
-                    import urllib.request as _urlreq
-
-                    _payload = _json.dumps(
-                        {
-                            "sessionId": "4fe799",
-                            "runId": "areas-map",
-                            "hypothesisId": "H-raw",
-                            "location": "viewport_green_assets:raw",
-                            "message": "assets_raw_done",
-                            "data": {
-                                "n_features": len(fc_raw.get("features") or []),
-                                "zoom": zoom,
-                                "n_area_ids": len(green_area_ids or []),
-                                "n_match_munis": (
-                                    len(filter_scope_munis)
-                                    if filter_scope_munis
-                                    else 0
-                                ),
-                                "raw_zoom_ok": raw_zoom_ok,
-                                "filtered_raw_ready": filtered_raw_ready,
-                            },
-                            "timestamp": int(_time.time() * 1000),
-                        }
-                    ).encode("utf-8")
-                    _urlreq.urlopen(
-                        _urlreq.Request(
-                            "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                            data=_payload,
-                            headers={
-                                "Content-Type": "application/json",
-                                "X-Debug-Session-Id": "4fe799",
-                            },
-                            method="POST",
-                        ),
-                        timeout=1.5,
-                    )
-                except Exception:
-                    pass
-                # #endregion
                 return fc_raw
         else:
             fc_raw = repository.get_raw_in_bbox(
                 bbox, LAST_ZOOM_RAW_HARD_CAP, **raw_kwargs
             )
             n_raw = len(fc_raw.get("features") or [])
-            # #region agent log
-            try:
-                import json as _json
-                import time as _time
-                import urllib.request as _urlreq
-
-                _payload = _json.dumps(
-                    {
-                        "sessionId": "4fe799",
-                        "runId": "areas-map",
-                        "hypothesisId": "H-raw",
-                        "location": "viewport_green_assets:raw",
-                        "message": "assets_raw_done",
-                        "data": {
-                            "n_features": n_raw,
-                            "zoom": zoom,
-                            "n_area_ids": len(green_area_ids or []),
-                            "n_match_munis": (
-                                len(filter_scope_munis) if filter_scope_munis else 0
-                            ),
-                            "raw_zoom_ok": raw_zoom_ok,
-                            "filtered_raw_ready": filtered_raw_ready,
-                            "fallback_live": bool(
-                                n_raw == 0 and green_area_ids is not None
-                            ),
-                        },
-                        "timestamp": int(_time.time() * 1000),
-                    }
-                ).encode("utf-8")
-                _urlreq.urlopen(
-                    _urlreq.Request(
-                        "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                        data=_payload,
-                        headers={
-                            "Content-Type": "application/json",
-                            "X-Debug-Session-Id": "4fe799",
-                        },
-                        method="POST",
-                    ),
-                    timeout=1.5,
-                )
-            except Exception:
-                pass
-            # #endregion
             # Cerca: empty raw must not hide live FK clusters (debug 4fe799).
             if n_raw > 0 or green_area_ids is None:
                 return fc_raw
@@ -618,52 +308,6 @@ def viewport_green_assets(
             filters=filters,
         )
         _ms_live = int((_time_live.monotonic() - _t_live) * 1000)
-        # #region agent log
-        try:
-            import json as _json
-            import time as _time
-            import urllib.request as _urlreq
-
-            _payload = _json.dumps(
-                {
-                    "sessionId": "4fe799",
-                    "runId": "perf-opt",
-                    "hypothesisId": "H-opt-live-clusters",
-                    "location": "viewport_green_assets:live_ga_clusters",
-                    "message": "ga_ids_live_clusters",
-                    "data": {
-                        "n_clusters": len(clusters),
-                        "n_area_ids": len(green_area_ids),
-                        "zoom": zoom,
-                        "ms_live_clusters": _ms_live,
-                        "baseline_cold_ms": 786,
-                        "has_draw_clip": bool(clip_wkt),
-                        "has_area_clip": area_clip_geom is not None,
-                        "sum_count": sum(int(c.count) for c in clusters),
-                        "filter_keys": sorted((filters or {}).keys()),
-                        "filters": {
-                            k: str(v)[:80] for k, v in (filters or {}).items()
-                        },
-                        "asset_filters_applied_to_counts": bool(filters),
-                    },
-                    "timestamp": int(_time.time() * 1000),
-                }
-            ).encode("utf-8")
-            _urlreq.urlopen(
-                _urlreq.Request(
-                    "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                    data=_payload,
-                    headers={
-                        "Content-Type": "application/json",
-                        "X-Debug-Session-Id": "4fe799",
-                    },
-                    method="POST",
-                ),
-                timeout=1.5,
-            )
-        except Exception:
-            pass
-        # #endregion
         return grid_clusters_features_collection(clusters)
 
     # Pre-aggregated gold covers the grid zoom band. Clip filters cells via
@@ -752,53 +396,4 @@ def viewport_green_assets(
             bbox, grid_cell_size_m(zoom), **scope
         )
 
-    # #region agent log
-    try:
-        import json as _json
-        import time as _time
-        import urllib.request as _urlreq
-
-        _sum = sum(int(c.count) for c in clusters)
-        _payload = _json.dumps(
-            {
-                "sessionId": "4fe799",
-                "runId": "asset-cluster-count",
-                "hypothesisId": "H-B-gold-ignores-asset-filters",
-                "location": "viewport_green_assets:grid_return",
-                "message": "assets_cluster_path",
-                "data": {
-                    "path": "grid_gold" if use_gold else "live_grid",
-                    "zoom": zoom,
-                    "has_asset_filters": has_asset_filters,
-                    "has_area_filters": has_area_filters,
-                    "filter_keys": sorted((filters or {}).keys()),
-                    "area_filter_keys": sorted((area_filters or {}).keys()),
-                    "n_clusters": len(clusters),
-                    "sum_cluster_count": _sum,
-                    "gold_level": gold_level if use_gold else None,
-                    "n_match_munis": (
-                        len(filter_scope_munis)
-                        if filter_scope_munis is not None
-                        else None
-                    ),
-                    "asset_filters_applied_to_counts": False,
-                },
-                "timestamp": int(_time.time() * 1000),
-            }
-        ).encode("utf-8")
-        _urlreq.urlopen(
-            _urlreq.Request(
-                "http://host.docker.internal:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c",
-                data=_payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "X-Debug-Session-Id": "4fe799",
-                },
-                method="POST",
-            ),
-            timeout=1.5,
-        )
-    except Exception:
-        pass
-    # #endregion
     return grid_clusters_features_collection(clusters)

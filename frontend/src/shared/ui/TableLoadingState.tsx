@@ -4,7 +4,7 @@
  * @see docs/components/dxc-webkit/46-spinner.md
  * @see docs/components/shared-ui-components.md
  */
-import { useEffect, useRef, type FC, type CSSProperties } from 'react'
+import { useRef, type FC, type CSSProperties } from 'react'
 import { Box, Spinner, Text } from 'dxc-webkit'
 
 export type TableLoadingStateProps = {
@@ -21,38 +21,6 @@ export const TableLoadingState: FC<TableLoadingStateProps> = ({
   className,
 }) => {
   const rootRef = useRef<HTMLDivElement | null>(null)
-  // #region agent log
-  useEffect(() => {
-    const el = rootRef.current
-    const dots = el?.querySelectorAll('.spinner-grow')
-    const rect = el?.getBoundingClientRect()
-    const cs = dots?.[0] ? getComputedStyle(dots[0]) : null
-    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Debug-Session-Id': '4fe799',
-      },
-      body: JSON.stringify({
-        sessionId: '4fe799',
-        runId: 'perf',
-        hypothesisId: 'H-table-loader-vis',
-        location: 'TableLoadingState.tsx:mount',
-        message: 'table_blue_dots_loader_shown',
-        data: {
-          label: label ?? null,
-          nGrow: dots?.length ?? 0,
-          w: rect ? Math.round(rect.width) : null,
-          h: rect ? Math.round(rect.height) : null,
-          bg: cs?.backgroundColor ?? null,
-          color: cs?.color ?? null,
-          anim: cs?.animationName ?? null,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {})
-  }, [label])
-  // #endregion
 
   return (
     <div

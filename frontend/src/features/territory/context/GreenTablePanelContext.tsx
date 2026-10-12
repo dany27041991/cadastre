@@ -242,9 +242,6 @@ export function GreenTablePanelProvider({ children }: { readonly children: React
     if (!ingestRangeReady) return
     const area = { ...columnFiltersByKind.area }
     const asset = { ...columnFiltersByKind.asset }
-    // #region agent log
-    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'and-filters',hypothesisId:'H-and',location:'GreenTablePanelContext.tsx:applyFilters',message:'cerca_commit',data:{areaKeys:Object.keys(area),assetKeys:Object.keys(asset),area,asset},timestamp:Date.now()})}).catch(()=>{})
-    // #endregion
     // Arm burst BEFORE setState so table effect cannot race viewport MinIO
     // (debug 4fe799: table_http_start +26ms before burst → MinIO IO Error).
     beginViewportLoadBurst('cerca-commit')

@@ -48,31 +48,6 @@ from silver_schema import (  # noqa: E402
     ensure_assets_table,
 )
 
-# #region agent log
-_DEBUG_LOG = Path(
-    "/Users/danilogiovannico/Desktop/LAVORO/MASE/SIV/Sviluppo/LINFA/.cursor/debug-4fe799.log"
-)
-
-
-def _dbg(hypothesis_id: str, location: str, message: str, data: dict[str, Any]) -> None:
-    try:
-        payload = {
-            "sessionId": "4fe799",
-            "runId": "backfill-h4",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data,
-            "timestamp": int(time.time() * 1000),
-        }
-        with _DEBUG_LOG.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(payload, default=str) + "\n")
-    except Exception:
-        pass
-
-
-# #endregion
-
 AREA_V11 = (
     "zril_identifier",
     "istat_classification",
@@ -100,7 +75,6 @@ _PROT = ("NONE", "PROTECTED", "MONUMENTAL", "HISTORICAL")
 _HEALTH = ("UNKNOWN", "HEALTHY", "DEGRADED", "DECLINING", "SICK")
 _SURVEY_TS = pa.timestamp("us", tz="UTC")
 
-
 def _mock_survey_dates(ids: list[Any], n: int) -> list[datetime]:
     return [
         datetime(
@@ -112,7 +86,6 @@ def _mock_survey_dates(ids: list[Any], n: int) -> list[datetime]:
         for i in range(n)
     ]
 
-
 def _needs_fill(table: pa.Table, cols: tuple[str, ...]) -> bool:
     names = set(table.column_names)
     for c in cols:
@@ -122,7 +95,6 @@ def _needs_fill(table: pa.Table, cols: tuple[str, ...]) -> bool:
             return True
     return False
 
-
 def _fill_nulls(existing: list[Any], generated: list[Any]) -> list[Any]:
     out: list[Any] = []
     for old, new in zip(existing, generated):
@@ -131,7 +103,6 @@ def _fill_nulls(existing: list[Any], generated: list[Any]) -> list[Any]:
         else:
             out.append(old)
     return out
-
 
 def fill_areas_v11(table: pa.Table) -> pa.Table:
     table = ensure_areas_table(table)
@@ -181,7 +152,6 @@ def fill_areas_v11(table: pa.Table) -> pa.Table:
         type=_SURVEY_TS,
     )
     return pa.table(arrays, schema=pa.schema([(n, AREA_COLUMN_TYPES[n]) for n in AREA_COLUMN_TYPES]))
-
 
 def fill_assets_v11(table: pa.Table) -> pa.Table:
     table = ensure_assets_table(table)
@@ -238,7 +208,6 @@ def fill_assets_v11(table: pa.Table) -> pa.Table:
         arrays, schema=pa.schema([(n, ASSET_COLUMN_TYPES[n]) for n in ASSET_COLUMN_TYPES])
     )
 
-
 def _latest_only_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     best: dict[tuple[int, str], dict[str, Any]] = {}
     for r in rows:
@@ -247,7 +216,6 @@ def _latest_only_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if prev is None or r["ingest_at"] > prev["ingest_at"]:
             best[key] = r
     return list(best.values())
-
 
 def backfill(client, *, dry_run: bool = False, latest_only: bool = False) -> int:
     catalog = load_catalog_table(client)
@@ -266,14 +234,6 @@ def backfill(client, *, dry_run: bool = False, latest_only: bool = False) -> int
         f"dry_run={dry_run} latest_only={latest_only}",
         flush=True,
     )
-    # #region agent log
-    _dbg(
-        "H4",
-        "backfill_v11_mock_attrs.py:start",
-        "backfill_start",
-        {"candidates": len(rows), "dry_run": dry_run, "latest_only": latest_only},
-    )
-    # #endregion
 
     written = 0
     skipped = 0
@@ -311,57 +271,11 @@ def backfill(client, *, dry_run: bool = False, latest_only: bool = False) -> int
                 flush=True,
             )
 
-    # #region agent log
-    sample_nulls: dict[str, Any] = {}
-    if not dry_run and written > 0:
-        sample = next(
-            (
-                r
-                for r in rows
-                if int(r.get("province_id") or 0) != 75 and r["dataset"] == "assets"
-            ),
-            None,
-        )
-        if sample:
-            prefix = hive_prefix(
-                "assets",
-                int(sample["region_id"]),
-                int(sample["province_id"]),
-                int(sample["municipality_id"]),
-                sample["ingest_at"],
-            )
-            raw = get_bytes(client, f"{prefix}/part-000.parquet")
-            if raw:
-                t = read_parquet_bytes(raw)
-                sample_nulls = {
-                    c: (
-                        "MISSING_COL"
-                        if c not in t.column_names
-                        else t.column(c).null_count
-                    )
-                    for c in ASSET_V11
-                }
-                sample_nulls["muni"] = sample["municipality_id"]
-                sample_nulls["n"] = t.num_rows
-    _dbg(
-        "H4",
-        "backfill_v11_mock_attrs.py:done",
-        "backfill_done",
-        {
-            "written": written,
-            "skipped": skipped,
-            "missing": missing,
-            "sample_nulls": sample_nulls,
-        },
-    )
-    # #endregion
-
     print(
         f"Done written={written} skipped_ok={skipped} missing_silver={missing}",
         flush=True,
     )
     return written
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -375,7 +289,6 @@ def main() -> int:
     client = s3_client()
     backfill(client, dry_run=args.dry_run, latest_only=args.latest_only)
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

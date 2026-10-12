@@ -14,8 +14,6 @@ import {
   isTableFetchBlocked,
   isViewportLoadBurstActive,
 } from '../../model/hooks/viewportLoadGate'
-import { markPerfScan } from '../../lib/perfScan'
-
 /**
  * Backoff for silent exact-total refetch while BE fills the wide COUNT cache.
  * Starts fast so the pager updates soon after the background count lands.
@@ -139,9 +137,6 @@ export function useGreenTablePagedData({
       displayed.page === page &&
       displayed.pageSize === pageSize
     if (!keepRowsVisible) setLoading(true)
-    // #region agent log
-    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'perf',hypothesisId:'H-table-load',location:'useGreenTablePagedData.ts:effect',message:'table_loading_begin',data:{showGreenAssets,page,pageSize,keepRowsVisible,exactTotalNonce,filters:activeColumnFilters,filterKeys:Object.keys(activeColumnFilters),burst:isViewportLoadBurstActive(),mapLoadCount:(window as unknown as {__geoinsightLoad?:number}).__geoinsightLoad??null},timestamp:Date.now()})}).catch(()=>{})
-    // #endregion
 
     const params: Record<string, string | number> = { page, page_size: pageSize }
     if (sort) {
@@ -161,42 +156,16 @@ export function useGreenTablePagedData({
     // MinIO IO Error + NetworkError while viewport+table raced).
     const startFetch = () => {
       if (cancelled) return
-      const tFetch0 = Date.now()
-      markPerfScan('table_http_start', {
-        showGreenAssets,
-        page,
-        pageSize,
-        filterKeys: Object.keys(activeColumnFilters),
-      })
-      // #region agent log
-      fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'perf',hypothesisId:'H-perf-table',location:'useGreenTablePagedData.ts:startFetch',message:'table_fetch_begin',data:{showGreenAssets,filters:activeColumnFilters,filterKeys:Object.keys(activeColumnFilters),burst:isViewportLoadBurstActive(),aborted:abort.signal.aborted,page,pageSize},timestamp:Date.now()})}).catch(()=>{})
-      // #endregion
       fetchFn(baseQuery, params, abort.signal)
       .then((data) => {
         if (cancelled) {
-          // #region agent log
-          fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'perf',hypothesisId:'H-perf-table',location:'useGreenTablePagedData.ts:thenCancelled',message:'table_fetch_cancelled',data:{filters:activeColumnFilters,ms:Date.now()-tFetch0},timestamp:Date.now()})}).catch(()=>{})
-          // #endregion
           return
         }
-        const tableMs = Date.now() - tFetch0
-        markPerfScan('table_http_done', {
-          ms: tableMs,
-          total: data.total,
-          nrows: (data.data ?? []).length,
-          showGreenAssets,
-        })
-        // #region agent log
-        {const rows=data.data??[];const keys=showGreenAssets?['species_code','trunk_diameter_cm','plant_height_m','growth_stage','protection_status','health_status','survey_date']:['area_code','istat_classification','intensity_of_fruition','perimeter_type','surface_area_m2','survey_date'];const nanCount=Object.fromEntries(keys.map(k=>[k,rows.filter((r:Record<string,unknown>)=>r?.[k]==='NaN'||r?.[k]==null||r?.[k]==='').length]));const sample=rows[0]?Object.fromEntries(keys.map(k=>[k,(rows[0] as Record<string,unknown>)?.[k]])):{};const rowIds=rows.slice(0,5).map((r:Record<string,unknown>)=>({id:r?.id,name:r?.name,area_code:r?.area_code,survey_date:r?.survey_date,lon:r?.longitude,lat:r?.latitude}));fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'perf',hypothesisId:'H-perf-table',location:'useGreenTablePagedData.ts:then',message:'table_fetch_ok',data:{showGreenAssets,baseQuery:baseQuery.slice(0,180),total:data.total,nrows:rows.length,nanCount,sample,rowIds,filters:activeColumnFilters,filterKeys:Object.keys(activeColumnFilters),page,pageSize,ms:tableMs},timestamp:Date.now()})}).catch(()=>{})}
-        // #endregion
         const approx = isApproximateTotal(data, page, pageSize)
         setPageData(data)
         displayedPageRef.current = { page, pageSize }
         setTotalIsApproximate(approx)
         setLoading(false)
-        // #region agent log
-        fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'perf-opt',hypothesisId:'H-opt-table-wall',location:'useGreenTablePagedData.ts:loadingOff',message:'table_loading_end',data:{why:'ok',total:data.total,approx,filters:activeColumnFilters,ms:tableMs},timestamp:Date.now()})}).catch(()=>{})
-        // #endregion
         if (!panelInitialized.current) {
           panelInitialized.current = true
           setTablePanelActive(data.total > 0)
@@ -207,9 +176,6 @@ export function useGreenTablePagedData({
           const burst = isViewportLoadBurstActive()
           const delay = burst ? Math.max(base, 15000) : base
           approxRetriesRef.current += 1
-          // #region agent log
-          fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'perf-table-p2',hypothesisId:'H-table-defer',location:'useGreenTablePagedData.ts:approx',message:'table_approx_defer',data:{delay,burst,attempt:approxRetriesRef.current},timestamp:Date.now()})}).catch(()=>{})
-          // #endregion
           approxTimer = setTimeout(() => {
             setExactTotalNonce((n) => n + 1)
           }, delay)
@@ -223,24 +189,15 @@ export function useGreenTablePagedData({
           (err instanceof DOMException && err.name === 'AbortError') ||
           (err instanceof Error && err.name === 'AbortError')
         if (aborted) {
-          // #region agent log
-          fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'stuck-loader',hypothesisId:'H-table-load',location:'useGreenTablePagedData.ts:catchAbort',message:'table_fetch_aborted',data:{filters:activeColumnFilters,cancelled},timestamp:Date.now()})}).catch(()=>{})
-          // #endregion
           return
         }
         const isNetwork =
           String(err).includes('NetworkError') ||
           String(err).includes('Failed to fetch') ||
           (err instanceof TypeError)
-        // #region agent log
-        fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'and-filter',hypothesisId:'H-table-back',location:'useGreenTablePagedData.ts:catch',message:'table_fetch_error',data:{showGreenAssets,baseQuery:baseQuery.slice(0,180),err:String(err),filters:activeColumnFilters,filterKeys:Object.keys(activeColumnFilters),hadPageData:pageDataRef.current!=null,isNetwork,retryNonce:exactTotalNonce},timestamp:Date.now()})}).catch(()=>{})
-        // #endregion
         // MinIO/DuckDB overload (debug 4fe799): one slow retry, then stop spinning.
         if (isNetwork && exactTotalNonce < 1) {
           const delay = isViewportLoadBurstActive() ? 4000 : 2000
-          // #region agent log
-          fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'pool-storm',hypothesisId:'H-table-defer',location:'useGreenTablePagedData.ts:netRetry',message:'table_net_retry',data:{delay,burst:isViewportLoadBurstActive()},timestamp:Date.now()})}).catch(()=>{})
-          // #endregion
           window.setTimeout(() => {
             if (!cancelled) setExactTotalNonce((n) => n + 1)
             else setLoading(false)
@@ -252,26 +209,17 @@ export function useGreenTablePagedData({
           setTotalIsApproximate(false)
         }
         setLoading(false)
-        // #region agent log
-        fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'stuck-loader',hypothesisId:'H-table-load',location:'useGreenTablePagedData.ts:loadingOffErr',message:'table_loading_end',data:{why:'error',err:String(err).slice(0,120),filters:activeColumnFilters},timestamp:Date.now()})}).catch(()=>{})
-        // #endregion
       })
     }
 
     let burstWaitTimer: ReturnType<typeof setTimeout> | null = null
     if (isTableFetchBlocked()) {
-      // #region agent log
-      fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'post-fix',hypothesisId:'H-table-defer',location:'useGreenTablePagedData.ts:burstWait',message:'table_burst_wait',data:{filters:activeColumnFilters},timestamp:Date.now()})}).catch(()=>{})
-      // #endregion
       const waitedAt = Date.now()
       const poll = () => {
         if (cancelled) return
         const stillBurst = isTableFetchBlocked()
         const waitedMs = Date.now() - waitedAt
         if (!stillBurst || waitedMs > 90_000) {
-          // #region agent log
-          fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'stuck-loader',hypothesisId:'H-table-load',location:'useGreenTablePagedData.ts:burstDone',message:'table_burst_wait_done',data:{waitedMs,stillBurst,timedOut:waitedMs>90_000,filters:activeColumnFilters},timestamp:Date.now()})}).catch(()=>{})
-          // #endregion
           startFetch()
           return
         }
@@ -283,9 +231,6 @@ export function useGreenTablePagedData({
     }
 
     return () => {
-      // #region agent log
-      fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'stuck-loader',hypothesisId:'H-table-load',location:'useGreenTablePagedData.ts:cleanup',message:'table_effect_cleanup',data:{filters:activeColumnFilters},timestamp:Date.now()})}).catch(()=>{})
-      // #endregion
       cancelled = true
       abort.abort()
       if (approxTimer) clearTimeout(approxTimer)

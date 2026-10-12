@@ -76,13 +76,6 @@ export function IngestDateRangeFields() {
     }
   }, [datesDisabled])
 
-  // #region agent log
-  useEffect(() => {
-    if (!panel) return
-    fetch('http://127.0.0.1:7455/ingest/ee4d7135-3aef-4e11-b07a-3de89c3bf62c',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'4fe799'},body:JSON.stringify({sessionId:'4fe799',runId:'territory-search-gate',hypothesisId:'H-dates-toggle',location:'IngestDateRangeFields:gate',message:'ingest_dates_gate',data:{areasOn,assetsOn,blockedByLayers,datesDisabled,adminReady:adminTerritoryReady??null},timestamp:Date.now()})}).catch(()=>{})
-  }, [panel, areasOn, assetsOn, blockedByLayers, datesDisabled, adminTerritoryReady])
-  // #endregion
-
   if (!panel) return null
 
   const { dateFrom, dateTo, setDateFrom, setDateTo } = panel
