@@ -121,13 +121,19 @@ def viewport_green_assets(
         need_area_ids = zoom >= RAW_MIN_ZOOM or (
             selective and len(match_munis) <= RAW_MAX_MUNICIPALITIES
         )
-        # probe_wide × asset filters: match_munis is None and used to fall into
-        # filtered_raw_asset_only (national silver ~110s, ignores area scope —
-        # debug 4fe799 name=area + plant_code). Force bounded match_areas pin.
-        probe_wide_asset_pin = (
-            has_asset_filters and match_munis is None and not need_area_ids
+        # Asset filters + area filters MUST resolve green_area_ids at every zoom.
+        # Without them, filtered_ladder/gold ignores plant_code (and similar) and
+        # can thrash: debug 4fe799 name+area_code → 1035 munis (>RAW_MAX) then
+        # +plant_code → path=filtered_ladder n_area_ids=0 → 434k clusters / 97s.
+        # Also covers probe_wide (match_munis is None) national silver ~110s.
+        asset_area_pin = bool(has_asset_filters and has_area_filters)
+        probe_wide_asset_pin = asset_area_pin and match_munis is None
+        wide_selective_asset_pin = (
+            asset_area_pin
+            and selective
+            and len(match_munis or []) > RAW_MAX_MUNICIPALITIES
         )
-        if probe_wide_asset_pin:
+        if asset_area_pin:
             need_area_ids = True
         match_mode = "areas" if need_area_ids else f"munis:{muni_resolve_mode}"
         n_matches = 0
@@ -148,18 +154,23 @@ def viewport_green_assets(
                 else list(area_res)
             )
             n_areas_res_scoped = len(areas_res_scoped)
-            opt_path = (
-                f"munis_then_scoped_areas:n={n_areas_res_scoped}"
-                if muni_set
-                else (
-                    "probe_wide_pin_for_asset_filters"
-                    if probe_wide_asset_pin
-                    else "munis_then_areas_unscoped"
+            if muni_set:
+                opt_path = (
+                    f"wide_selective_asset_pin:n={n_areas_res_scoped}"
+                    if wide_selective_asset_pin
+                    else f"munis_then_scoped_areas:n={n_areas_res_scoped}"
                 )
-            )
+            elif probe_wide_asset_pin:
+                opt_path = "probe_wide_pin_for_asset_filters"
+            else:
+                opt_path = "munis_then_areas_unscoped"
             _t_areas = _time_match.monotonic()
-            # Bound probe_wide pin — full 50k area-id resolve was ~57s.
-            _areas_limit = 2_000 if probe_wide_asset_pin or not muni_set else 50_000
+            # Bound pin / wide selective — full 50k area-id resolve was ~57s.
+            _areas_limit = (
+                2_000
+                if probe_wide_asset_pin or wide_selective_asset_pin or not muni_set
+                else 50_000
+            )
             matches = silver_read.resolve_matching_areas(
                 areas_res_scoped,
                 area_filters,
@@ -227,8 +238,10 @@ def viewport_green_assets(
                         "n_areas_res_in": n_areas_res_in,
                         "n_areas_res_scoped": n_areas_res_scoped,
                         "baseline_cold_ms_match_approx": 13500,
-                        "code_ver": "match-v7-probe-wide-asset-pin",
+                        "code_ver": "match-v8-asset-area-pin-capped",
                         "probe_wide_asset_pin": probe_wide_asset_pin,
+                        "wide_selective_asset_pin": wide_selective_asset_pin,
+                        "asset_area_pin": asset_area_pin,
                         "n_clip_res": n_clip_res,
                     },
                     "timestamp": int(_time_match.time() * 1000),

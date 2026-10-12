@@ -53,12 +53,17 @@ _MATCH_MUNI_CHUNK = 400
 # First dense chunk: if this many munis hit, treat filter as near-national and
 # skip the full 7.9k scan (Area boost log: 6250 munis / 50k area ids ≈ 57s).
 _WIDESPREAD_PROBE_MIN_MUNIS = 80
+# Selective early_stop can keep hitting for thousands of munis (debug 4fe799:
+# name+area_code → 1035 munis / 10.8s). Cap dense-first results — enough to
+# scope gold / area-id pin without scanning the whole nation.
+_MATCH_MUNI_RESULT_CAP = 80
 
 MatchMunisMode = Literal[
     "cache",
     "probe_wide",
     "full",
     "early_stop",
+    "early_stop_capped",
     "early_stop_empty",
     "empty",
     "oneshot",
@@ -344,7 +349,11 @@ def resolve_matching_municipality_ids(
             stop_after_used = stop_after
             empty_streak = 0
             ri = 0
-            while ri < len(rest) and empty_streak < stop_after:
+            while (
+                ri < len(rest)
+                and empty_streak < stop_after
+                and len(found) < _MATCH_MUNI_RESULT_CAP
+            ):
                 need = stop_after - empty_streak
                 batch = rest[ri : ri + min(_MATCH_MUNI_WORKERS, need)]
                 ri += len(batch)
@@ -366,6 +375,9 @@ def resolve_matching_municipality_ids(
                         continue
                     empty_streak = 0
                     found.update(hits)
+                    if len(found) >= _MATCH_MUNI_RESULT_CAP:
+                        mode = "early_stop_capped"
+                        break
         elif not allow_widespread_shortcircuit:
             # Selective product filters + empty probe: do NOT full-scan the nation
             # (debug 4fe799: zril-127+villa → mode=full, 20 chunks ≈ 100s, n_munis=0).
@@ -373,7 +385,11 @@ def resolve_matching_municipality_ids(
             mode = "early_stop_empty"
             empty_streak = 0
             ri = 0
-            while ri < len(rest) and empty_streak < _EMPTY_CHUNK_STOP:
+            while (
+                ri < len(rest)
+                and empty_streak < _EMPTY_CHUNK_STOP
+                and len(found) < _MATCH_MUNI_RESULT_CAP
+            ):
                 need = _EMPTY_CHUNK_STOP - empty_streak
                 batch = rest[ri : ri + min(_MATCH_MUNI_WORKERS, need)]
                 ri += len(batch)
@@ -394,6 +410,9 @@ def resolve_matching_municipality_ids(
                         continue
                     empty_streak = 0
                     found.update(hits)
+                    if len(found) >= _MATCH_MUNI_RESULT_CAP:
+                        mode = "early_stop_capped"
+                        break
         else:
             mode = "full"
             # Parallel DISTINCT on remaining chunks (non-selective, probe empty).
@@ -419,7 +438,8 @@ def resolve_matching_municipality_ids(
                 "mode": mode,
                 "workers": _MATCH_MUNI_WORKERS,
                 "stop_after": stop_after_used,
-                "opt": "early_stop_parallel_sparse_v1",
+                "opt": "early_stop_cap_v2",
+                "result_cap": _MATCH_MUNI_RESULT_CAP,
                 "baseline_cold_ms": 7180,
                 "coalesced": False,
             },
